@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import RejectedQCReturnEntry, RejectedQCReturnItem, UnitChoice
+from .models import EmptyVehicleGateOut, RejectedQCReturnEntry, RejectedQCReturnItem, UnitChoice
 
 
 # Register your models here.
@@ -28,3 +28,17 @@ class RejectedQCReturnEntryAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("entry_no", "created_at", "updated_at")
     inlines = [RejectedQCReturnItemInline]
+
+
+@admin.register(EmptyVehicleGateOut)
+class EmptyVehicleGateOutAdmin(admin.ModelAdmin):
+    list_display = (
+        "entry_no", "company", "vehicle_entry", "vehicle", "driver",
+        "gate_out_date", "out_time", "status", "created_at",
+    )
+    list_filter = ("company", "status", "gate_out_date")
+    search_fields = (
+        "entry_no", "vehicle_entry__entry_no", "vehicle__vehicle_number",
+        "driver__name", "security_name",
+    )
+    readonly_fields = ("entry_no", "created_at", "updated_at")

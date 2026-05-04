@@ -1,5 +1,8 @@
 from django.urls import path
 from .views import (
+    EmptyVehicleEligibleEntriesView,
+    EmptyVehicleGateOutDetailView,
+    EmptyVehicleGateOutListCreateView,
     RawMaterialGateEntryFullView,
     DailyNeedGateEntryFullView,
     MaintenanceGateEntryFullView,
@@ -20,6 +23,11 @@ urlpatterns = [
     # Rejected QC Return gate-out URLs
     path('rejected-qc-returns/', RejectedQCReturnListCreateView.as_view(), name='rejected_qc_return_list_create'),
     path('rejected-qc-returns/<int:entry_id>/', RejectedQCReturnDetailView.as_view(), name='rejected_qc_return_detail'),
+
+    # Empty Vehicle gate-out URLs
+    path('empty-vehicle-outs/eligible-entries/', EmptyVehicleEligibleEntriesView.as_view(), name='empty_vehicle_eligible_entries'),
+    path('empty-vehicle-outs/', EmptyVehicleGateOutListCreateView.as_view(), name='empty_vehicle_gate_out_list_create'),
+    path('empty-vehicle-outs/<int:entry_id>/', EmptyVehicleGateOutDetailView.as_view(), name='empty_vehicle_gate_out_detail'),
 
     # Gate Entry URLs
     path('raw-material-gate-entry/<int:gate_entry_id>/', RawMaterialGateEntryFullView.as_view(), name='raw_material_gate_entry_full_view'),

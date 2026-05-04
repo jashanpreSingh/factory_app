@@ -18,8 +18,11 @@ from .permissions import (
     CanViewMaintenanceFullEntry,
     CanViewConstructionFullEntry,
 )
-from .models import GateAttachment, RejectedQCReturnEntry, RejectedQCReturnItem, UnitChoice
+from .models import EmptyVehicleGateOut, GateAttachment, RejectedQCReturnEntry, RejectedQCReturnItem, UnitChoice
 from .serializers import (
+    EmptyVehicleEligibleEntrySerializer,
+    EmptyVehicleGateOutCreateSerializer,
+    EmptyVehicleGateOutSerializer,
     GateAttachmentSerializer,
     RejectedQCReturnCreateSerializer,
     RejectedQCReturnEntrySerializer,
@@ -61,6 +64,130 @@ class UnitChoiceListView(APIView):
         units = UnitChoice.objects.all()
         serializer = UnitChoiceSerializer(units, many=True)
         return Response(serializer.data)
+
+
+class EmptyVehicleEligibleEntriesView(APIView):
+    """List inward vehicle entries that can be marked out empty."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            VehicleEntry.objects
+            .filter(company=request.company.company)
+            .exclude(status="CANCELLED")
+            .exclude(empty_vehicle_gate_out__is_active=True)
+            .select_related("vehicle", "vehicle__vehicle_type", "driver", "company")
+            .order_by("-entry_time")
+        )
+
+        entry_type = request.query_params.get("entry_type")
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+
+        if entry_type:
+            qs = qs.filter(entry_type=entry_type)
+        if from_date:
+            qs = qs.filter(entry_time__date__gte=from_date)
+        if to_date:
+            qs = qs.filter(entry_time__date__lte=to_date)
+
+        serializer = EmptyVehicleEligibleEntrySerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+class EmptyVehicleGateOutListCreateView(APIView):
+    """List and create empty vehicle gate-out records."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            EmptyVehicleGateOut.objects
+            .filter(company=request.company.company, is_active=True)
+            .select_related(
+                "vehicle_entry",
+                "vehicle_entry__vehicle",
+                "vehicle_entry__driver",
+                "vehicle",
+                "driver",
+                "company",
+            )
+        )
+
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+        if from_date:
+            qs = qs.filter(gate_out_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(gate_out_date__lte=to_date)
+
+        serializer = EmptyVehicleGateOutSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = EmptyVehicleGateOutCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        vehicle_entry = get_object_or_404(
+            VehicleEntry.objects.select_related("vehicle", "driver", "company"),
+            id=data["vehicle_entry_id"],
+            company=request.company.company,
+        )
+
+        if vehicle_entry.status == "CANCELLED":
+            return Response(
+                {"detail": "Cancelled gate entries cannot be marked out"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if EmptyVehicleGateOut.objects.filter(
+            vehicle_entry=vehicle_entry,
+            is_active=True,
+        ).exists():
+            return Response(
+                {"detail": "This vehicle entry is already marked out"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        gate_out = EmptyVehicleGateOut.objects.create(
+            company=request.company.company,
+            entry_no=EmptyVehicleGateOut.generate_entry_no(),
+            vehicle_entry=vehicle_entry,
+            vehicle=vehicle_entry.vehicle,
+            driver=vehicle_entry.driver,
+            gate_out_date=data["gate_out_date"],
+            out_time=data["out_time"],
+            security_name=data.get("security_name", ""),
+            remarks=data.get("remarks", ""),
+            created_by=request.user,
+            updated_by=request.user,
+        )
+
+        return Response(
+            EmptyVehicleGateOutSerializer(gate_out).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EmptyVehicleGateOutDetailView(APIView):
+    """Get one empty vehicle gate-out record."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, entry_id):
+        gate_out = get_object_or_404(
+            EmptyVehicleGateOut.objects.select_related(
+                "vehicle_entry",
+                "vehicle_entry__vehicle",
+                "vehicle_entry__driver",
+                "vehicle",
+                "driver",
+                "company",
+            ),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return Response(EmptyVehicleGateOutSerializer(gate_out).data)
 
 
 class RejectedQCReturnListCreateView(APIView):
