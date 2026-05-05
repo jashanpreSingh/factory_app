@@ -57,7 +57,8 @@ from .serializers import (
 )
 from .permissions import (
     CanManageProductionLines, CanManageMachines, CanManageChecklistTemplates,
-    CanViewProductionRun, CanCreateProductionRun, CanEditProductionRun,
+    CanViewProductionRun, CanViewProductionRunOrManageLines,
+    CanCreateProductionRun, CanEditProductionRun,
     CanCompleteProductionRun,
     CanViewBreakdown, CanCreateBreakdown, CanEditBreakdown,
     CanViewMaterialUsage, CanCreateMaterialUsage, CanEditMaterialUsage,
@@ -85,7 +86,7 @@ def _get_service(request):
 class LineListCreateAPI(APIView):
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [IsAuthenticated(), HasCompanyContext(), CanViewProductionRun()]
+            return [IsAuthenticated(), HasCompanyContext(), CanViewProductionRunOrManageLines()]
         return [IsAuthenticated(), HasCompanyContext(), CanManageProductionLines()]
 
     def get(self, request):
@@ -2061,7 +2062,11 @@ from .serializers import (
 
 class LineSkuConfigListCreateAPI(APIView):
     """List all configs or create a new one."""
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated(), HasCompanyContext(), CanViewProductionRunOrManageLines()]
+        return [IsAuthenticated(), HasCompanyContext(), CanManageProductionLines()]
 
     def get(self, request):
         company = request.company.company
@@ -2086,7 +2091,11 @@ class LineSkuConfigListCreateAPI(APIView):
 
 class LineSkuConfigDetailAPI(APIView):
     """Retrieve, update, or delete a config."""
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated(), HasCompanyContext(), CanViewProductionRunOrManageLines()]
+        return [IsAuthenticated(), HasCompanyContext(), CanManageProductionLines()]
 
     def _get_config(self, request, config_id):
         return LineSkuConfig.objects.filter(
