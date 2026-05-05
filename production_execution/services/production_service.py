@@ -1098,36 +1098,17 @@ class ProductionExecutionService:
         except WasteLog.DoesNotExist:
             raise ValueError(f"Waste log {waste_id} not found.")
 
-    def approve_waste(self, waste_id: int, level: str, user, sign: str) -> WasteLog:
+    def approve_waste(self, waste_id: int, user, sign: str) -> WasteLog:
         waste = self.get_waste_log(waste_id)
         now = timezone.now()
 
-        if level == 'engineer':
-            waste.engineer_sign = sign
-            waste.engineer_signed_by = user
-            waste.engineer_signed_at = now
-            waste.wastage_approval_status = WasteApprovalStatus.PARTIALLY_APPROVED
-        elif level == 'am':
-            if not waste.engineer_signed_at:
-                raise ValueError("Engineer must sign before AM.")
-            waste.am_sign = sign
-            waste.am_signed_by = user
-            waste.am_signed_at = now
-        elif level == 'store':
-            if not waste.am_signed_at:
-                raise ValueError("AM must sign before Store.")
-            waste.store_sign = sign
-            waste.store_signed_by = user
-            waste.store_signed_at = now
-        elif level == 'hod':
-            if not waste.store_signed_at:
-                raise ValueError("Store must sign before HOD.")
-            waste.hod_sign = sign
-            waste.hod_signed_by = user
-            waste.hod_signed_at = now
-            waste.wastage_approval_status = WasteApprovalStatus.FULLY_APPROVED
-        else:
-            raise ValueError(f"Invalid approval level: {level}")
+        if waste.wastage_approval_status == WasteApprovalStatus.FULLY_APPROVED:
+            raise ValueError("Waste log is already approved.")
+
+        waste.hod_sign = sign
+        waste.hod_signed_by = user
+        waste.hod_signed_at = now
+        waste.wastage_approval_status = WasteApprovalStatus.FULLY_APPROVED
 
         waste.save()
         return waste

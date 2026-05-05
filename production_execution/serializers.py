@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db.models import Sum
 from rest_framework import serializers
 from .models import (
     ProductionLine, Machine, MachineChecklistTemplate,
@@ -291,14 +292,60 @@ class StopProductionSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 class MaterialUsageSerializer(serializers.ModelSerializer):
+    bom_quantity = serializers.SerializerMethodField()
+    wastage_quantity = serializers.SerializerMethodField()
+    wastage_percentage = serializers.SerializerMethodField()
+    final_consumption_quantity = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductionMaterialUsage
         fields = [
             'id', 'material_code', 'material_name',
             'opening_qty', 'issued_qty', 'closing_qty', 'wastage_qty',
+            'bom_quantity', 'wastage_percentage', 'wastage_quantity',
+            'final_consumption_quantity',
             'uom', 'created_at', 'updated_at',
         ]
         read_only_fields = ['wastage_qty', 'created_at', 'updated_at']
+
+    def _format_quantity(self, value):
+        return str(Decimal(value or 0).quantize(Decimal('0.001')))
+
+    def _format_percentage(self, value):
+        return str(Decimal(value or 0).quantize(Decimal('0.01')))
+
+    def _get_bom_waste_quantity(self, obj):
+        cached = getattr(obj, '_bom_waste_quantity', None)
+        if cached is not None:
+            return cached
+
+        waste_logs = WasteLog.objects.filter(production_run=obj.production_run)
+        if obj.material_code:
+            waste_logs = waste_logs.filter(material_code=obj.material_code)
+        else:
+            waste_logs = waste_logs.filter(material_name=obj.material_name)
+
+        total = waste_logs.aggregate(total=Sum('wastage_qty'))['total'] or Decimal('0')
+        obj._bom_waste_quantity = total
+        return total
+
+    def get_bom_quantity(self, obj):
+        return self._format_quantity(obj.opening_qty)
+
+    def get_wastage_quantity(self, obj):
+        return self._format_quantity(self._get_bom_waste_quantity(obj))
+
+    def get_wastage_percentage(self, obj):
+        bom_quantity = Decimal(obj.opening_qty or 0)
+        if bom_quantity <= 0:
+            return self._format_percentage(0)
+
+        percentage = (self._get_bom_waste_quantity(obj) / bom_quantity) * Decimal('100')
+        return self._format_percentage(percentage)
+
+    def get_final_consumption_quantity(self, obj):
+        final_quantity = Decimal(obj.opening_qty or 0) + self._get_bom_waste_quantity(obj)
+        return self._format_quantity(final_quantity)
 
 
 class MaterialUsageCreateSerializer(serializers.Serializer):
@@ -454,6 +501,9 @@ class WasteLogSerializer(serializers.ModelSerializer):
     run_number = serializers.IntegerField(source='production_run.run_number', read_only=True, default=None)
     run_date = serializers.DateField(source='production_run.date', read_only=True, default=None)
     run_product = serializers.CharField(source='production_run.product', read_only=True, default='')
+    approved_sign = serializers.SerializerMethodField()
+    approved_by = serializers.SerializerMethodField()
+    approved_at = serializers.SerializerMethodField()
 
     class Meta:
         model = WasteLog
@@ -464,10 +514,36 @@ class WasteLogSerializer(serializers.ModelSerializer):
             'am_sign', 'am_signed_by', 'am_signed_at',
             'store_sign', 'store_signed_by', 'store_signed_at',
             'hod_sign', 'hod_signed_by', 'hod_signed_at',
-            'wastage_approval_status',
+            'wastage_approval_status', 'approved_sign', 'approved_by', 'approved_at',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['created_at', 'updated_at']
+
+    def _approval_values(self, obj):
+        approval_fields = [
+            ('hod_sign', 'hod_signed_by_id', 'hod_signed_at'),
+            ('store_sign', 'store_signed_by_id', 'store_signed_at'),
+            ('am_sign', 'am_signed_by_id', 'am_signed_at'),
+            ('engineer_sign', 'engineer_signed_by_id', 'engineer_signed_at'),
+        ]
+        for sign_field, by_field, at_field in approval_fields:
+            sign = getattr(obj, sign_field, '')
+            if sign:
+                return {
+                    'sign': sign,
+                    'by': getattr(obj, by_field, None),
+                    'at': getattr(obj, at_field, None),
+                }
+        return {'sign': '', 'by': None, 'at': None}
+
+    def get_approved_sign(self, obj):
+        return self._approval_values(obj)['sign']
+
+    def get_approved_by(self, obj):
+        return self._approval_values(obj)['by']
+
+    def get_approved_at(self, obj):
+        return self._approval_values(obj)['at']
 
 
 class WasteLogCreateItemSerializer(serializers.Serializer):
