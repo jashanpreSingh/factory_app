@@ -98,6 +98,12 @@ class ProductionRunCreateSerializer(serializers.Serializer):
     )
     labour_count = serializers.IntegerField(min_value=0, required=False, default=0)
     other_manpower_count = serializers.IntegerField(min_value=0, required=False, default=0)
+    electricity_cost_per_unit = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
+    labour_cost_per_hour = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
     supervisor = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
     operators = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
     materials = serializers.ListField(
@@ -116,6 +122,12 @@ class ProductionRunUpdateSerializer(serializers.Serializer):
     )
     labour_count = serializers.IntegerField(min_value=0, required=False)
     other_manpower_count = serializers.IntegerField(min_value=0, required=False)
+    electricity_cost_per_unit = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
+    labour_cost_per_hour = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
     supervisor = serializers.CharField(max_length=200, required=False, allow_blank=True)
     operators = serializers.CharField(max_length=500, required=False, allow_blank=True)
     rejected_qty = serializers.DecimalField(
@@ -135,6 +147,7 @@ class ProductionRunListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'sap_doc_entry', 'run_number', 'date',
             'line', 'line_name', 'product', 'required_qty', 'rated_speed',
+            'electricity_cost_per_unit', 'labour_cost_per_hour',
             'total_production', 'total_running_minutes', 'total_breakdown_time',
             'rejected_qty', 'reworked_qty',
             'sap_receipt_doc_entry', 'sap_sync_status', 'sap_sync_error',
@@ -209,6 +222,7 @@ class ProductionRunDetailSerializer(serializers.ModelSerializer):
             'id', 'sap_doc_entry', 'run_number', 'date',
             'line', 'line_name', 'product', 'required_qty', 'rated_speed',
             'labour_count', 'other_manpower_count', 'supervisor', 'operators',
+            'electricity_cost_per_unit', 'labour_cost_per_hour',
             'total_production', 'total_running_minutes', 'total_breakdown_time',
             'rejected_qty', 'reworked_qty',
             'sap_receipt_doc_entry', 'sap_sync_status', 'sap_sync_error',
@@ -673,6 +687,7 @@ class LineSkuConfigSerializer(serializers.ModelSerializer):
             'id', 'line', 'line_name', 'config_name',
             'sku_code', 'sku_name',
             'rated_speed', 'labour_count', 'other_manpower_count',
+            'electricity_cost_per_unit', 'labour_cost_per_hour',
             'supervisor', 'operators', 'is_active',
             'created_at', 'updated_at',
         ]
@@ -687,6 +702,8 @@ class LineSkuConfigCreateSerializer(serializers.Serializer):
     rated_speed = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     labour_count = serializers.IntegerField(min_value=0, required=False, default=0)
     other_manpower_count = serializers.IntegerField(min_value=0, required=False, default=0)
+    electricity_cost_per_unit = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
+    labour_cost_per_hour = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
     supervisor = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
     operators = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
 
@@ -698,5 +715,7 @@ class LineSkuConfigUpdateSerializer(serializers.Serializer):
     rated_speed = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     labour_count = serializers.IntegerField(min_value=0, required=False)
     other_manpower_count = serializers.IntegerField(min_value=0, required=False)
+    electricity_cost_per_unit = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
+    labour_cost_per_hour = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
     supervisor = serializers.CharField(max_length=200, required=False, allow_blank=True)
     operators = serializers.CharField(max_length=500, required=False, allow_blank=True)

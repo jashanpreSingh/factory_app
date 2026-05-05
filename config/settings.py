@@ -12,9 +12,14 @@ from corsheaders.defaults import default_headers
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def parse_debug(value):
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on', 'debug', 'development'}
+
+
 # Core Settings
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=parse_debug)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
 # Application definition
@@ -157,7 +162,12 @@ SIMPLE_JWT = {
 }
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
+CORS_ALLOWED_ORIGINS = list(dict.fromkeys(
+    config('CORS_ALLOWED_ORIGINS', cast=Csv()) + [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ]
+))
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = list(default_headers) + ['Company-Code']
 
