@@ -257,6 +257,8 @@ class ProductionExecutionService:
             rated_speed=data.get('rated_speed'),
             labour_count=data.get('labour_count', 0),
             other_manpower_count=data.get('other_manpower_count', 0),
+            electricity_cost_per_unit=data.get('electricity_cost_per_unit'),
+            labour_cost_per_hour=data.get('labour_cost_per_hour'),
             supervisor=data.get('supervisor', ''),
             operators=data.get('operators', ''),
             status=RunStatus.DRAFT,
@@ -328,6 +330,7 @@ class ProductionExecutionService:
             raise ValueError("Cannot edit a COMPLETED run.")
 
         for field in ['product', 'rated_speed', 'labour_count', 'other_manpower_count',
+                      'electricity_cost_per_unit', 'labour_cost_per_hour',
                       'supervisor', 'operators']:
             if field in data:
                 setattr(run, field, data[field])

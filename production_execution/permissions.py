@@ -7,6 +7,14 @@ class CanManageProductionLines(BasePermission):
         return request.user.has_perm('production_execution.can_manage_production_lines')
 
 
+class CanViewProductionRunOrManageLines(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.has_perm('production_execution.can_view_production_run') or
+            request.user.has_perm('production_execution.can_manage_production_lines')
+        )
+
+
 class CanManageMachines(BasePermission):
     def has_permission(self, request, view):
         return request.user.has_perm('production_execution.can_manage_machines')
