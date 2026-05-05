@@ -65,7 +65,7 @@ from .permissions import (
     CanViewManpower, CanCreateManpower,
     CanViewLineClearance, CanCreateLineClearance, CanApproveLineClearanceQA,
     CanViewMachineChecklist, CanCreateMachineChecklist,
-    CanViewWasteLog, CanCreateWasteLog,
+    CanViewWasteLog, CanCreateWasteLog, CanApproveWaste,
     CanApproveWasteEngineer, CanApproveWasteAM,
     CanApproveWasteStore, CanApproveWasteHOD,
     CanViewReports,
@@ -944,88 +944,38 @@ class WasteLogDetailAPI(APIView):
         return Response(WasteLogSerializer(waste).data)
 
 
-class WasteApproveEngineerAPI(APIView):
+class WasteApproveAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveWaste]
+
+    def post(self, request, waste_id):
+        serializer = WasteApprovalSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"detail": "Invalid data.", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        service = _get_service(request)
+        try:
+            waste = service.approve_waste(waste_id, request.user, serializer.validated_data['sign'])
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(WasteLogSerializer(waste).data)
+
+
+class WasteApproveEngineerAPI(WasteApproveAPI):
     permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveWasteEngineer]
 
-    def post(self, request, waste_id):
-        serializer = WasteApprovalSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                {"detail": "Invalid data.", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        service = _get_service(request)
-        try:
-            waste = service.approve_waste(
-                waste_id, 'engineer', request.user,
-                serializer.validated_data['sign']
-            )
-        except ValueError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(WasteLogSerializer(waste).data)
 
-
-class WasteApproveAMAPI(APIView):
+class WasteApproveAMAPI(WasteApproveAPI):
     permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveWasteAM]
 
-    def post(self, request, waste_id):
-        serializer = WasteApprovalSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                {"detail": "Invalid data.", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        service = _get_service(request)
-        try:
-            waste = service.approve_waste(
-                waste_id, 'am', request.user,
-                serializer.validated_data['sign']
-            )
-        except ValueError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(WasteLogSerializer(waste).data)
 
-
-class WasteApproveStoreAPI(APIView):
+class WasteApproveStoreAPI(WasteApproveAPI):
     permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveWasteStore]
 
-    def post(self, request, waste_id):
-        serializer = WasteApprovalSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                {"detail": "Invalid data.", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        service = _get_service(request)
-        try:
-            waste = service.approve_waste(
-                waste_id, 'store', request.user,
-                serializer.validated_data['sign']
-            )
-        except ValueError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(WasteLogSerializer(waste).data)
 
-
-class WasteApproveHODAPI(APIView):
+class WasteApproveHODAPI(WasteApproveAPI):
     permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveWasteHOD]
-
-    def post(self, request, waste_id):
-        serializer = WasteApprovalSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                {"detail": "Invalid data.", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        service = _get_service(request)
-        try:
-            waste = service.approve_waste(
-                waste_id, 'hod', request.user,
-                serializer.validated_data['sign']
-            )
-        except ValueError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(WasteLogSerializer(waste).data)
 
 
 # ===========================================================================
