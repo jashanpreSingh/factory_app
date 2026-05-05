@@ -9,12 +9,22 @@ from datetime import timedelta
 from decouple import config, Csv
 from corsheaders.defaults import default_headers
 
+
+def cast_debug(value):
+    normalized = str(value).strip().lower()
+    if normalized in {'1', 'true', 'yes', 'on', 'debug'}:
+        return True
+    if normalized in {'0', 'false', 'no', 'off', 'release', 'prod', 'production'}:
+        return False
+    raise ValueError(f"Invalid DEBUG value: {value}")
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Core Settings
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=cast_debug)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
 # Application definition
@@ -157,7 +167,14 @@ SIMPLE_JWT = {
 }
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
+LOCAL_DEV_CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+CORS_ALLOWED_ORIGINS = list(dict.fromkeys([
+    *config('CORS_ALLOWED_ORIGINS', default='', cast=Csv()),
+    *LOCAL_DEV_CORS_ALLOWED_ORIGINS,
+]))
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = list(default_headers) + ['Company-Code']
 

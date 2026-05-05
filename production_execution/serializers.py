@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import (
     ProductionLine, Machine, MachineChecklistTemplate,
@@ -456,13 +458,48 @@ class WasteLogSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
-class WasteLogCreateSerializer(serializers.Serializer):
-    production_run_id = serializers.IntegerField()
+class WasteLogCreateItemSerializer(serializers.Serializer):
     material_code = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
     material_name = serializers.CharField(max_length=255)
-    wastage_qty = serializers.DecimalField(max_digits=12, decimal_places=3)
+    wastage_qty = serializers.DecimalField(
+        max_digits=12, decimal_places=3, required=False, allow_null=True
+    )
     uom = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
     reason = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class WasteLogCreateSerializer(serializers.Serializer):
+    production_run_id = serializers.IntegerField()
+    items = WasteLogCreateItemSerializer(many=True, required=False)
+    material_code = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+    material_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    wastage_qty = serializers.DecimalField(
+        max_digits=12, decimal_places=3, required=False, allow_null=True
+    )
+    uom = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    reason = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate(self, attrs):
+        items = attrs.get('items')
+        if items is not None:
+            entered_items = [
+                item for item in items
+                if item.get('wastage_qty') is not None and item['wastage_qty'] > Decimal('0')
+            ]
+            if not entered_items:
+                raise serializers.ValidationError({
+                    'items': 'Enter waste quantity for at least one BOM or manual item.'
+                })
+            attrs['items'] = entered_items
+            return attrs
+
+        if not attrs.get('material_name'):
+            raise serializers.ValidationError({'material_name': 'This field is required.'})
+        if attrs.get('wastage_qty') is None or attrs['wastage_qty'] <= Decimal('0'):
+            raise serializers.ValidationError({
+                'wastage_qty': 'Enter a waste quantity greater than zero.'
+            })
+        return attrs
 
 
 class WasteApprovalSerializer(serializers.Serializer):
