@@ -920,6 +920,12 @@ class WasteLogListCreateAPI(APIView):
             )
         service = _get_service(request)
         try:
+            if 'items' in serializer.validated_data:
+                waste_logs = service.create_waste_logs(serializer.validated_data)
+                return Response(
+                    WasteLogSerializer(waste_logs, many=True).data,
+                    status=status.HTTP_201_CREATED
+                )
             waste = service.create_waste_log(serializer.validated_data)
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

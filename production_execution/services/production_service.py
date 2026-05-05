@@ -1066,15 +1066,24 @@ class ProductionExecutionService:
         return qs
 
     def create_waste_log(self, data: dict) -> WasteLog:
+        return self.create_waste_logs(data)[0]
+
+    @transaction.atomic
+    def create_waste_logs(self, data: dict) -> list[WasteLog]:
         run = self._get_run_or_raise(data['production_run_id'])
-        return WasteLog.objects.create(
-            production_run=run,
-            material_code=data.get('material_code', ''),
-            material_name=data['material_name'],
-            wastage_qty=data['wastage_qty'],
-            uom=data.get('uom', ''),
-            reason=data.get('reason', ''),
-        )
+        items = data.get('items') or [data]
+
+        saved = []
+        for item in items:
+            saved.append(WasteLog.objects.create(
+                production_run=run,
+                material_code=item.get('material_code', ''),
+                material_name=item['material_name'],
+                wastage_qty=item['wastage_qty'],
+                uom=item.get('uom', ''),
+                reason=item.get('reason') or data.get('reason', ''),
+            ))
+        return saved
 
     def get_waste_log(self, waste_id: int) -> WasteLog:
         try:
