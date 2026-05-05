@@ -403,7 +403,7 @@ class LineClearanceListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'production_run', 'run_number', 'date', 'line', 'line_name',
             'document_id', 'status', 'qa_approved',
-            'created_by', 'created_at',
+            'created_by', 'created_at', 'updated_at',
         ]
 
 

@@ -82,6 +82,41 @@ class ProductionExecutionService:
         except ProductionLine.DoesNotExist:
             raise ValueError(f"Production line {line_id} not found.")
 
+    def _get_startable_line_clearance(self, run: ProductionRun):
+        """
+        A run-specific clearance takes priority. If no run-specific clearance
+        exists yet, a cleared line/date clearance can be used as the preset gate.
+        """
+        base_qs = LineClearance.objects.filter(
+            company=self.company,
+            line=run.line,
+            date=run.date,
+        ).order_by('-updated_at', '-id')
+
+        run_clearance = base_qs.filter(production_run=run).first()
+        if run_clearance:
+            if (
+                run_clearance.status == ClearanceStatus.CLEARED
+                and run_clearance.qa_approved
+            ):
+                return run_clearance
+            return None
+
+        return base_qs.filter(
+            production_run__isnull=True,
+            status=ClearanceStatus.CLEARED,
+            qa_approved=True,
+        ).first()
+
+    def _ensure_line_cleared_for_start(self, run: ProductionRun):
+        if self._get_startable_line_clearance(run):
+            return
+
+        raise ValueError(
+            "Production cannot start until line clearance is CLEARED by QA "
+            "for the selected line and date."
+        )
+
     # ==================================================================
     # MASTER DATA — Machines
     # ==================================================================
@@ -369,6 +404,7 @@ class ProductionExecutionService:
             raise ValueError("Production is already running.")
         if run.breakdowns.filter(is_active=True).exists():
             raise ValueError("There is an active breakdown. Resolve it first.")
+        self._ensure_line_cleared_for_start(run)
 
         now = timezone.now()
         segment = ProductionSegment.objects.create(
@@ -415,6 +451,8 @@ class ProductionExecutionService:
         run = self._get_run_or_raise(run_id)
         if run.status == RunStatus.COMPLETED:
             raise ValueError("Cannot add breakdowns to a COMPLETED run.")
+        if run.status == RunStatus.DRAFT:
+            self._ensure_line_cleared_for_start(run)
 
         now = timezone.now()
 
@@ -461,6 +499,9 @@ class ProductionExecutionService:
             )
         except MachineBreakdown.DoesNotExist:
             raise ValueError(f"Active breakdown {breakdown_id} not found.")
+
+        if action == 'start_production':
+            self._ensure_line_cleared_for_start(run)
 
         now = timezone.now()
         breakdown.end_time = now

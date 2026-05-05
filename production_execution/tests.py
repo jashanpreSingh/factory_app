@@ -12,6 +12,14 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from company.models import Company, UserCompany, UserRole
+from production_execution.models import (
+    ClearanceStatus,
+    LineClearance,
+    ProductionLine,
+    ProductionRun,
+    RunStatus,
+)
+from production_execution.services.production_service import ProductionExecutionService
 
 User = get_user_model()
 
@@ -229,6 +237,69 @@ class ProductionRunTests(BaseTestCase):
         unauthenticated_client = APIClient()
         resp = unauthenticated_client.get(f'{BASE_URL}/runs/')
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ProductionStartLineClearanceTests(BaseTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.line = ProductionLine.objects.create(
+            company=self.company,
+            name='Line-1',
+        )
+        self.run = ProductionRun.objects.create(
+            company=self.company,
+            run_number=1,
+            date=date.today(),
+            line=self.line,
+            product='Test Product',
+            status=RunStatus.DRAFT,
+            created_by=self.user,
+        )
+        self.service = ProductionExecutionService(self.company.code)
+
+    def test_start_production_requires_cleared_line_clearance(self):
+        with self.assertRaisesMessage(ValueError, 'line clearance is CLEARED by QA'):
+            self.service.start_production(self.run.id)
+
+        clearance = LineClearance.objects.create(
+            company=self.company,
+            production_run=self.run,
+            date=self.run.date,
+            line=self.line,
+            status=ClearanceStatus.SUBMITTED,
+            qa_approved=False,
+            created_by=self.user,
+        )
+
+        with self.assertRaisesMessage(ValueError, 'line clearance is CLEARED by QA'):
+            self.service.start_production(self.run.id)
+
+        clearance.status = ClearanceStatus.CLEARED
+        clearance.qa_approved = True
+        clearance.qa_approved_by = self.user
+        clearance.save()
+
+        segment = self.service.start_production(self.run.id)
+
+        self.run.refresh_from_db()
+        self.assertTrue(segment.is_active)
+        self.assertEqual(self.run.status, RunStatus.IN_PROGRESS)
+
+    def test_start_production_allows_generic_cleared_line_date_clearance(self):
+        LineClearance.objects.create(
+            company=self.company,
+            date=self.run.date,
+            line=self.line,
+            status=ClearanceStatus.CLEARED,
+            qa_approved=True,
+            qa_approved_by=self.user,
+            created_by=self.user,
+        )
+
+        segment = self.service.start_production(self.run.id)
+
+        self.assertTrue(segment.is_active)
 
 
 class HourlyLogTests(BaseTestCase):
