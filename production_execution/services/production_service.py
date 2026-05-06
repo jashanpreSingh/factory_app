@@ -281,8 +281,48 @@ class ProductionExecutionService:
             except Exception as e:
                 logger.warning(f"Could not auto-fetch BOM for run {run.id}: {e}")
 
+        self._sync_run_labour_entry(run, user=user)
+        from .cost_calculator import recalculate_run_cost
+        recalculate_run_cost(run)
+
         logger.info(f"Production run created: ID={run.id}, Run#{run_number}")
         return run
+
+    def _sync_run_labour_entry(self, run: ProductionRun, user=None):
+        from decimal import Decimal
+        from ..models import ResourceLabour
+
+        default_description = 'Production labour'
+        worker_count = int(run.labour_count or 0)
+        entry = run.labour_entries.filter(description=default_description).first()
+
+        if worker_count <= 0:
+            if entry:
+                entry.delete()
+            return None
+
+        rate_per_hour = run.labour_cost_per_hour
+        if rate_per_hour is None:
+            rate_per_hour = Decimal('0.0000')
+
+        defaults = {
+            'worker_count': worker_count,
+            'hours_worked': Decimal('1.00'),
+            'rate_per_hour': rate_per_hour,
+        }
+
+        if entry:
+            for field, value in defaults.items():
+                setattr(entry, field, value)
+            entry.save()
+            return entry
+
+        return ResourceLabour.objects.create(
+            production_run=run,
+            description=default_description,
+            created_by=user,
+            **defaults,
+        )
 
     def auto_populate_materials_from_bom(self, run: ProductionRun) -> list:
         """
@@ -324,7 +364,7 @@ class ProductionExecutionService:
     def get_run(self, run_id: int) -> ProductionRun:
         return self._get_run_or_raise(run_id)
 
-    def update_run(self, run_id: int, data: dict) -> ProductionRun:
+    def update_run(self, run_id: int, data: dict, user=None) -> ProductionRun:
         run = self._get_run_or_raise(run_id)
         if run.status == RunStatus.COMPLETED:
             raise ValueError("Cannot edit a COMPLETED run.")
@@ -340,6 +380,10 @@ class ProductionExecutionService:
             run.machines.set(machines)
 
         run.save()
+        if 'labour_count' in data or 'labour_cost_per_hour' in data:
+            self._sync_run_labour_entry(run, user=user)
+            from .cost_calculator import recalculate_run_cost
+            recalculate_run_cost(run)
         return run
 
     def delete_run(self, run_id: int):
@@ -359,7 +403,9 @@ class ProductionExecutionService:
         if run.status == RunStatus.COMPLETED:
             raise ValueError("Cannot start a COMPLETED run.")
 
-        # Warehouse approval gate — only allow start if approved
+        # Warehouse approval gate — only allow start after warehouse has approved BOM materials.
+        if run.warehouse_approval_status == 'NOT_REQUESTED':
+            raise ValueError("Cannot start production — submit the BOM request to warehouse first.")
         if run.warehouse_approval_status == 'PENDING':
             raise ValueError("Cannot start production — BOM request is pending warehouse approval.")
         if run.warehouse_approval_status == 'REJECTED':

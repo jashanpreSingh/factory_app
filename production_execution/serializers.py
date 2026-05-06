@@ -296,6 +296,12 @@ class MaterialUsageSerializer(serializers.ModelSerializer):
     wastage_quantity = serializers.SerializerMethodField()
     wastage_percentage = serializers.SerializerMethodField()
     final_consumption_quantity = serializers.SerializerMethodField()
+    warehouse_request_id = serializers.SerializerMethodField()
+    warehouse_request_status = serializers.SerializerMethodField()
+    warehouse_line_status = serializers.SerializerMethodField()
+    warehouse_requested_qty = serializers.SerializerMethodField()
+    warehouse_approved_qty = serializers.SerializerMethodField()
+    warehouse_available_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductionMaterialUsage
@@ -305,6 +311,9 @@ class MaterialUsageSerializer(serializers.ModelSerializer):
             'bom_quantity', 'wastage_percentage', 'wastage_quantity',
             'final_consumption_quantity',
             'uom', 'created_at', 'updated_at',
+            'warehouse_request_id', 'warehouse_request_status',
+            'warehouse_line_status', 'warehouse_requested_qty',
+            'warehouse_approved_qty', 'warehouse_available_stock',
         ]
         read_only_fields = ['wastage_qty', 'created_at', 'updated_at']
 
@@ -346,6 +355,36 @@ class MaterialUsageSerializer(serializers.ModelSerializer):
     def get_final_consumption_quantity(self, obj):
         final_quantity = Decimal(obj.opening_qty or 0) + self._get_bom_waste_quantity(obj)
         return self._format_quantity(final_quantity)
+
+    def _bom_request(self):
+        return self.context.get('bom_request')
+
+    def _bom_line(self, obj):
+        return self.context.get('bom_lines_by_material_id', {}).get(obj.id)
+
+    def get_warehouse_request_id(self, obj):
+        bom_request = self._bom_request()
+        return bom_request.id if bom_request else None
+
+    def get_warehouse_request_status(self, obj):
+        bom_request = self._bom_request()
+        return bom_request.status if bom_request else None
+
+    def get_warehouse_line_status(self, obj):
+        bom_line = self._bom_line(obj)
+        return bom_line.status if bom_line else None
+
+    def get_warehouse_requested_qty(self, obj):
+        bom_line = self._bom_line(obj)
+        return str(bom_line.required_qty) if bom_line else None
+
+    def get_warehouse_approved_qty(self, obj):
+        bom_line = self._bom_line(obj)
+        return str(bom_line.approved_qty) if bom_line else None
+
+    def get_warehouse_available_stock(self, obj):
+        bom_line = self._bom_line(obj)
+        return str(bom_line.available_stock) if bom_line else None
 
 
 class MaterialUsageCreateSerializer(serializers.Serializer):

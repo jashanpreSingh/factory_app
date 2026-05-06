@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict, deque
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -380,7 +381,7 @@ class RunDetailAPI(APIView):
             )
         service = _get_service(request)
         try:
-            run = service.update_run(run_id, serializer.validated_data)
+            run = service.update_run(run_id, serializer.validated_data, user=request.user)
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ProductionRunDetailSerializer(run).data)
@@ -588,12 +589,46 @@ class MaterialUsageListCreateAPI(APIView):
     def get(self, request, run_id):
         service = _get_service(request)
         try:
-            materials = service.get_run_materials(
+            materials = list(service.get_run_materials(
                 run_id, batch_number=request.GET.get('batch_number')
-            )
+            ))
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
-        return Response(MaterialUsageSerializer(materials, many=True).data)
+
+        bom_request = None
+        bom_lines_by_material_id = {}
+        if not request.GET.get('batch_number'):
+            try:
+                from warehouse.models import BOMRequest
+                bom_request = (
+                    BOMRequest.objects
+                    .filter(company=request.company.company, production_run_id=run_id)
+                    .prefetch_related('lines')
+                    .order_by('-created_at')
+                    .first()
+                )
+                if bom_request:
+                    lines_by_code = defaultdict(deque)
+                    for line in bom_request.lines.all().order_by('base_line', 'id'):
+                        lines_by_code[line.item_code].append(line)
+                    for material in materials:
+                        matched_lines = lines_by_code.get(material.material_code)
+                        if matched_lines:
+                            bom_lines_by_material_id[material.id] = matched_lines.popleft()
+            except Exception:
+                logger.exception(
+                    "Failed to enrich material usages with BOM approval data "
+                    f"for run {run_id}"
+                )
+
+        return Response(MaterialUsageSerializer(
+            materials,
+            many=True,
+            context={
+                'bom_request': bom_request,
+                'bom_lines_by_material_id': bom_lines_by_material_id,
+            },
+        ).data)
 
     def post(self, request, run_id):
         data = request.data
@@ -1423,7 +1458,7 @@ class ResourceLabourDetailAPI(APIView):
             entry = ResourceLabour.objects.get(id=entry_id, production_run=run)
         except (ValueError, ResourceLabour.DoesNotExist) as e:
             return Response({'detail': str(e)}, status=status.HTTP_404_NOT_FOUND)
-        for field in ['worker_name', 'hours_worked', 'rate_per_hour']:
+        for field in ['description', 'worker_count', 'hours_worked', 'rate_per_hour']:
             if field in request.data:
                 setattr(entry, field, request.data[field])
         entry.save()
