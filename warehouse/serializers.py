@@ -103,11 +103,21 @@ class BOMRequestRejectSerializer(serializers.Serializer):
     reason = serializers.CharField()
 
 
+class MaterialIssueLineSerializer(serializers.Serializer):
+    line_id = serializers.IntegerField()
+    quantity = serializers.DecimalField(
+        max_digits=12, decimal_places=3, required=False
+    )
+    warehouse = serializers.CharField(
+        max_length=20, required=False, allow_blank=True, default=''
+    )
+
+
 class MaterialIssueSerializer(serializers.Serializer):
     posting_date = serializers.DateField(required=False)
-    lines = serializers.ListField(
-        child=serializers.DictField(), required=False, default=list,
-        help_text="[{line_id, quantity}] — defaults to all approved remaining"
+    lines = MaterialIssueLineSerializer(
+        many=True, required=False, default=list,
+        help_text="[{line_id, quantity, warehouse}] - defaults to all approved remaining"
     )
 
 

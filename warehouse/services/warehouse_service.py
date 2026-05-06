@@ -499,7 +499,7 @@ class WarehouseService:
     def issue_materials_to_sap(self, request_id: int, data: dict, user) -> BOMRequest:
         """
         Issue approved materials to SAP via InventoryGenExits.
-        data.lines = [{line_id, quantity}]  (optional, defaults to approved_qty)
+        data.lines = [{line_id, quantity, warehouse}]  (optional, defaults to approved_qty)
         """
         import requests as http_requests
 
@@ -525,13 +525,18 @@ class WarehouseService:
                         f"Issue qty {qty} exceeds remaining approved qty {remaining} "
                         f"for {line.item_code}"
                     )
-                lines_to_issue.append({'line': line, 'qty': qty})
+                warehouse = (ld.get('warehouse') or line.warehouse or '').strip()
+                lines_to_issue.append({'line': line, 'qty': qty, 'warehouse': warehouse})
         else:
             # Issue all approved lines for their remaining qty
             for line in bom_request.lines.filter(status=BOMLineStatus.APPROVED):
                 remaining = line.approved_qty - line.issued_qty
                 if remaining > 0:
-                    lines_to_issue.append({'line': line, 'qty': remaining})
+                    lines_to_issue.append({
+                        'line': line,
+                        'qty': remaining,
+                        'warehouse': line.warehouse or '',
+                    })
 
         if not lines_to_issue:
             raise ValueError("No materials to issue.")
@@ -562,14 +567,18 @@ class WarehouseService:
         document_lines = []
         for item in lines_to_issue:
             line = item['line']
-            # When BaseType=202 (production order), SAP derives ItemCode
-            # and WarehouseCode from the base document — do NOT send them.
-            document_lines.append({
+            selected_warehouse = (item.get('warehouse') or '').strip()
+            # Keep the production-order base link; override WarehouseCode only when changed.
+            # If unchanged, SAP derives the default warehouse from the base document.
+            document_line = {
                 "Quantity": float(item['qty']),
                 "BaseType": 202,
                 "BaseEntry": doc_entry,
                 "BaseLine": line.base_line,
-            })
+            }
+            if selected_warehouse and selected_warehouse != (line.warehouse or ''):
+                document_line["WarehouseCode"] = selected_warehouse
+            document_lines.append(document_line)
 
         payload = {
             "DocDate": posting_date,
