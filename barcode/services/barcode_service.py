@@ -1,11 +1,12 @@
 import logging
+import re
 from decimal import Decimal as D
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
 from ..models import (
-    Pallet, Box, PalletMovement, BoxMovement, LooseStock,
+    BarcodeSequence, Pallet, Box, PalletMovement, BoxMovement, LooseStock,
     PalletStatus, BoxStatus, LooseStockStatus,
     PalletMovementType, BoxMovementType, DismantleReason,
 )
@@ -14,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class BarcodeService:
+    LINE_KEY_MAX_LENGTH = 32
+    SEQUENCE_BOX = 'BOX'
+    SEQUENCE_PALLET = 'PALLET'
 
     def __init__(self, company_code: str):
         self.company_code = company_code
@@ -32,11 +36,82 @@ class BarcodeService:
 
     @staticmethod
     def _sanitize_line(line: str) -> str:
-        """Sanitize line name for use in barcode IDs (replace spaces with _)."""
-        return line.replace(' ', '_') if line else 'XX'
+        """Sanitize line name for use in barcode IDs."""
+        if not line:
+            return 'XX'
+        line_key = re.sub(r'[^A-Za-z0-9_-]+', '_', str(line).strip())
+        line_key = re.sub(r'_+', '_', line_key).strip('_-')
+        if not line_key:
+            return 'XX'
+        return line_key[:BarcodeService.LINE_KEY_MAX_LENGTH]
 
-    def _next_box_seq(self, date_str: str, line_key: str) -> int:
+    @staticmethod
+    def _clean_production_line(line: str) -> str:
+        """Keep stored line labels within the model field limit."""
+        return str(line or '').strip()[:50]
+
+    def _existing_next_value(self, sequence_type: str, date_str: str, line_key: str) -> int:
+        """Find the next value from existing records when a sequence row is created."""
+        if sequence_type == self.SEQUENCE_BOX:
+            model = Box
+            field_name = 'box_barcode'
+            prefix = f"BOX-{date_str}-{line_key}-"
+        else:
+            model = Pallet
+            field_name = 'pallet_id'
+            prefix = f"PLT-{date_str}-{line_key}-"
+
+        last = (
+            model.objects
+            .filter(company=self.company, **{f'{field_name}__startswith': prefix})
+            .order_by(f'-{field_name}')
+            .values_list(field_name, flat=True)
+            .first()
+        )
+        if last:
+            return int(last.split('-')[-1]) + 1
+        return 1
+
+    def _reserve_sequence(self, sequence_type: str, date_str: str,
+                          line_key: str, count: int = 1) -> int:
+        """
+        Reserve a contiguous range for barcode IDs.
+
+        The sequence row is locked for the current transaction, so parallel
+        label generation cannot receive the same number range.
+        """
+        sequence, _ = (
+            BarcodeSequence.objects
+            .select_for_update()
+            .get_or_create(
+                company=self.company,
+                sequence_type=sequence_type,
+                date_str=date_str,
+                line_key=line_key,
+                defaults={
+                    'next_value': self._existing_next_value(
+                        sequence_type, date_str, line_key
+                    )
+                },
+            )
+        )
+        start = sequence.next_value
+        sequence.next_value = start + count
+        sequence.save(update_fields=['next_value', 'updated_at'])
+        return start
+
+    def _next_box_seq(self, date_str: str, line_key: str, count: int = 1) -> int:
         """Get the next available sequence number for box barcodes."""
+        return self._reserve_sequence(self.SEQUENCE_BOX, date_str, line_key, count)
+
+    def _next_pallet_id(self, date_str: str, line: str) -> str:
+        """Generate next pallet ID: PLT-YYYYMMDD-LINE-NNN"""
+        line_key = self._sanitize_line(line)
+        seq = self._reserve_sequence(self.SEQUENCE_PALLET, date_str, line_key)
+        return f"PLT-{date_str}-{line_key}-{seq:03d}"
+
+    def _legacy_next_box_seq(self, date_str: str, line_key: str) -> int:
+        """Fallback helper kept for troubleshooting old data."""
         prefix = f"BOX-{date_str}-{line_key}-"
         last = (
             Box.objects
@@ -48,23 +123,6 @@ class BarcodeService:
         if last:
             return int(last.split('-')[-1]) + 1
         return 1
-
-    def _next_pallet_id(self, date_str: str, line: str) -> str:
-        """Generate next pallet ID: PLT-YYYYMMDD-LINE-NNN"""
-        line_key = self._sanitize_line(line)
-        prefix = f"PLT-{date_str}-{line_key}-"
-        last = (
-            Pallet.objects
-            .filter(company=self.company, pallet_id__startswith=prefix)
-            .order_by('-pallet_id')
-            .values_list('pallet_id', flat=True)
-            .first()
-        )
-        if last:
-            seq = int(last.split('-')[-1]) + 1
-        else:
-            seq = 1
-        return f"{prefix}{seq:03d}"
 
     def _build_box_barcode_data(self, box):
         """Build the JSON payload that gets encoded in the QR code."""
@@ -111,7 +169,7 @@ class BarcodeService:
         qty_per_box = D(str(data['qty']))
         box_count = int(data['box_count'])
         warehouse = data['warehouse']
-        line = data.get('production_line', '')
+        line = self._clean_production_line(data.get('production_line', ''))
         mfg_date = data['mfg_date']
         exp_date = data.get('exp_date') or mfg_date
         uom = data.get('uom', '')
@@ -133,8 +191,8 @@ class BarcodeService:
             except ProductionRun.DoesNotExist:
                 raise ValueError(f"Production run {run_id} not found.")
 
-        # Get the starting sequence once, then increment for each box
-        start_seq = self._next_box_seq(date_str, line_key)
+        # Reserve a contiguous sequence range once, then increment for each box.
+        start_seq = self._next_box_seq(date_str, line_key, box_count)
         prefix = f"BOX-{date_str}-{line_key}-"
 
         boxes = []
@@ -270,7 +328,7 @@ class BarcodeService:
         """
         box_ids = data['box_ids']
         warehouse = data['warehouse']
-        line = data.get('production_line', '')
+        line = self._clean_production_line(data.get('production_line', ''))
         run_id = data.get('production_run_id')
 
         boxes = list(

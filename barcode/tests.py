@@ -1,0 +1,245 @@
+import json
+from datetime import date
+from decimal import Decimal
+
+from django.test import TestCase
+
+from accounts.models import User
+from company.models import Company
+
+from .models import (
+    BarcodeSequence,
+    Box,
+    BoxMovement,
+    BoxMovementType,
+    BoxStatus,
+    EntityType,
+    LooseStockStatus,
+    PalletMovement,
+    ScanLog,
+    ScanResult,
+)
+from .services.barcode_service import BarcodeService
+from .services.production_release_service import ProductionReleaseOilService
+from .services.scan_service import ScanService
+
+
+class BarcodeWorkflowTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(
+            name='Barcode Test Company',
+            code='TESTCO',
+        )
+        self.user = User.objects.create_user(
+            email='barcode@example.com',
+            password='test-pass',
+            full_name='Barcode Tester',
+            employee_code='EMP-BC-001',
+        )
+        self.service = BarcodeService(company_code=self.company.code)
+        self.scan_service = ScanService(company_code=self.company.code)
+
+    def _generate_boxes(self, count=3, qty='12.50', line='Line 1', batch='BATCH-001'):
+        return self.service.generate_boxes(
+            {
+                'item_code': 'FG001',
+                'item_name': 'Test Finished Good',
+                'batch_number': batch,
+                'qty': Decimal(qty),
+                'box_count': count,
+                'uom': 'PCS',
+                'mfg_date': date(2026, 5, 7),
+                'exp_date': date(2027, 5, 7),
+                'warehouse': 'FG01',
+                'production_line': line,
+            },
+            user=self.user,
+        )
+
+    def test_generate_boxes_reserves_unique_sequence_and_logs_movements(self):
+        boxes = self._generate_boxes(count=3)
+
+        self.assertEqual(
+            [box.box_barcode for box in boxes],
+            [
+                'BOX-20260507-Line_1-0001',
+                'BOX-20260507-Line_1-0002',
+                'BOX-20260507-Line_1-0003',
+            ],
+        )
+        self.assertEqual(Box.objects.count(), 3)
+        self.assertEqual(
+            BoxMovement.objects.filter(movement_type=BoxMovementType.CREATE).count(),
+            3,
+        )
+        self.assertTrue(all(box.barcode_data['type'] == 'BOX' for box in boxes))
+
+        sequence = BarcodeSequence.objects.get(
+            company=self.company,
+            sequence_type='BOX',
+            date_str='20260507',
+            line_key='Line_1',
+        )
+        self.assertEqual(sequence.next_value, 4)
+
+        more_boxes = self._generate_boxes(count=2)
+        self.assertEqual(
+            [box.box_barcode for box in more_boxes],
+            [
+                'BOX-20260507-Line_1-0004',
+                'BOX-20260507-Line_1-0005',
+            ],
+        )
+
+    def test_create_pallet_links_boxes_and_tracks_totals(self):
+        boxes = self._generate_boxes(count=3)
+
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [box.id for box in boxes],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+            },
+            user=self.user,
+        )
+
+        self.assertEqual(pallet.pallet_id, 'PLT-20260507-Line_1-001')
+        self.assertEqual(pallet.box_count, 3)
+        self.assertEqual(pallet.total_qty, Decimal('37.50'))
+        self.assertEqual(PalletMovement.objects.count(), 1)
+        self.assertEqual(
+            Box.objects.filter(pallet=pallet, current_warehouse='FG01').count(),
+            3,
+        )
+        self.assertEqual(pallet.barcode_data['type'], 'PALLET')
+
+    def test_scan_service_handles_exact_qr_one_d_and_missing_barcodes(self):
+        boxes = self._generate_boxes(count=3)
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [box.id for box in boxes],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+            },
+            user=self.user,
+        )
+
+        exact_box = self.scan_service.process_scan(boxes[0].box_barcode, 'LOOKUP')
+        self.assertEqual(exact_box['result'], ScanResult.SUCCESS)
+        self.assertEqual(exact_box['entity_type'], EntityType.BOX)
+        self.assertEqual(exact_box['entity_data']['box_barcode'], boxes[0].box_barcode)
+
+        qr_box = self.scan_service.process_scan(json.dumps(boxes[1].barcode_data), 'LOOKUP')
+        self.assertEqual(qr_box['result'], ScanResult.SUCCESS)
+        self.assertEqual(qr_box['entity_data']['box_barcode'], boxes[1].box_barcode)
+
+        one_d_box = self.scan_service.lookup_barcode(
+            'B' + boxes[2].box_barcode.replace('-', '')
+        )
+        self.assertEqual(one_d_box['entity_type'], EntityType.BOX)
+        self.assertEqual(one_d_box['entity_data']['box_barcode'], boxes[2].box_barcode)
+
+        qr_pallet_lookup = self.scan_service.lookup_barcode(json.dumps(pallet.barcode_data))
+        self.assertEqual(qr_pallet_lookup['entity_type'], EntityType.PALLET)
+        self.assertEqual(qr_pallet_lookup['entity_data']['pallet_id'], pallet.pallet_id)
+
+        one_d_pallet = self.scan_service.process_scan(
+            'P' + pallet.pallet_id.replace('-', ''),
+            'LOOKUP',
+        )
+        self.assertEqual(one_d_pallet['result'], ScanResult.SUCCESS)
+        self.assertEqual(one_d_pallet['entity_data']['pallet_id'], pallet.pallet_id)
+
+        missing = self.scan_service.process_scan('NOT-A-REAL-BARCODE', 'LOOKUP')
+        self.assertEqual(missing['result'], ScanResult.NOT_FOUND)
+        self.assertEqual(missing['entity_type'], EntityType.UNKNOWN)
+        self.assertEqual(ScanLog.objects.count(), 4)
+
+    def test_void_dismantle_and_repack_flow(self):
+        boxes = self._generate_boxes(count=2, qty='10.00')
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [box.id for box in boxes],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+            },
+            user=self.user,
+        )
+
+        voided_box = self.service.void_box(
+            boxes[0].id,
+            reason='Damaged label',
+            user=self.user,
+        )
+        pallet.refresh_from_db()
+        self.assertEqual(voided_box.status, BoxStatus.VOID)
+        self.assertIsNone(voided_box.pallet)
+        self.assertEqual(pallet.box_count, 1)
+        self.assertEqual(pallet.total_qty, Decimal('10.00'))
+
+        loose = self.service.dismantle_box(
+            boxes[1].id,
+            loose_qty=Decimal('4.00'),
+            reason='REPACK',
+            reason_notes='Pilot repack test',
+            user=self.user,
+        )
+        boxes[1].refresh_from_db()
+        pallet.refresh_from_db()
+        self.assertEqual(boxes[1].status, BoxStatus.PARTIAL)
+        self.assertEqual(boxes[1].qty, Decimal('6.00'))
+        self.assertEqual(loose.status, LooseStockStatus.ACTIVE)
+        self.assertEqual(loose.qty, Decimal('4.00'))
+        self.assertEqual(pallet.total_qty, Decimal('6.00'))
+
+        repacked_box = self.service.repack(
+            loose_ids=[loose.id],
+            qty_per_loose=None,
+            warehouse='FG01',
+            user=self.user,
+        )
+        loose.refresh_from_db()
+        self.assertEqual(loose.status, LooseStockStatus.REPACKED)
+        self.assertEqual(loose.qty, Decimal('0.00'))
+        self.assertEqual(loose.repacked_into_box, repacked_box)
+        self.assertTrue(repacked_box.box_barcode.startswith('BOX-'))
+
+    def test_line_key_is_sanitized_to_fit_barcode_field(self):
+        boxes = self._generate_boxes(
+            count=1,
+            line='Filler Line / East Wing / Extremely Long Name 1234567890',
+        )
+
+        self.assertLessEqual(len(boxes[0].box_barcode), 50)
+        self.assertNotIn('/', boxes[0].box_barcode)
+
+    def test_production_release_oil_row_normalizes_for_label_dropdown(self):
+        row = ProductionReleaseOilService._normalize_row({
+            'DocEntry': 9465,
+            'DocNum': 226926733,
+            'PostDate': date(2026, 2, 20),
+            'ItemCode': 'FG0000003',
+            'ItemName': 'COLD PRESS 5 LTR + EXTRA LIGHT OLIVE 1 LTR 4 PCS',
+            'Liter Countable': 'Y',
+            'ManBtchNum': 'Y',
+            'PlannedQty': Decimal('336.00'),
+            'Box': Decimal('84.00'),
+            'Liter': Decimal('1680.00'),
+            'Box Size': Decimal('4.00'),
+            'Volume Per Pc': Decimal('5.00'),
+            'Volume Per Box': Decimal('20.00'),
+            'U_BATCH_NO': 'BATCH-001',
+            'MFG Date': date(2026, 2, 20),
+            'Expiry Date': date(2027, 2, 20),
+            'Status': 'R',
+        })
+
+        self.assertEqual(row['doc_entry'], 9465)
+        self.assertEqual(row['doc_num'], 226926733)
+        self.assertEqual(row['post_date'], '2026-02-20')
+        self.assertEqual(row['item_code'], 'FG0000003')
+        self.assertEqual(row['batch_number'], 'BATCH-001')
+        self.assertEqual(row['box_count'], '84')
+        self.assertEqual(row['box_size'], '4')
+        self.assertEqual(row['mfg_date'], '2026-02-20')
+        self.assertEqual(row['exp_date'], '2027-02-20')

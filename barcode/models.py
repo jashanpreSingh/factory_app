@@ -93,6 +93,31 @@ class ScanResult(models.TextChoices):
 
 
 # ---------------------------------------------------------------------------
+# Barcode Sequence - reserves box/pallet numbers per company/date/line
+# ---------------------------------------------------------------------------
+
+class BarcodeSequence(models.Model):
+    company = models.ForeignKey(
+        'company.Company', on_delete=models.CASCADE,
+        related_name='barcode_sequences'
+    )
+    sequence_type = models.CharField(max_length=20)
+    date_str = models.CharField(max_length=8)
+    line_key = models.CharField(max_length=50)
+    next_value = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('company', 'sequence_type', 'date_str', 'line_key')
+        ordering = ['sequence_type', 'date_str', 'line_key']
+        verbose_name = 'Barcode Sequence'
+        verbose_name_plural = 'Barcode Sequences'
+
+    def __str__(self):
+        return f"{self.sequence_type} {self.date_str} {self.line_key}: {self.next_value}"
+
+
+# ---------------------------------------------------------------------------
 # Pallet — collection of boxes
 # ---------------------------------------------------------------------------
 

@@ -8,7 +8,7 @@ from .views import (
     DismantlePalletAPI, DismantleBoxAPI, RepackAPI,
     LooseStockListAPI, LooseStockDetailAPI,
     ScanAPI, BarcodeLookupAPI, ScanHistoryAPI,
-    ProductionRunLabelsAPI, ProductionRunPalletAPI,
+    ProductionRunLabelsAPI, ProductionRunPalletAPI, ProductionReleaseOilListAPI,
 )
 
 urlpatterns = [
@@ -69,6 +69,7 @@ urlpatterns = [
     # ------------------------------------------------------------------
     # Production Integration
     # ------------------------------------------------------------------
+    path('production-release-oil/', ProductionReleaseOilListAPI.as_view(), name='bc-production-release-oil'),
     path('production/<int:run_id>/generate-labels/', ProductionRunLabelsAPI.as_view(), name='bc-production-labels'),
     path('production/<int:run_id>/create-pallet/', ProductionRunPalletAPI.as_view(), name='bc-production-pallet'),
 ]

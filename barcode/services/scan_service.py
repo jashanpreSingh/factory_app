@@ -132,37 +132,43 @@ class ScanService:
 
     def lookup_barcode(self, barcode_string: str) -> dict:
         """Look up any barcode without logging."""
-        box = self._lookup_box(barcode_string)
-        if box:
-            return {
-                'entity_type': EntityType.BOX,
-                'entity_id': box.id,
-                'entity_data': {
-                    'id': box.id, 'box_barcode': box.box_barcode,
-                    'item_code': box.item_code, 'item_name': box.item_name,
-                    'batch_number': box.batch_number,
-                    'qty': str(box.qty), 'uom': box.uom,
-                    'status': box.status,
-                    'current_warehouse': box.current_warehouse,
-                    'pallet_id': box.pallet.pallet_id if box.pallet else None,
-                },
-            }
+        parsed = self._parse_barcode(barcode_string)
+        entity_type = parsed.get('entity_type', EntityType.UNKNOWN)
+        lookup_value = parsed.get('barcode') or barcode_string
 
-        pallet = self._lookup_pallet(barcode_string)
-        if pallet:
-            return {
-                'entity_type': EntityType.PALLET,
-                'entity_id': pallet.id,
-                'entity_data': {
-                    'id': pallet.id, 'pallet_id': pallet.pallet_id,
-                    'item_code': pallet.item_code, 'item_name': pallet.item_name,
-                    'batch_number': pallet.batch_number,
-                    'box_count': pallet.box_count,
-                    'total_qty': str(pallet.total_qty), 'uom': pallet.uom,
-                    'status': pallet.status,
-                    'current_warehouse': pallet.current_warehouse,
-                },
-            }
+        if entity_type in (EntityType.BOX, EntityType.UNKNOWN):
+            box = self._lookup_box(lookup_value)
+            if box:
+                return {
+                    'entity_type': EntityType.BOX,
+                    'entity_id': box.id,
+                    'entity_data': {
+                        'id': box.id, 'box_barcode': box.box_barcode,
+                        'item_code': box.item_code, 'item_name': box.item_name,
+                        'batch_number': box.batch_number,
+                        'qty': str(box.qty), 'uom': box.uom,
+                        'status': box.status,
+                        'current_warehouse': box.current_warehouse,
+                        'pallet_id': box.pallet.pallet_id if box.pallet else None,
+                    },
+                }
+
+        if entity_type in (EntityType.PALLET, EntityType.UNKNOWN):
+            pallet = self._lookup_pallet(lookup_value)
+            if pallet:
+                return {
+                    'entity_type': EntityType.PALLET,
+                    'entity_id': pallet.id,
+                    'entity_data': {
+                        'id': pallet.id, 'pallet_id': pallet.pallet_id,
+                        'item_code': pallet.item_code, 'item_name': pallet.item_name,
+                        'batch_number': pallet.batch_number,
+                        'box_count': pallet.box_count,
+                        'total_qty': str(pallet.total_qty), 'uom': pallet.uom,
+                        'status': pallet.status,
+                        'current_warehouse': pallet.current_warehouse,
+                    },
+                }
 
         return {'entity_type': EntityType.UNKNOWN, 'entity_id': None, 'entity_data': None}
 

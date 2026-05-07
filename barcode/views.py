@@ -10,6 +10,10 @@ from .services.barcode_service import BarcodeService
 from .services.label_service import LabelService
 from .services.scan_service import ScanService
 from .services.production_integration_service import ProductionBarcodeIntegration
+from .services.production_release_service import (
+    ProductionReleaseOilService,
+    ProductionReleaseReadError,
+)
 from .serializers import (
     BoxGenerateSerializer, BoxListSerializer, BoxDetailSerializer,
     PalletCreateSerializer, PalletListSerializer, PalletDetailSerializer,
@@ -625,6 +629,27 @@ class ProductionRunLabelsAPI(APIView):
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProductionReleaseOilListAPI(APIView):
+    """List released rows from SAP HANA PRODUCTION_RELEASE_OIL for label generation."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        try:
+            service = ProductionReleaseOilService(
+                company_code=request.company.company.code,
+            )
+            rows = service.list_releases(
+                search=request.query_params.get('search', '').strip(),
+                limit=request.query_params.get('limit', 100),
+            )
+        except ProductionReleaseReadError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(rows)
 
 
 class ProductionRunPalletAPI(APIView):
