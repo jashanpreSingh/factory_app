@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'non_moving_rm',
     'warehouse',
     'barcode',
+    'ai_assistant',
 ]
 
 MIDDLEWARE = [
@@ -188,3 +189,14 @@ STOCK_ALERT_COOLDOWN_MINUTES = config('STOCK_ALERT_COOLDOWN_MINUTES', default=60
 # APScheduler
 APSCHEDULER_DATETIME_FORMAT = "N j, Y, f:s a"
 APSCHEDULER_RUN_NOW_TIMEOUT = 25  # seconds
+
+# AI assistant
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.5-flash-lite')
+GEMINI_FALLBACK_MODELS = config(
+    'GEMINI_FALLBACK_MODELS',
+    default='gemini-flash-lite-latest,gemini-2.0-flash-lite',
+    cast=Csv(),
+)
+AI_ASSISTANT_TIMEOUT_SECONDS = config('AI_ASSISTANT_TIMEOUT_SECONDS', default=45, cast=int)
+AI_ASSISTANT_MAX_CONTEXT_ROWS = config('AI_ASSISTANT_MAX_CONTEXT_ROWS', default=5, cast=int)
