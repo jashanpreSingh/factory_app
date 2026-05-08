@@ -27,6 +27,7 @@ class TransporterAdmin(admin.ModelAdmin):
         "name",
         "contact_person",
         "mobile_no",
+        "gstin",
         "vehicle_count",
         "is_active_display",
         "created_at",
@@ -40,6 +41,7 @@ class TransporterAdmin(admin.ModelAdmin):
         "name",
         "contact_person",
         "mobile_no",
+        "gstin",
     )
     ordering = ("name",)
     date_hierarchy = "created_at"
@@ -53,7 +55,7 @@ class TransporterAdmin(admin.ModelAdmin):
             "description": "Transporter/Logistics company details"
         }),
         ("Contact Information", {
-            "fields": ("contact_person", "mobile_no"),
+            "fields": ("contact_person", "mobile_no", "gstin"),
             "classes": ("wide",),
         }),
         ("Status", {

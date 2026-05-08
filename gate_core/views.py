@@ -1,5 +1,10 @@
+import datetime as dt
+from decimal import Decimal, InvalidOperation
+
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 # Create your views here.
 from rest_framework.views import APIView
@@ -12,20 +17,53 @@ from quality_control.enums import FactoryHeadDecision, InspectionStatus
 from quality_control.models import RawMaterialInspection
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, ValidationError
+from sap_client.client import SAPClient
+from sap_client.exceptions import SAPConnectionError, SAPDataError
 from .permissions import (
     CanViewRawMaterialFullEntry,
     CanViewDailyNeedFullEntry,
     CanViewMaintenanceFullEntry,
     CanViewConstructionFullEntry,
 )
-from .models import EmptyVehicleGateOut, GateAttachment, RejectedQCReturnEntry, RejectedQCReturnItem, UnitChoice
+from .models import (
+    BSTGateIn,
+    BSTGateInItem,
+    BSTGateOut,
+    BSTGateOutItem,
+    BSTGateReturn,
+    EmptyVehicleGateIn,
+    EmptyVehicleGateInItem,
+    EmptyVehicleGateOut,
+    GateAttachment,
+    JobWorkGateIn,
+    JobWorkGateInItem,
+    RejectedQCReturnEntry,
+    RejectedQCReturnItem,
+    UnitChoice,
+)
 from .serializers import (
+    BSTGateInCreateSerializer,
+    BSTGateInSerializer,
+    BSTGateOutCancelSerializer,
+    BSTGateOutCreateSerializer,
+    BSTGateOutSerializer,
+    BSTGateReturnCreateSerializer,
+    BSTGateReturnSerializer,
+    EmptyVehicleGateInCreateSerializer,
+    EmptyVehicleGateInSerializer,
+    EmptyVehicleGateInUpdateSerializer,
     EmptyVehicleEligibleEntrySerializer,
+    EmptyVehicleGateOutCancelSerializer,
     EmptyVehicleGateOutCreateSerializer,
     EmptyVehicleGateOutSerializer,
     GateAttachmentSerializer,
+    JobWorkGateInCreateSerializer,
+    JobWorkGateInSerializer,
     RejectedQCReturnCreateSerializer,
     RejectedQCReturnEntrySerializer,
+    SAPGRPOSerializer,
+    SAPProductionOrderSerializer,
+    SAPStockTransferSerializer,
     UnitChoiceSerializer,
 )
 
@@ -66,6 +104,2173 @@ class UnitChoiceListView(APIView):
         return Response(serializer.data)
 
 
+class EmptyVehicleGateInReasonListView(APIView):
+    """List supported empty vehicle gate-in reasons."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        reason_field = EmptyVehicleGateIn._meta.get_field("reason")
+        return Response([
+            {"value": value, "label": label}
+            for value, label in reason_field.choices
+        ])
+
+
+def get_sap_stock_transfer_or_error(request, doc_entry):
+    try:
+        client = SAPClient(company_code=request.company.company.code)
+        sap_transfer = client.get_stock_transfer(doc_entry)
+    except SAPConnectionError:
+        return None, Response(
+            {"detail": "SAP system is currently unavailable. Please try again later."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except SAPDataError:
+        return None, Response(
+            {"detail": "Failed to retrieve selected BST document from SAP."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    if not sap_transfer:
+        return None, None
+
+    return sap_transfer, None
+
+
+def apply_sap_transfer_to_empty_gate_in(gate_in, sap_transfer):
+    gate_in.sap_doc_entry = sap_transfer["doc_entry"]
+    gate_in.sap_doc_num = sap_transfer["doc_num"]
+    gate_in.sap_doc_date = sap_transfer.get("doc_date")
+    gate_in.sap_from_warehouse = sap_transfer.get("from_warehouse", "")
+    gate_in.sap_to_warehouse = sap_transfer.get("to_warehouse", "")
+    gate_in.sap_reference = sap_transfer.get("reference", "")
+    gate_in.sap_comments = sap_transfer.get("comments", "")
+    gate_in.sap_line_count = sap_transfer.get("line_count", 0)
+    gate_in.sap_total_quantity = sap_transfer.get("total_quantity", 0) or 0
+
+
+def clear_sap_transfer_from_empty_gate_in(gate_in):
+    gate_in.sap_doc_entry = None
+    gate_in.sap_doc_num = ""
+    gate_in.sap_doc_date = None
+    gate_in.sap_from_warehouse = ""
+    gate_in.sap_to_warehouse = ""
+    gate_in.sap_reference = ""
+    gate_in.sap_comments = ""
+    gate_in.sap_line_count = 0
+    gate_in.sap_total_quantity = 0
+
+
+def parse_line_quantities(raw_items, quantity_field, label):
+    quantities = {}
+    for item in raw_items or []:
+        line_num = item.get("line_num")
+        if line_num is None:
+            raise ValidationError({"items": f"Line number is required for {label}."})
+
+        value = item.get(quantity_field)
+        if value in (None, ""):
+            raise ValidationError({"items": f"{label} is required for line {line_num}."})
+
+        try:
+            quantity = Decimal(str(value))
+            line_num = int(line_num)
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValidationError({"items": f"Enter a valid {label.lower()} for line {line_num}."})
+
+        if quantity < 0:
+            raise ValidationError({"items": f"{label} cannot be negative for line {line_num}."})
+
+        quantities[line_num] = quantity
+    return quantities
+
+
+def sync_empty_gate_in_items(gate_in, sap_transfer, actual_quantities, user):
+    gate_in.items.all().delete()
+
+    for line in sap_transfer.get("lines", []):
+        sap_quantity = Decimal(str(line.get("quantity", 0) or 0))
+        line_num = int(line["line_num"])
+        EmptyVehicleGateInItem.objects.create(
+            empty_vehicle_gate_in=gate_in,
+            line_num=line_num,
+            item_code=line.get("item_code", ""),
+            item_name=line.get("item_name", ""),
+            sap_quantity=sap_quantity,
+            actual_quantity=actual_quantities.get(line_num, sap_quantity),
+            uom=line.get("uom", ""),
+            from_warehouse=line.get("from_warehouse", ""),
+            to_warehouse=line.get("to_warehouse", ""),
+            created_by=user,
+            updated_by=user,
+        )
+
+
+def sync_bst_gate_in_items(bst_in, bst_out, receiving_quantities, user):
+    bst_in.items.all().delete()
+
+    for item in bst_out.items.all():
+        received_quantity = receiving_quantities.get(
+            item.line_num,
+            item.actual_quantity if item.actual_quantity is not None else item.quantity,
+        )
+        BSTGateInItem.objects.create(
+            bst_gate_in=bst_in,
+            bst_gate_out_item=item,
+            line_num=item.line_num,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            quantity=item.quantity,
+            actual_quantity=item.actual_quantity,
+            receiving_quantity=received_quantity,
+            uom=item.uom,
+            from_warehouse=item.from_warehouse,
+            to_warehouse=item.to_warehouse,
+            created_by=user,
+            updated_by=user,
+        )
+
+
+def find_active_empty_vehicle_bst_link(company, sap_doc_entry, exclude_id=None):
+    qs = (
+        EmptyVehicleGateIn.objects
+        .filter(
+            company=company,
+            reason="BST",
+            sap_doc_entry=sap_doc_entry,
+            is_active=True,
+        )
+        .exclude(vehicle_entry__status__in=["COMPLETED", "CANCELLED"])
+        .order_by("-created_at")
+    )
+    if exclude_id:
+        qs = qs.exclude(id=exclude_id)
+    return qs.first()
+
+
+def empty_vehicle_bst_already_linked_response(linked_gate_in):
+    return Response(
+        {
+            "detail": (
+                "This SAP BST document is already linked to "
+                f"Empty Vehicle In entry {linked_gate_in.entry_no} "
+                f"(entryId {linked_gate_in.id})."
+            ),
+            "linked_empty_vehicle_gate_in_id": linked_gate_in.id,
+            "linked_entry_no": linked_gate_in.entry_no,
+            "linked_entry_id": linked_gate_in.id,
+            "linked_vehicle_entry_id": linked_gate_in.vehicle_entry_id,
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+class EmptyVehicleGateInListCreateView(APIView):
+    """List and create empty vehicle gate-in records."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            EmptyVehicleGateIn.objects
+            .filter(company=request.company.company, is_active=True)
+            .select_related(
+                "vehicle_entry",
+                "vehicle",
+                "vehicle__vehicle_type",
+                "vehicle__transporter",
+                "driver",
+                "company",
+            )
+            .prefetch_related("bst_gate_outs", "items")
+        )
+
+        reason = request.query_params.get("reason")
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+        inside_only = request.query_params.get("inside_only")
+
+        if reason:
+            qs = qs.filter(reason=reason)
+        if from_date:
+            qs = qs.filter(gate_in_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(gate_in_date__lte=to_date)
+        if inside_only in ("1", "true", "True", "yes"):
+            qs = qs.exclude(vehicle_entry__status__in=["COMPLETED", "CANCELLED"])
+
+        serializer = EmptyVehicleGateInSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = EmptyVehicleGateInCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        vehicle = get_object_or_404(Vehicle, id=data["vehicle_id"])
+        driver = get_object_or_404(Driver, id=data["driver_id"])
+        sap_transfer = None
+
+        existing_inside = (
+            EmptyVehicleGateIn.objects
+            .filter(
+                company=request.company.company,
+                vehicle=vehicle,
+                is_active=True,
+            )
+            .exclude(vehicle_entry__status__in=["COMPLETED", "CANCELLED"])
+            .exists()
+        )
+
+        if existing_inside:
+            return Response(
+                {"detail": "This vehicle already has an active empty vehicle gate-in entry"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if data["reason"] == "BST":
+            linked_gate_in = find_active_empty_vehicle_bst_link(
+                request.company.company,
+                data["sap_doc_entry"],
+            )
+            if linked_gate_in:
+                return empty_vehicle_bst_already_linked_response(linked_gate_in)
+
+            linked_bst_out = (
+                BSTGateOut.objects
+                .filter(
+                    company=request.company.company,
+                    sap_doc_entry=data["sap_doc_entry"],
+                    is_active=True,
+                    status__in=["IN_PROGRESS", "COMPLETED"],
+                )
+                .order_by("-created_at")
+                .first()
+            )
+            if linked_bst_out:
+                return sap_bst_already_linked_response(linked_bst_out)
+
+            sap_transfer, error_response = get_sap_stock_transfer_or_error(
+                request,
+                data["sap_doc_entry"],
+            )
+            if error_response:
+                return error_response
+            if not sap_transfer:
+                raise NotFound("Selected BST document was not found in SAP")
+
+        actual_quantities = parse_line_quantities(
+            data.get("items"),
+            "actual_quantity",
+            "Actual quantity",
+        )
+
+        entry_no = EmptyVehicleGateIn.generate_entry_no()
+
+        with transaction.atomic():
+            vehicle_entry = VehicleEntry.objects.create(
+                company=request.company.company,
+                entry_no=entry_no,
+                vehicle=vehicle,
+                driver=driver,
+                entry_type="EMPTY_VEHICLE",
+                status="IN_PROGRESS",
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+            gate_in = EmptyVehicleGateIn.objects.create(
+                company=request.company.company,
+                entry_no=entry_no,
+                vehicle_entry=vehicle_entry,
+                vehicle=vehicle,
+                driver=driver,
+                reason=data["reason"],
+                gate_in_date=data["gate_in_date"],
+                in_time=data["in_time"],
+                document_reference=data.get("document_reference", ""),
+                document_notes=data.get("document_notes", ""),
+                security_name=data.get("security_name", ""),
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+            if sap_transfer:
+                apply_sap_transfer_to_empty_gate_in(gate_in, sap_transfer)
+                sync_empty_gate_in_items(gate_in, sap_transfer, actual_quantities, request.user)
+                gate_in.save(update_fields=[
+                    "sap_doc_entry",
+                    "sap_doc_num",
+                    "sap_doc_date",
+                    "sap_from_warehouse",
+                    "sap_to_warehouse",
+                    "sap_reference",
+                    "sap_comments",
+                    "sap_line_count",
+                    "sap_total_quantity",
+                    "updated_at",
+                ])
+
+        return Response(
+            EmptyVehicleGateInSerializer(gate_in).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EmptyVehicleGateInDetailView(APIView):
+    """Get or update one empty vehicle gate-in record."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get_object(self, request, entry_id):
+        return get_object_or_404(
+            EmptyVehicleGateIn.objects.select_related(
+                "vehicle_entry",
+                "vehicle",
+                "vehicle__vehicle_type",
+                "vehicle__transporter",
+                "driver",
+                "company",
+            ).prefetch_related("bst_gate_outs", "items"),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+
+    def get(self, request, entry_id):
+        gate_in = self.get_object(request, entry_id)
+        return Response(EmptyVehicleGateInSerializer(gate_in).data)
+
+    def patch(self, request, entry_id):
+        gate_in = self.get_object(request, entry_id)
+        serializer = EmptyVehicleGateInUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        has_active_bst_out = gate_in.bst_gate_outs.filter(
+            is_active=True,
+            status__in=["IN_PROGRESS", "COMPLETED"],
+        ).exists()
+        document_fields = {"sap_doc_entry", "document_reference", "document_notes", "items"}
+
+        if has_active_bst_out and document_fields.intersection(data.keys()):
+            return Response(
+                {"detail": "BST document details cannot be edited after BST out is started"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sap_transfer = None
+        actual_quantities = (
+            parse_line_quantities(data.get("items"), "actual_quantity", "Actual quantity")
+            if "items" in data
+            else None
+        )
+        if actual_quantities is not None and gate_in.reason != "BST":
+            return Response(
+                {"detail": "Actual quantity can only be captured for BST empty vehicle entries"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if "sap_doc_entry" in data:
+            if gate_in.reason != "BST" and data["sap_doc_entry"]:
+                return Response(
+                    {"detail": "SAP BST document can only be linked when the reason is BST"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if gate_in.reason == "BST" and not data["sap_doc_entry"]:
+                return Response(
+                    {"detail": "Select the SAP BST document for this empty vehicle entry"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if data["sap_doc_entry"] and data["sap_doc_entry"] != gate_in.sap_doc_entry:
+                linked_gate_in = find_active_empty_vehicle_bst_link(
+                    request.company.company,
+                    data["sap_doc_entry"],
+                    exclude_id=gate_in.id,
+                )
+                if linked_gate_in:
+                    return empty_vehicle_bst_already_linked_response(linked_gate_in)
+
+                linked_bst_out = (
+                    BSTGateOut.objects
+                    .filter(
+                        company=request.company.company,
+                        sap_doc_entry=data["sap_doc_entry"],
+                        is_active=True,
+                        status__in=["IN_PROGRESS", "COMPLETED"],
+                    )
+                    .order_by("-created_at")
+                    .first()
+                )
+                if linked_bst_out:
+                    return sap_bst_already_linked_response(linked_bst_out)
+
+                sap_transfer, error_response = get_sap_stock_transfer_or_error(
+                    request,
+                    data["sap_doc_entry"],
+                )
+                if error_response:
+                    return error_response
+                if not sap_transfer:
+                    raise NotFound("Selected BST document was not found in SAP")
+
+        if (
+            actual_quantities is not None
+            and gate_in.reason == "BST"
+            and gate_in.sap_doc_entry
+            and not sap_transfer
+            and not gate_in.items.exists()
+        ):
+            sap_transfer, error_response = get_sap_stock_transfer_or_error(
+                request,
+                gate_in.sap_doc_entry,
+            )
+            if error_response:
+                return error_response
+            if not sap_transfer:
+                raise NotFound("Selected BST document was not found in SAP")
+
+        with transaction.atomic():
+            if "sap_doc_entry" in data:
+                if sap_transfer:
+                    apply_sap_transfer_to_empty_gate_in(gate_in, sap_transfer)
+                    sync_empty_gate_in_items(
+                        gate_in,
+                        sap_transfer,
+                        actual_quantities or {},
+                        request.user,
+                    )
+                elif not data["sap_doc_entry"]:
+                    clear_sap_transfer_from_empty_gate_in(gate_in)
+                    gate_in.items.all().delete()
+            elif sap_transfer:
+                apply_sap_transfer_to_empty_gate_in(gate_in, sap_transfer)
+                sync_empty_gate_in_items(
+                    gate_in,
+                    sap_transfer,
+                    actual_quantities or {},
+                    request.user,
+                )
+            elif actual_quantities is not None:
+                existing_lines = {item.line_num: item for item in gate_in.items.all()}
+                unknown_lines = set(actual_quantities) - set(existing_lines)
+                if unknown_lines:
+                    line_list = ", ".join(str(line) for line in sorted(unknown_lines))
+                    raise ValidationError({"items": f"Unknown BST line(s): {line_list}."})
+
+                for line_num, quantity in actual_quantities.items():
+                    item = existing_lines[line_num]
+                    item.actual_quantity = quantity
+                    item.updated_by = request.user
+                    item.save(update_fields=["actual_quantity", "updated_by", "updated_at"])
+
+            for field in ["document_reference", "document_notes", "security_name", "remarks"]:
+                if field in data:
+                    setattr(gate_in, field, data[field])
+
+            gate_in.updated_by = request.user
+            gate_in.save()
+
+        if hasattr(gate_in, "_prefetched_objects_cache"):
+            gate_in._prefetched_objects_cache.pop("items", None)
+
+        return Response(EmptyVehicleGateInSerializer(gate_in).data)
+
+
+class EmptyVehicleGateInEligibleView(APIView):
+    """List empty vehicles currently inside and available for outbound flows."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            EmptyVehicleGateIn.objects
+            .filter(company=request.company.company, is_active=True)
+            .exclude(vehicle_entry__status__in=["COMPLETED", "CANCELLED"])
+            .exclude(
+                bst_gate_outs__is_active=True,
+                bst_gate_outs__status__in=["IN_PROGRESS", "COMPLETED"],
+            )
+            .select_related(
+                "vehicle_entry",
+                "vehicle",
+                "vehicle__vehicle_type",
+                "vehicle__transporter",
+                "driver",
+                "company",
+            )
+            .prefetch_related("bst_gate_outs", "items")
+            .distinct()
+        )
+
+        reason = request.query_params.get("reason")
+        if reason:
+            qs = qs.filter(reason=reason)
+
+        serializer = EmptyVehicleGateInSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+class SAPStockTransferListView(APIView):
+    """List SAP inventory transfers available for BST gate-out reference."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        try:
+            limit = int(request.query_params.get("limit", 50))
+        except (TypeError, ValueError):
+            limit = 50
+
+        try:
+            client = SAPClient(company_code=request.company.company.code)
+            transfers = client.list_stock_transfers(
+                search=request.query_params.get("search"),
+                from_date=parse_date(request.query_params.get("from_date") or ""),
+                to_date=parse_date(request.query_params.get("to_date") or ""),
+                limit=limit,
+            )
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError:
+            return Response(
+                {"detail": "Failed to retrieve BST documents from SAP."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(SAPStockTransferSerializer(transfers, many=True).data)
+
+
+class SAPStockTransferDetailView(APIView):
+    """Get one SAP inventory transfer with line details."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, doc_entry):
+        try:
+            client = SAPClient(company_code=request.company.company.code)
+            transfer = client.get_stock_transfer(doc_entry)
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError:
+            return Response(
+                {"detail": "Failed to retrieve BST document from SAP."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not transfer:
+            raise NotFound("BST document not found in SAP")
+
+        return Response(SAPStockTransferSerializer(transfer).data)
+
+
+class BSTGateOutListCreateView(APIView):
+    """List and create BST gate-out records."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            BSTGateOut.objects
+            .filter(company=request.company.company, is_active=True)
+            .select_related(
+                "vehicle_entry",
+                "empty_vehicle_gate_in",
+                "vehicle",
+                "vehicle__vehicle_type",
+                "vehicle__transporter",
+                "driver",
+                "company",
+            )
+            .prefetch_related("items")
+        )
+
+        status_filter = request.query_params.get("status")
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if from_date:
+            qs = qs.filter(gate_out_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(gate_out_date__lte=to_date)
+
+        serializer = BSTGateOutSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = BSTGateOutCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        empty_gate_in = get_object_or_404(
+            EmptyVehicleGateIn.objects.select_related(
+                "vehicle_entry",
+                "vehicle",
+                "driver",
+                "company",
+            ).prefetch_related("items"),
+            id=data["empty_vehicle_gate_in_id"],
+            company=request.company.company,
+            reason="BST",
+            is_active=True,
+        )
+
+        vehicle_entry = empty_gate_in.vehicle_entry
+        if vehicle_entry.status in ["COMPLETED", "CANCELLED"]:
+            return Response(
+                {"detail": "This BST vehicle is no longer available for gate out"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if BSTGateOut.objects.filter(
+            empty_vehicle_gate_in=empty_gate_in,
+            is_active=True,
+            status__in=["IN_PROGRESS", "COMPLETED"],
+        ).exists():
+            return Response(
+                {"detail": "BST out has already been started for this vehicle"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if empty_gate_in.sap_doc_entry and data["sap_doc_entry"] != empty_gate_in.sap_doc_entry:
+            return Response(
+                {"detail": "BST out must use the SAP BST document linked at empty vehicle gate-in"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        linked_bst_out = BSTGateOut.objects.filter(
+            company=request.company.company,
+            sap_doc_entry=data["sap_doc_entry"],
+            is_active=True,
+            status__in=["IN_PROGRESS", "COMPLETED"],
+        ).order_by("-created_at").first()
+        if linked_bst_out:
+            return sap_bst_already_linked_response(linked_bst_out)
+
+        try:
+            client = SAPClient(company_code=request.company.company.code)
+            sap_transfer = client.get_stock_transfer(data["sap_doc_entry"])
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError:
+            return Response(
+                {"detail": "Failed to retrieve selected BST document from SAP."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not sap_transfer:
+            raise NotFound("Selected BST document was not found in SAP")
+
+        with transaction.atomic():
+            bst_out = BSTGateOut.objects.create(
+                company=request.company.company,
+                entry_no=BSTGateOut.generate_entry_no(),
+                vehicle_entry=vehicle_entry,
+                empty_vehicle_gate_in=empty_gate_in,
+                vehicle=empty_gate_in.vehicle,
+                driver=empty_gate_in.driver,
+                sap_doc_entry=sap_transfer["doc_entry"],
+                sap_doc_num=sap_transfer["doc_num"],
+                sap_doc_date=sap_transfer.get("doc_date"),
+                sap_from_warehouse=sap_transfer.get("from_warehouse", ""),
+                sap_to_warehouse=sap_transfer.get("to_warehouse", ""),
+                sap_reference=sap_transfer.get("reference", ""),
+                sap_comments=sap_transfer.get("comments", ""),
+                gate_out_date=data["gate_out_date"],
+                out_time=data["out_time"],
+                security_name=data.get("security_name", ""),
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+            actual_by_line = {
+                item.line_num: item.actual_quantity
+                for item in empty_gate_in.items.all()
+            }
+            for line in sap_transfer.get("lines", []):
+                line_num = int(line["line_num"])
+                sap_quantity = Decimal(str(line.get("quantity", 0) or 0))
+                BSTGateOutItem.objects.create(
+                    bst_gate_out=bst_out,
+                    line_num=line_num,
+                    item_code=line.get("item_code", ""),
+                    item_name=line.get("item_name", ""),
+                    quantity=sap_quantity,
+                    actual_quantity=actual_by_line.get(line_num, sap_quantity),
+                    uom=line.get("uom", ""),
+                    from_warehouse=line.get("from_warehouse", ""),
+                    to_warehouse=line.get("to_warehouse", ""),
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+
+            vehicle_entry.status = "IN_PROGRESS"
+            vehicle_entry.updated_by = request.user
+            vehicle_entry.save(update_fields=["status", "updated_by", "updated_at"])
+
+        return Response(
+            BSTGateOutSerializer(bst_out).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+def sap_bst_already_linked_response(linked_bst_out):
+    """Build a duplicate SAP BST response with the entry id needed to open it."""
+    return Response(
+        {
+            "detail": (
+                "This SAP BST document is already linked to "
+                f"BST Out entry {linked_bst_out.entry_no} "
+                f"(entryId {linked_bst_out.vehicle_entry_id})."
+            ),
+            "linked_bst_out_id": linked_bst_out.id,
+            "linked_entry_no": linked_bst_out.entry_no,
+            "linked_entry_id": linked_bst_out.vehicle_entry_id,
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def update_bst_gate_out(request, bst_out):
+    """Update editable BST gate-out step 1 fields while the entry is in progress."""
+    serializer = BSTGateOutCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    if bst_out.status != "IN_PROGRESS" or bst_out.vehicle_entry.is_locked:
+        return Response(
+            {"detail": "Completed BST out entries cannot be edited"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if data["empty_vehicle_gate_in_id"] != bst_out.empty_vehicle_gate_in_id:
+        return Response(
+            {"detail": "Vehicle cannot be changed after BST out has been started"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if (
+        bst_out.empty_vehicle_gate_in.sap_doc_entry
+        and data["sap_doc_entry"] != bst_out.empty_vehicle_gate_in.sap_doc_entry
+    ):
+        return Response(
+            {"detail": "BST document cannot be changed after BST out has been started"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    sap_transfer = None
+    if data["sap_doc_entry"] != bst_out.sap_doc_entry:
+        linked_bst_out = BSTGateOut.objects.filter(
+            company=request.company.company,
+            sap_doc_entry=data["sap_doc_entry"],
+            is_active=True,
+            status__in=["IN_PROGRESS", "COMPLETED"],
+        ).exclude(id=bst_out.id).order_by("-created_at").first()
+        if linked_bst_out:
+            return sap_bst_already_linked_response(linked_bst_out)
+
+        try:
+            client = SAPClient(company_code=request.company.company.code)
+            sap_transfer = client.get_stock_transfer(data["sap_doc_entry"])
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError:
+            return Response(
+                {"detail": "Failed to retrieve selected BST document from SAP."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not sap_transfer:
+            raise NotFound("Selected BST document was not found in SAP")
+
+    with transaction.atomic():
+        if sap_transfer:
+            bst_out.sap_doc_entry = sap_transfer["doc_entry"]
+            bst_out.sap_doc_num = sap_transfer["doc_num"]
+            bst_out.sap_doc_date = sap_transfer.get("doc_date")
+            bst_out.sap_from_warehouse = sap_transfer.get("from_warehouse", "")
+            bst_out.sap_to_warehouse = sap_transfer.get("to_warehouse", "")
+            bst_out.sap_reference = sap_transfer.get("reference", "")
+            bst_out.sap_comments = sap_transfer.get("comments", "")
+
+            bst_out.items.all().delete()
+            actual_by_line = {
+                item.line_num: item.actual_quantity
+                for item in bst_out.empty_vehicle_gate_in.items.all()
+            }
+            for line in sap_transfer.get("lines", []):
+                line_num = int(line["line_num"])
+                sap_quantity = Decimal(str(line.get("quantity", 0) or 0))
+                BSTGateOutItem.objects.create(
+                    bst_gate_out=bst_out,
+                    line_num=line_num,
+                    item_code=line.get("item_code", ""),
+                    item_name=line.get("item_name", ""),
+                    quantity=sap_quantity,
+                    actual_quantity=actual_by_line.get(line_num, sap_quantity),
+                    uom=line.get("uom", ""),
+                    from_warehouse=line.get("from_warehouse", ""),
+                    to_warehouse=line.get("to_warehouse", ""),
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+
+        bst_out.gate_out_date = data["gate_out_date"]
+        bst_out.out_time = data["out_time"]
+        bst_out.security_name = data.get("security_name", "")
+        bst_out.remarks = data.get("remarks", "")
+        bst_out.updated_by = request.user
+        bst_out.save()
+
+    if hasattr(bst_out, "_prefetched_objects_cache"):
+        bst_out._prefetched_objects_cache.pop("items", None)
+
+    return Response(BSTGateOutSerializer(bst_out).data)
+
+
+def get_active_bst_gate_out_by_vehicle_entry(request, vehicle_entry_id):
+    bst_out = (
+        BSTGateOut.objects
+        .select_related(
+            "vehicle_entry",
+            "empty_vehicle_gate_in",
+            "vehicle",
+            "vehicle__vehicle_type",
+            "vehicle__transporter",
+            "driver",
+            "company",
+        )
+        .prefetch_related("items")
+        .filter(
+            vehicle_entry_id=vehicle_entry_id,
+            company=request.company.company,
+            is_active=True,
+            status__in=["IN_PROGRESS", "COMPLETED"],
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+    if not bst_out:
+        raise NotFound("Active BST out entry not found")
+
+    return bst_out
+
+
+class BSTGateOutDetailView(APIView):
+    """Get one BST gate-out record by BST record id."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, entry_id):
+        bst_out = get_object_or_404(
+            BSTGateOut.objects.select_related(
+                "vehicle_entry",
+                "empty_vehicle_gate_in",
+                "vehicle",
+                "vehicle__vehicle_type",
+                "vehicle__transporter",
+                "driver",
+                "company",
+            ).prefetch_related("items"),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return Response(BSTGateOutSerializer(bst_out).data)
+
+    def put(self, request, entry_id):
+        bst_out = get_object_or_404(
+            BSTGateOut.objects.select_related(
+                "vehicle_entry",
+                "empty_vehicle_gate_in",
+                "vehicle",
+                "vehicle__vehicle_type",
+                "vehicle__transporter",
+                "driver",
+                "company",
+            ).prefetch_related("items"),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return update_bst_gate_out(request, bst_out)
+
+
+class BSTGateOutByVehicleEntryView(APIView):
+    """Get one BST gate-out record by its underlying vehicle entry id."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, vehicle_entry_id):
+        bst_out = get_active_bst_gate_out_by_vehicle_entry(request, vehicle_entry_id)
+        return Response(BSTGateOutSerializer(bst_out).data)
+
+    def put(self, request, vehicle_entry_id):
+        bst_out = get_active_bst_gate_out_by_vehicle_entry(request, vehicle_entry_id)
+        return update_bst_gate_out(request, bst_out)
+
+
+class BSTGateOutCancelView(APIView):
+    """Cancel an in-progress BST gate-out and release its empty vehicle gate-in."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, entry_id):
+        serializer = BSTGateOutCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        bst_out = get_object_or_404(
+            BSTGateOut.objects.select_related(
+                "vehicle_entry",
+                "empty_vehicle_gate_in",
+                "vehicle",
+                "vehicle__vehicle_type",
+                "vehicle__transporter",
+                "driver",
+                "company",
+            ).prefetch_related("items"),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+
+        if bst_out.status != "IN_PROGRESS" or bst_out.vehicle_entry.is_locked:
+            return Response(
+                {"detail": "Only in-progress BST out entries can be cancelled"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if hasattr(bst_out.vehicle_entry, "weighment"):
+            return Response(
+                {"detail": "BST out cannot be cancelled after weighment has been recorded"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if GateAttachment.objects.filter(gate_entry=bst_out.vehicle_entry).exists():
+            return Response(
+                {"detail": "BST out cannot be cancelled after attachments have been uploaded"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bst_out.status = "CANCELLED"
+        bst_out.cancel_reason = serializer.validated_data["cancel_reason"]
+        bst_out.cancelled_at = timezone.now()
+        bst_out.cancelled_by = request.user
+        bst_out.updated_by = request.user
+        bst_out.save(update_fields=[
+            "status",
+            "cancel_reason",
+            "cancelled_at",
+            "cancelled_by",
+            "updated_by",
+            "updated_at",
+        ])
+
+        return Response(BSTGateOutSerializer(bst_out).data)
+
+
+class BSTGateOutCompleteView(APIView):
+    """Complete BST gate-out and close the empty vehicle visit."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, vehicle_entry_id):
+        bst_out = get_active_bst_gate_out_by_vehicle_entry(request, vehicle_entry_id)
+
+        with transaction.atomic():
+            bst_out.status = "COMPLETED"
+            bst_out.updated_by = request.user
+            bst_out.save(update_fields=["status", "updated_by", "updated_at"])
+
+            vehicle_entry = bst_out.vehicle_entry
+            vehicle_entry.status = "COMPLETED"
+            vehicle_entry.is_locked = True
+            vehicle_entry.updated_by = request.user
+            vehicle_entry.save(update_fields=["status", "is_locked", "updated_by", "updated_at"])
+
+        return Response(BSTGateOutSerializer(bst_out).data)
+
+
+class SAPGRPOListView(APIView):
+    """List SAP GRPO documents already posted for job-work gate-in reference."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        try:
+            limit = int(request.query_params.get("limit", 50))
+        except (TypeError, ValueError):
+            limit = 50
+
+        try:
+            client = SAPClient(company_code=request.company.company.code)
+            grpos = client.list_grpos(
+                search=request.query_params.get("search"),
+                from_date=parse_date(request.query_params.get("from_date") or ""),
+                to_date=parse_date(request.query_params.get("to_date") or ""),
+                limit=limit,
+                crude_oil_only=True,
+            )
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError:
+            return Response(
+                {"detail": "Failed to retrieve GRPO documents from SAP."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(SAPGRPOSerializer(grpos, many=True).data)
+
+
+class SAPGRPODetailView(APIView):
+    """Get one SAP GRPO document with line details."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, doc_entry):
+        try:
+            client = SAPClient(company_code=request.company.company.code)
+            grpo = client.get_grpo(doc_entry, crude_oil_only=True)
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError:
+            return Response(
+                {"detail": "Failed to retrieve GRPO document from SAP."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not grpo:
+            raise NotFound("Crude oil GRPO document not found in SAP")
+
+        return Response(SAPGRPOSerializer(grpo).data)
+
+
+def sap_calendar_date(value):
+    """Convert SAP date columns returned as datetimes into plain dates."""
+    if isinstance(value, dt.datetime):
+        return value.date()
+    return value
+
+
+def normalize_sap_production_order(row, components=None):
+    """Return production order data using gate-friendly snake_case keys."""
+    return {
+        "doc_entry": row.get("DocEntry"),
+        "doc_num": str(row.get("DocNum") or ""),
+        "item_code": row.get("ItemCode") or "",
+        "item_name": row.get("ProdName") or "",
+        "planned_qty": row.get("PlannedQty") or 0,
+        "completed_qty": row.get("CmpltQty") or 0,
+        "rejected_qty": row.get("RjctQty") or 0,
+        "remaining_qty": row.get("RemainingQty") or 0,
+        "start_date": sap_calendar_date(row.get("StartDate")),
+        "due_date": sap_calendar_date(row.get("DueDate")),
+        "warehouse": row.get("Warehouse") or "",
+        "status": row.get("Status") or "",
+        "components": [
+            {
+                "line_num": component.get("LineNum") or 0,
+                "item_code": component.get("ItemCode") or "",
+                "item_name": component.get("ItemName") or "",
+                "planned_qty": component.get("PlannedQty") or 0,
+                "issued_qty": component.get("IssuedQty") or 0,
+                "warehouse": component.get("Warehouse") or "",
+                "uom": component.get("UomCode") or "",
+            }
+            for component in (components or [])
+        ],
+    }
+
+
+def filter_sap_production_orders(rows, search):
+    query = (search or "").strip().lower()
+    if not query:
+        return rows
+
+    def matches(row):
+        values = [
+            row.get("DocEntry"),
+            row.get("DocNum"),
+            row.get("ItemCode"),
+            row.get("ProdName"),
+            row.get("Warehouse"),
+            row.get("Status"),
+        ]
+        return any(query in str(value or "").lower() for value in values)
+
+    return [row for row in rows if matches(row)]
+
+
+class SAPProductionOrderListView(APIView):
+    """List open SAP production orders for later oil-refining entry linking."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        try:
+            limit = int(request.query_params.get("limit", 50))
+        except (TypeError, ValueError):
+            limit = 50
+
+        try:
+            from production_execution.services.sap_reader import (
+                ProductionOrderReader,
+                SAPReadError,
+            )
+
+            reader = ProductionOrderReader(request.company.company.code)
+            rows = reader.get_open_production_orders()
+        except SAPReadError as exc:
+            return Response(
+                {"detail": str(exc) or "Failed to retrieve production orders from SAP."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        rows = filter_sap_production_orders(rows, request.query_params.get("search"))
+        orders = [normalize_sap_production_order(row) for row in rows[:limit]]
+        return Response(SAPProductionOrderSerializer(orders, many=True).data)
+
+
+class SAPProductionOrderDetailView(APIView):
+    """Get one SAP production order with component details."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, doc_entry):
+        try:
+            from production_execution.services.sap_reader import (
+                ProductionOrderReader,
+                SAPReadError,
+            )
+
+            reader = ProductionOrderReader(request.company.company.code)
+            detail = reader.get_production_order_detail(doc_entry)
+        except SAPReadError as exc:
+            return Response(
+                {"detail": str(exc) or "Failed to retrieve production order from SAP."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        order = normalize_sap_production_order(
+            detail["header"],
+            detail.get("components", []),
+        )
+        return Response(SAPProductionOrderSerializer(order).data)
+
+
+def sap_grpo_already_linked_response(linked_job_work):
+    """Build a duplicate SAP GRPO response with the entry id needed to open it."""
+    return Response(
+        {
+            "detail": (
+                "This SAP GRPO document is already linked to "
+                f"Job Work entry {linked_job_work.entry_no} "
+                f"(entryId {linked_job_work.vehicle_entry_id})."
+            ),
+            "linked_job_work_id": linked_job_work.id,
+            "linked_entry_no": linked_job_work.entry_no,
+            "linked_entry_id": linked_job_work.vehicle_entry_id,
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def create_job_work_items(job_work, sap_grpo, user):
+    for line in sap_grpo.get("lines", []):
+        JobWorkGateInItem.objects.create(
+            job_work_gate_in=job_work,
+            line_num=line["line_num"],
+            item_code=line.get("item_code", ""),
+            item_name=line.get("item_name", ""),
+            quantity=line.get("quantity", 0),
+            uom=line.get("uom", ""),
+            warehouse_code=line.get("warehouse_code", ""),
+            base_type=line.get("base_type"),
+            base_entry=line.get("base_entry"),
+            base_line=line.get("base_line"),
+            created_by=user,
+            updated_by=user,
+        )
+
+
+def sap_production_order_already_linked_response(linked_job_work):
+    """Build a duplicate SAP production order response with the entry id needed to open it."""
+    return Response(
+        {
+            "detail": (
+                "This SAP production order is already linked to "
+                f"Job Work entry {linked_job_work.entry_no} "
+                f"(entryId {linked_job_work.vehicle_entry_id})."
+            ),
+            "linked_job_work_id": linked_job_work.id,
+            "linked_entry_no": linked_job_work.entry_no,
+            "linked_entry_id": linked_job_work.vehicle_entry_id,
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def decimal_from_sap_value(value):
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def get_sap_production_order_for_job_work(request, doc_entry):
+    try:
+        from production_execution.services.sap_reader import (
+            ProductionOrderReader,
+            SAPReadError,
+        )
+
+        reader = ProductionOrderReader(request.company.company.code)
+        detail = reader.get_production_order_detail(doc_entry)
+    except SAPReadError as exc:
+        return None, Response(
+            {"detail": str(exc) or "Failed to retrieve selected production order from SAP."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    return normalize_sap_production_order(
+        detail["header"],
+        detail.get("components", []),
+    ), None
+
+
+def clear_job_work_production_order(job_work):
+    job_work.production_order_doc_entry = None
+    job_work.production_order_doc_num = ""
+    job_work.production_item_code = ""
+    job_work.production_item_name = ""
+    job_work.production_planned_qty = None
+    job_work.production_completed_qty = None
+    job_work.production_rejected_qty = None
+    job_work.production_remaining_qty = None
+    job_work.production_start_date = None
+    job_work.production_due_date = None
+    job_work.production_warehouse = ""
+    job_work.production_status = ""
+    job_work.items.all().delete()
+
+
+def apply_job_work_production_order(job_work, production_order, user):
+    job_work.production_order_doc_entry = production_order["doc_entry"]
+    job_work.production_order_doc_num = production_order["doc_num"]
+    job_work.production_item_code = production_order["item_code"]
+    job_work.production_item_name = production_order["item_name"]
+    job_work.production_planned_qty = decimal_from_sap_value(production_order["planned_qty"])
+    job_work.production_completed_qty = decimal_from_sap_value(production_order["completed_qty"])
+    job_work.production_rejected_qty = decimal_from_sap_value(production_order["rejected_qty"])
+    job_work.production_remaining_qty = decimal_from_sap_value(production_order["remaining_qty"])
+    job_work.production_start_date = production_order["start_date"]
+    job_work.production_due_date = production_order["due_date"]
+    job_work.production_warehouse = production_order["warehouse"] or ""
+    job_work.production_status = production_order["status"] or ""
+
+    job_work.items.all().delete()
+    for component in production_order.get("components", []):
+        JobWorkGateInItem.objects.create(
+            job_work_gate_in=job_work,
+            line_num=component["line_num"],
+            item_code=component.get("item_code", ""),
+            item_name=component.get("item_name", ""),
+            quantity=component.get("planned_qty", 0),
+            uom=component.get("uom", ""),
+            warehouse_code=component.get("warehouse", ""),
+            base_type=202,
+            base_entry=production_order["doc_entry"],
+            base_line=component["line_num"],
+            created_by=user,
+            updated_by=user,
+        )
+
+
+def select_job_work_gate_in_queryset():
+    return (
+        JobWorkGateIn.objects
+        .select_related(
+            "vehicle_entry",
+            "vehicle",
+            "vehicle__vehicle_type",
+            "vehicle__transporter",
+            "driver",
+            "company",
+        )
+        .prefetch_related("items")
+    )
+
+
+def get_active_job_work_by_vehicle_entry(request, vehicle_entry_id):
+    job_work = (
+        select_job_work_gate_in_queryset()
+        .filter(
+            vehicle_entry_id=vehicle_entry_id,
+            company=request.company.company,
+            is_active=True,
+            status__in=["IN_PROGRESS", "COMPLETED"],
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+    if not job_work:
+        raise NotFound("Active job work entry not found")
+
+    return job_work
+
+
+def update_job_work_gate_in(request, job_work):
+    """Update job-work gate fields and optional SAP production-order link."""
+    serializer = JobWorkGateInCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    if job_work.status == "CANCELLED":
+        return Response(
+            {"detail": "Cancelled job work entries cannot be edited"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    vehicle = get_object_or_404(Vehicle, id=data["vehicle_id"])
+    driver = get_object_or_404(Driver, id=data["driver_id"])
+
+    production_order = None
+    production_order_was_provided = "production_order_doc_entry" in data
+    requested_production_order = data.get("production_order_doc_entry")
+
+    if (
+        production_order_was_provided
+        and requested_production_order
+        and requested_production_order != job_work.production_order_doc_entry
+    ):
+        linked_job_work = (
+            JobWorkGateIn.objects
+            .filter(
+                company=request.company.company,
+                production_order_doc_entry=requested_production_order,
+                is_active=True,
+                status__in=["IN_PROGRESS", "COMPLETED"],
+            )
+            .exclude(id=job_work.id)
+            .order_by("-created_at")
+            .first()
+        )
+        if linked_job_work:
+            return sap_production_order_already_linked_response(linked_job_work)
+
+        production_order, error_response = get_sap_production_order_for_job_work(
+            request,
+            requested_production_order,
+        )
+        if error_response:
+            return error_response
+
+    with transaction.atomic():
+        job_work.vehicle = vehicle
+        job_work.driver = driver
+        job_work.gate_in_date = data["gate_in_date"]
+        job_work.in_time = data["in_time"]
+        job_work.security_name = data.get("security_name", "")
+        job_work.remarks = data.get("remarks", "")
+
+        if production_order_was_provided:
+            if requested_production_order:
+                if production_order:
+                    apply_job_work_production_order(job_work, production_order, request.user)
+            else:
+                clear_job_work_production_order(job_work)
+
+        job_work.updated_by = request.user
+        job_work.save()
+
+        vehicle_entry = job_work.vehicle_entry
+        vehicle_entry.vehicle = vehicle
+        vehicle_entry.driver = driver
+        vehicle_entry.remarks = data.get("remarks", "")
+        vehicle_entry.updated_by = request.user
+        vehicle_entry.save(update_fields=[
+            "vehicle", "driver", "remarks", "updated_by", "updated_at",
+        ])
+
+    if hasattr(job_work, "_prefetched_objects_cache"):
+        job_work._prefetched_objects_cache.pop("items", None)
+
+    return Response(JobWorkGateInSerializer(job_work).data)
+
+
+class JobWorkGateInListCreateView(APIView):
+    """List and create job-work gate-in records."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = select_job_work_gate_in_queryset().filter(
+            company=request.company.company,
+            is_active=True,
+        )
+
+        status_filter = request.query_params.get("status")
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if from_date:
+            qs = qs.filter(gate_in_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(gate_in_date__lte=to_date)
+
+        serializer = JobWorkGateInSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = JobWorkGateInCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        vehicle = get_object_or_404(Vehicle, id=data["vehicle_id"])
+        driver = get_object_or_404(Driver, id=data["driver_id"])
+
+        requested_production_order = data.get("production_order_doc_entry")
+        production_order = None
+
+        if requested_production_order:
+            linked_job_work = (
+                JobWorkGateIn.objects
+                .filter(
+                    company=request.company.company,
+                    production_order_doc_entry=requested_production_order,
+                    is_active=True,
+                    status__in=["IN_PROGRESS", "COMPLETED"],
+                )
+                .order_by("-created_at")
+                .first()
+            )
+            if linked_job_work:
+                return sap_production_order_already_linked_response(linked_job_work)
+
+            production_order, error_response = get_sap_production_order_for_job_work(
+                request,
+                requested_production_order,
+            )
+            if error_response:
+                return error_response
+
+        with transaction.atomic():
+            entry_no = JobWorkGateIn.generate_entry_no()
+            vehicle_entry = VehicleEntry.objects.create(
+                company=request.company.company,
+                entry_no=entry_no,
+                vehicle=vehicle,
+                driver=driver,
+                entry_type="JOB_WORK",
+                status="IN_PROGRESS",
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+            job_work = JobWorkGateIn.objects.create(
+                company=request.company.company,
+                entry_no=entry_no,
+                vehicle_entry=vehicle_entry,
+                vehicle=vehicle,
+                driver=driver,
+                gate_in_date=data["gate_in_date"],
+                in_time=data["in_time"],
+                security_name=data.get("security_name", ""),
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+            if production_order:
+                apply_job_work_production_order(job_work, production_order, request.user)
+                job_work.save()
+
+        return Response(
+            JobWorkGateInSerializer(job_work).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class JobWorkGateInDetailView(APIView):
+    """Get or update one job-work gate-in record by job-work id."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, entry_id):
+        job_work = get_object_or_404(
+            select_job_work_gate_in_queryset(),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return Response(JobWorkGateInSerializer(job_work).data)
+
+    def put(self, request, entry_id):
+        job_work = get_object_or_404(
+            select_job_work_gate_in_queryset(),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return update_job_work_gate_in(request, job_work)
+
+
+class JobWorkGateInByVehicleEntryView(APIView):
+    """Get or update one job-work gate-in record by vehicle entry id."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, vehicle_entry_id):
+        job_work = get_active_job_work_by_vehicle_entry(request, vehicle_entry_id)
+        return Response(JobWorkGateInSerializer(job_work).data)
+
+    def put(self, request, vehicle_entry_id):
+        job_work = get_active_job_work_by_vehicle_entry(request, vehicle_entry_id)
+        return update_job_work_gate_in(request, job_work)
+
+
+class JobWorkGateInCompleteView(APIView):
+    """Complete job-work gate movement while keeping the entry editable."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, vehicle_entry_id):
+        job_work = get_active_job_work_by_vehicle_entry(request, vehicle_entry_id)
+
+        with transaction.atomic():
+            job_work.status = "COMPLETED"
+            job_work.updated_by = request.user
+            job_work.save(update_fields=["status", "updated_by", "updated_at"])
+
+            vehicle_entry = job_work.vehicle_entry
+            vehicle_entry.status = "COMPLETED"
+            vehicle_entry.is_locked = False
+            vehicle_entry.updated_by = request.user
+            vehicle_entry.save(update_fields=["status", "is_locked", "updated_by", "updated_at"])
+
+        return Response(JobWorkGateInSerializer(job_work).data)
+
+
+def select_bst_gate_out_queryset():
+    return (
+        BSTGateOut.objects
+        .select_related(
+            "vehicle_entry",
+            "empty_vehicle_gate_in",
+            "vehicle",
+            "vehicle__vehicle_type",
+            "vehicle__transporter",
+            "driver",
+            "company",
+        )
+        .prefetch_related("items")
+    )
+
+
+def select_bst_gate_in_queryset():
+    return (
+        BSTGateIn.objects
+        .select_related(
+            "vehicle_entry",
+            "bst_gate_out",
+            "bst_gate_out__vehicle_entry",
+            "bst_gate_out__empty_vehicle_gate_in",
+            "vehicle",
+            "vehicle__vehicle_type",
+            "vehicle__transporter",
+            "driver",
+            "company",
+        )
+        .prefetch_related("items", "bst_gate_out__items")
+    )
+
+
+def select_bst_gate_return_queryset():
+    return (
+        BSTGateReturn.objects
+        .select_related(
+            "vehicle_entry",
+            "bst_gate_out",
+            "bst_gate_out__vehicle_entry",
+            "bst_gate_out__empty_vehicle_gate_in",
+            "vehicle",
+            "vehicle__vehicle_type",
+            "vehicle__transporter",
+            "driver",
+            "company",
+        )
+        .prefetch_related("bst_gate_out__items")
+    )
+
+
+def get_receivable_bst_gate_out(request, bst_gate_out_id):
+    return get_object_or_404(
+        select_bst_gate_out_queryset(),
+        id=bst_gate_out_id,
+        company=request.company.company,
+        is_active=True,
+        status="COMPLETED",
+    )
+
+
+def ensure_bst_gate_out_not_received(bst_gate_out, exclude_gate_in_id=None):
+    qs = BSTGateIn.objects.filter(
+        bst_gate_out=bst_gate_out,
+        is_active=True,
+        status__in=["IN_PROGRESS", "COMPLETED"],
+    )
+    if exclude_gate_in_id:
+        qs = qs.exclude(id=exclude_gate_in_id)
+
+    linked_gate_in = qs.order_by("-created_at").first()
+    if linked_gate_in:
+        return Response(
+            {
+                "detail": (
+                    "This BST out is already linked to "
+                    f"BST In entry {linked_gate_in.entry_no} "
+                    f"(entryId {linked_gate_in.vehicle_entry_id})."
+                ),
+                "linked_bst_in_id": linked_gate_in.id,
+                "linked_entry_no": linked_gate_in.entry_no,
+                "linked_entry_id": linked_gate_in.vehicle_entry_id,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
+
+def ensure_bst_gate_out_not_returned(bst_gate_out, exclude_return_id=None):
+    qs = BSTGateReturn.objects.filter(
+        bst_gate_out=bst_gate_out,
+        is_active=True,
+        status__in=["IN_PROGRESS", "COMPLETED"],
+    )
+    if exclude_return_id:
+        qs = qs.exclude(id=exclude_return_id)
+
+    linked_return = qs.order_by("-created_at").first()
+    if linked_return:
+        return Response(
+            {
+                "detail": (
+                    "This BST out is already linked to "
+                    f"BST Return entry {linked_return.entry_no} "
+                    f"(entryId {linked_return.vehicle_entry_id})."
+                ),
+                "linked_bst_return_id": linked_return.id,
+                "linked_entry_no": linked_return.entry_no,
+                "linked_entry_id": linked_return.vehicle_entry_id,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
+
+class BSTGateInEligibleOutsView(APIView):
+    """List completed BST gate-outs that have not been received at the gate yet."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            select_bst_gate_out_queryset()
+            .filter(
+                company=request.company.company,
+                is_active=True,
+                status="COMPLETED",
+            )
+            .exclude(
+                bst_gate_ins__is_active=True,
+                bst_gate_ins__status__in=["IN_PROGRESS", "COMPLETED"],
+            )
+            .exclude(
+                bst_gate_returns__is_active=True,
+                bst_gate_returns__status__in=["IN_PROGRESS", "COMPLETED"],
+            )
+            .distinct()
+        )
+
+        search = (request.query_params.get("search") or "").strip().lower()
+        if search:
+            qs = [
+                entry for entry in qs
+                if any(
+                    search in str(value or "").lower()
+                    for value in [
+                        entry.entry_no,
+                        entry.vehicle.vehicle_number,
+                        entry.driver.name,
+                        entry.sap_doc_num,
+                        entry.sap_from_warehouse,
+                        entry.sap_to_warehouse,
+                        entry.gate_out_date,
+                        entry.out_time,
+                    ]
+                )
+            ]
+
+        return Response(BSTGateOutSerializer(qs, many=True).data)
+
+
+class BSTGateInListCreateView(APIView):
+    """List and create BST gate-in receiving records."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            select_bst_gate_in_queryset()
+            .filter(company=request.company.company, is_active=True)
+        )
+
+        status_filter = request.query_params.get("status")
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if from_date:
+            qs = qs.filter(gate_in_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(gate_in_date__lte=to_date)
+
+        serializer = BSTGateInSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = BSTGateInCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        bst_out = get_receivable_bst_gate_out(request, data["bst_gate_out_id"])
+        duplicate_response = ensure_bst_gate_out_not_received(bst_out)
+        if duplicate_response is not None:
+            return duplicate_response
+        receiving_quantities = parse_line_quantities(
+            data.get("items"),
+            "receiving_quantity",
+            "Receiving quantity",
+        )
+
+        with transaction.atomic():
+            entry_no = BSTGateIn.generate_entry_no()
+            vehicle_entry = VehicleEntry.objects.create(
+                company=request.company.company,
+                entry_no=entry_no,
+                vehicle=bst_out.vehicle,
+                driver=bst_out.driver,
+                entry_type="BST_IN",
+                status="IN_PROGRESS",
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+            bst_in = BSTGateIn.objects.create(
+                company=request.company.company,
+                entry_no=entry_no,
+                vehicle_entry=vehicle_entry,
+                bst_gate_out=bst_out,
+                vehicle=bst_out.vehicle,
+                driver=bst_out.driver,
+                gate_in_date=data["gate_in_date"],
+                in_time=data["in_time"],
+                security_name=data.get("security_name", ""),
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+            sync_bst_gate_in_items(bst_in, bst_out, receiving_quantities, request.user)
+
+        return Response(
+            BSTGateInSerializer(bst_in).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+def update_bst_gate_in(request, bst_in):
+    """Update editable BST gate-in step 1 fields while the entry is in progress."""
+    serializer = BSTGateInCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    if bst_in.status != "IN_PROGRESS" or bst_in.vehicle_entry.is_locked:
+        return Response(
+            {"detail": "Completed BST in entries cannot be edited"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    bst_out = bst_in.bst_gate_out
+    receiving_quantities = parse_line_quantities(
+        data.get("items"),
+        "receiving_quantity",
+        "Receiving quantity",
+    )
+    if data["bst_gate_out_id"] != bst_in.bst_gate_out_id:
+        bst_out = get_receivable_bst_gate_out(request, data["bst_gate_out_id"])
+        duplicate_response = ensure_bst_gate_out_not_received(
+            bst_out,
+            exclude_gate_in_id=bst_in.id,
+        )
+        if duplicate_response is not None:
+            return duplicate_response
+
+    with transaction.atomic():
+        if bst_out.id != bst_in.bst_gate_out_id:
+            bst_in.bst_gate_out = bst_out
+            bst_in.vehicle = bst_out.vehicle
+            bst_in.driver = bst_out.driver
+
+            vehicle_entry = bst_in.vehicle_entry
+            vehicle_entry.vehicle = bst_out.vehicle
+            vehicle_entry.driver = bst_out.driver
+            vehicle_entry.updated_by = request.user
+            vehicle_entry.save(update_fields=["vehicle", "driver", "updated_by", "updated_at"])
+
+        bst_in.gate_in_date = data["gate_in_date"]
+        bst_in.in_time = data["in_time"]
+        bst_in.security_name = data.get("security_name", "")
+        bst_in.remarks = data.get("remarks", "")
+        bst_in.updated_by = request.user
+        bst_in.save()
+        sync_bst_gate_in_items(bst_in, bst_out, receiving_quantities, request.user)
+
+    if hasattr(bst_in, "_prefetched_objects_cache"):
+        bst_in._prefetched_objects_cache.pop("items", None)
+
+    return Response(BSTGateInSerializer(bst_in).data)
+
+
+def get_active_bst_gate_in_by_vehicle_entry(request, vehicle_entry_id):
+    bst_in = (
+        select_bst_gate_in_queryset()
+        .filter(
+            vehicle_entry_id=vehicle_entry_id,
+            company=request.company.company,
+            is_active=True,
+            status__in=["IN_PROGRESS", "COMPLETED"],
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+    if not bst_in:
+        raise NotFound("Active BST in entry not found")
+
+    return bst_in
+
+
+class BSTGateInDetailView(APIView):
+    """Get one BST gate-in record by BST record id."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, entry_id):
+        bst_in = get_object_or_404(
+            select_bst_gate_in_queryset(),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return Response(BSTGateInSerializer(bst_in).data)
+
+    def put(self, request, entry_id):
+        bst_in = get_object_or_404(
+            select_bst_gate_in_queryset(),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return update_bst_gate_in(request, bst_in)
+
+
+class BSTGateInByVehicleEntryView(APIView):
+    """Get or update one BST gate-in record by its underlying vehicle entry id."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, vehicle_entry_id):
+        bst_in = get_active_bst_gate_in_by_vehicle_entry(request, vehicle_entry_id)
+        return Response(BSTGateInSerializer(bst_in).data)
+
+    def put(self, request, vehicle_entry_id):
+        bst_in = get_active_bst_gate_in_by_vehicle_entry(request, vehicle_entry_id)
+        return update_bst_gate_in(request, bst_in)
+
+
+class BSTGateInCompleteView(APIView):
+    """Complete BST gate-in after the receiving branch confirms vehicle arrival."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, vehicle_entry_id):
+        bst_in = get_active_bst_gate_in_by_vehicle_entry(request, vehicle_entry_id)
+
+        with transaction.atomic():
+            bst_in.status = "COMPLETED"
+            bst_in.updated_by = request.user
+            bst_in.save(update_fields=["status", "updated_by", "updated_at"])
+
+            vehicle_entry = bst_in.vehicle_entry
+            vehicle_entry.status = "COMPLETED"
+            vehicle_entry.is_locked = True
+            vehicle_entry.updated_by = request.user
+            vehicle_entry.save(update_fields=["status", "is_locked", "updated_by", "updated_at"])
+
+        return Response(BSTGateInSerializer(bst_in).data)
+
+
+class BSTGateReturnEligibleOutsView(APIView):
+    """List completed BST gate-outs that returned before destination BST In."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            select_bst_gate_out_queryset()
+            .filter(
+                company=request.company.company,
+                is_active=True,
+                status="COMPLETED",
+            )
+            .exclude(
+                bst_gate_ins__is_active=True,
+                bst_gate_ins__status__in=["IN_PROGRESS", "COMPLETED"],
+            )
+            .exclude(
+                bst_gate_returns__is_active=True,
+                bst_gate_returns__status__in=["IN_PROGRESS", "COMPLETED"],
+            )
+            .distinct()
+        )
+
+        search = (request.query_params.get("search") or "").strip().lower()
+        if search:
+            qs = [
+                entry for entry in qs
+                if any(
+                    search in str(value or "").lower()
+                    for value in [
+                        entry.entry_no,
+                        entry.vehicle.vehicle_number,
+                        entry.driver.name,
+                        entry.sap_doc_num,
+                        entry.sap_from_warehouse,
+                        entry.sap_to_warehouse,
+                        entry.gate_out_date,
+                        entry.out_time,
+                    ]
+                )
+            ]
+
+        return Response(BSTGateOutSerializer(qs, many=True).data)
+
+
+class BSTGateReturnListCreateView(APIView):
+    """List and create source-side BST return records."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = (
+            select_bst_gate_return_queryset()
+            .filter(company=request.company.company, is_active=True)
+        )
+
+        status_filter = request.query_params.get("status")
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if from_date:
+            qs = qs.filter(gate_in_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(gate_in_date__lte=to_date)
+
+        serializer = BSTGateReturnSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = BSTGateReturnCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        bst_out = get_receivable_bst_gate_out(request, data["bst_gate_out_id"])
+        received_response = ensure_bst_gate_out_not_received(bst_out)
+        if received_response is not None:
+            return received_response
+
+        duplicate_response = ensure_bst_gate_out_not_returned(bst_out)
+        if duplicate_response is not None:
+            return duplicate_response
+
+        with transaction.atomic():
+            entry_no = BSTGateReturn.generate_entry_no()
+            vehicle_entry = VehicleEntry.objects.create(
+                company=request.company.company,
+                entry_no=entry_no,
+                vehicle=bst_out.vehicle,
+                driver=bst_out.driver,
+                entry_type="BST_RETURN",
+                status="IN_PROGRESS",
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+            bst_return = BSTGateReturn.objects.create(
+                company=request.company.company,
+                entry_no=entry_no,
+                vehicle_entry=vehicle_entry,
+                bst_gate_out=bst_out,
+                vehicle=bst_out.vehicle,
+                driver=bst_out.driver,
+                gate_in_date=data["gate_in_date"],
+                in_time=data["in_time"],
+                security_name=data.get("security_name", ""),
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
+                updated_by=request.user,
+            )
+
+        return Response(
+            BSTGateReturnSerializer(bst_return).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+def update_bst_gate_return(request, bst_return):
+    """Update editable BST return step 1 fields while the entry is in progress."""
+    serializer = BSTGateReturnCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    if bst_return.status != "IN_PROGRESS" or bst_return.vehicle_entry.is_locked:
+        return Response(
+            {"detail": "Completed BST return entries cannot be edited"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    bst_out = bst_return.bst_gate_out
+    if data["bst_gate_out_id"] != bst_return.bst_gate_out_id:
+        bst_out = get_receivable_bst_gate_out(request, data["bst_gate_out_id"])
+        received_response = ensure_bst_gate_out_not_received(bst_out)
+        if received_response is not None:
+            return received_response
+
+        duplicate_response = ensure_bst_gate_out_not_returned(
+            bst_out,
+            exclude_return_id=bst_return.id,
+        )
+        if duplicate_response is not None:
+            return duplicate_response
+
+    with transaction.atomic():
+        if bst_out.id != bst_return.bst_gate_out_id:
+            bst_return.bst_gate_out = bst_out
+            bst_return.vehicle = bst_out.vehicle
+            bst_return.driver = bst_out.driver
+
+            vehicle_entry = bst_return.vehicle_entry
+            vehicle_entry.vehicle = bst_out.vehicle
+            vehicle_entry.driver = bst_out.driver
+            vehicle_entry.updated_by = request.user
+            vehicle_entry.save(update_fields=["vehicle", "driver", "updated_by", "updated_at"])
+
+        bst_return.gate_in_date = data["gate_in_date"]
+        bst_return.in_time = data["in_time"]
+        bst_return.security_name = data.get("security_name", "")
+        bst_return.remarks = data.get("remarks", "")
+        bst_return.updated_by = request.user
+        bst_return.save()
+
+    return Response(BSTGateReturnSerializer(bst_return).data)
+
+
+def get_active_bst_gate_return_by_vehicle_entry(request, vehicle_entry_id):
+    bst_return = (
+        select_bst_gate_return_queryset()
+        .filter(
+            vehicle_entry_id=vehicle_entry_id,
+            company=request.company.company,
+            is_active=True,
+            status__in=["IN_PROGRESS", "COMPLETED"],
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+    if not bst_return:
+        raise NotFound("Active BST return entry not found")
+
+    return bst_return
+
+
+class BSTGateReturnDetailView(APIView):
+    """Get one BST return record by BST return record id."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, entry_id):
+        bst_return = get_object_or_404(
+            select_bst_gate_return_queryset(),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return Response(BSTGateReturnSerializer(bst_return).data)
+
+    def put(self, request, entry_id):
+        bst_return = get_object_or_404(
+            select_bst_gate_return_queryset(),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+        return update_bst_gate_return(request, bst_return)
+
+
+class BSTGateReturnByVehicleEntryView(APIView):
+    """Get or update one BST return record by its underlying vehicle entry id."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, vehicle_entry_id):
+        bst_return = get_active_bst_gate_return_by_vehicle_entry(request, vehicle_entry_id)
+        return Response(BSTGateReturnSerializer(bst_return).data)
+
+    def put(self, request, vehicle_entry_id):
+        bst_return = get_active_bst_gate_return_by_vehicle_entry(request, vehicle_entry_id)
+        return update_bst_gate_return(request, bst_return)
+
+
+class BSTGateReturnCompleteView(APIView):
+    """Complete BST return after the source gate confirms the vehicle came back."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, vehicle_entry_id):
+        bst_return = get_active_bst_gate_return_by_vehicle_entry(request, vehicle_entry_id)
+
+        with transaction.atomic():
+            bst_return.status = "COMPLETED"
+            bst_return.updated_by = request.user
+            bst_return.save(update_fields=["status", "updated_by", "updated_at"])
+
+            vehicle_entry = bst_return.vehicle_entry
+            vehicle_entry.status = "COMPLETED"
+            vehicle_entry.is_locked = True
+            vehicle_entry.updated_by = request.user
+            vehicle_entry.save(update_fields=["status", "is_locked", "updated_by", "updated_at"])
+
+        return Response(BSTGateReturnSerializer(bst_return).data)
+
+
 class EmptyVehicleEligibleEntriesView(APIView):
     """List inward vehicle entries that can be marked out empty."""
     permission_classes = [IsAuthenticated, HasCompanyContext]
@@ -75,10 +2280,15 @@ class EmptyVehicleEligibleEntriesView(APIView):
             VehicleEntry.objects
             .filter(company=request.company.company)
             .exclude(status="CANCELLED")
-            .exclude(empty_vehicle_gate_out__is_active=True)
             .select_related("vehicle", "vehicle__vehicle_type", "driver", "company")
             .order_by("-entry_time")
         )
+        completed_gate_out_entry_ids = EmptyVehicleGateOut.objects.filter(
+            company=request.company.company,
+            is_active=True,
+            status="COMPLETED",
+        ).values("vehicle_entry_id")
+        qs = qs.exclude(id__in=completed_gate_out_entry_ids)
 
         entry_type = request.query_params.get("entry_type")
         from_date = request.query_params.get("from_date")
@@ -143,6 +2353,7 @@ class EmptyVehicleGateOutListCreateView(APIView):
         if EmptyVehicleGateOut.objects.filter(
             vehicle_entry=vehicle_entry,
             is_active=True,
+            status="COMPLETED",
         ).exists():
             return Response(
                 {"detail": "This vehicle entry is already marked out"},
@@ -187,6 +2398,51 @@ class EmptyVehicleGateOutDetailView(APIView):
             company=request.company.company,
             is_active=True,
         )
+        return Response(EmptyVehicleGateOutSerializer(gate_out).data)
+
+
+class EmptyVehicleGateOutCancelView(APIView):
+    """Cancel a completed empty vehicle gate-out record."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, entry_id):
+        serializer = EmptyVehicleGateOutCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        gate_out = get_object_or_404(
+            EmptyVehicleGateOut.objects.select_related(
+                "vehicle_entry",
+                "vehicle_entry__vehicle",
+                "vehicle_entry__driver",
+                "vehicle",
+                "driver",
+                "company",
+            ),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+
+        if gate_out.status == "CANCELLED":
+            return Response(
+                {"detail": "This empty vehicle out entry is already cancelled"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        gate_out.status = "CANCELLED"
+        gate_out.cancel_reason = serializer.validated_data["cancel_reason"]
+        gate_out.cancelled_at = timezone.now()
+        gate_out.cancelled_by = request.user
+        gate_out.updated_by = request.user
+        gate_out.save(update_fields=[
+            "status",
+            "cancel_reason",
+            "cancelled_at",
+            "cancelled_by",
+            "updated_by",
+            "updated_at",
+        ])
+
         return Response(EmptyVehicleGateOutSerializer(gate_out).data)
 
 

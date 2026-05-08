@@ -1,63 +1,61 @@
 from django.db import models
-from django.conf import settings
 from django.utils import timezone
 
 from .base import BaseModel
 
 
-class EmptyVehicleGateOutStatus(models.TextChoices):
+class BSTGateReturnStatus(models.TextChoices):
+    IN_PROGRESS = "IN_PROGRESS", "In Progress"
     COMPLETED = "COMPLETED", "Completed"
     CANCELLED = "CANCELLED", "Cancelled"
 
 
-class EmptyVehicleGateOut(BaseModel):
-    """Physical gate-out record for an inward vehicle leaving empty."""
+class BSTGateReturn(BaseModel):
+    """Source-side gate-in record for a BST vehicle that returned before BST In."""
 
     company = models.ForeignKey(
         "company.Company",
         on_delete=models.PROTECT,
-        related_name="empty_vehicle_gate_outs",
+        related_name="bst_gate_returns",
     )
     entry_no = models.CharField(max_length=50, unique=True)
     vehicle_entry = models.ForeignKey(
         "driver_management.VehicleEntry",
         on_delete=models.PROTECT,
-        related_name="empty_vehicle_gate_out",
+        related_name="bst_gate_returns",
+    )
+    bst_gate_out = models.ForeignKey(
+        "gate_core.BSTGateOut",
+        on_delete=models.PROTECT,
+        related_name="bst_gate_returns",
     )
     vehicle = models.ForeignKey(
         "vehicle_management.Vehicle",
         on_delete=models.PROTECT,
-        related_name="empty_vehicle_gate_outs",
+        related_name="bst_gate_returns",
     )
     driver = models.ForeignKey(
         "driver_management.Driver",
         on_delete=models.PROTECT,
-        related_name="empty_vehicle_gate_outs",
+        related_name="bst_gate_returns",
     )
-    gate_out_date = models.DateField()
-    out_time = models.TimeField()
+    gate_in_date = models.DateField()
+    in_time = models.TimeField()
     security_name = models.CharField(max_length=100, blank=True)
     remarks = models.TextField(blank=True)
     status = models.CharField(
         max_length=20,
-        choices=EmptyVehicleGateOutStatus.choices,
-        default=EmptyVehicleGateOutStatus.COMPLETED,
-    )
-    cancel_reason = models.TextField(blank=True)
-    cancelled_at = models.DateTimeField(null=True, blank=True)
-    cancelled_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="empty_vehicle_gate_outs_cancelled",
+        choices=BSTGateReturnStatus.choices,
+        default=BSTGateReturnStatus.IN_PROGRESS,
     )
 
     class Meta:
-        ordering = ["-gate_out_date", "-out_time", "-created_at"]
+        ordering = ["-gate_in_date", "-in_time", "-created_at"]
         indexes = [
-            models.Index(fields=["company", "gate_out_date"]),
+            models.Index(fields=["company", "gate_in_date"]),
             models.Index(fields=["status"]),
+            models.Index(fields=["vehicle"]),
+            models.Index(fields=["bst_gate_out"]),
         ]
 
     def __str__(self):
@@ -66,9 +64,9 @@ class EmptyVehicleGateOut(BaseModel):
     @staticmethod
     def generate_entry_no():
         today = timezone.now()
-        prefix = f"EVGO-{today.strftime('%Y%m%d')}"
+        prefix = f"BSTR-{today.strftime('%Y%m%d')}"
         last = (
-            EmptyVehicleGateOut.objects
+            BSTGateReturn.objects
             .filter(entry_no__startswith=prefix)
             .order_by("-entry_no")
             .first()

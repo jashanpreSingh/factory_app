@@ -21,6 +21,7 @@ class TransporterSerializer(serializers.ModelSerializer):
             "name",
             "contact_person",
             "mobile_no",
+            "gstin",
             "created_at",
         ]
         read_only_fields = ("id", "created_at")
