@@ -52,7 +52,6 @@ INSTALLED_APPS = [
     'sap_plan_dashboard',
     'stock_dashboard',
     'inventory_age',
-    'dispatch_plans',
     'django_apscheduler',
     'non_moving_rm',
     'warehouse',

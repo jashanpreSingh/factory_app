@@ -3,7 +3,6 @@ from .context import CompanyContext
 from .hana.grpo_reader import HanaGRPOReader
 from .hana.po_reader import HanaPOReader
 from .hana.stock_transfer_reader import HanaStockTransferReader
-from .hana.service_grpo_options_reader import HanaServiceGRPOOptionsReader
 from .hana.warehouse_reader import HanaWarehouseReader
 from .hana.vendor_reader import HanaVendorReader
 from .service_layer.grpo_writer import GRPOWriter
@@ -36,10 +35,6 @@ class SAPClient:
     def get_active_vendors(self) -> List[VendorDTO]:
         reader = HanaVendorReader(self.context)
         return reader.get_active_vendors()
-
-    def get_service_grpo_options(self) -> dict:
-        reader = HanaServiceGRPOOptionsReader(self.context)
-        return reader.get_options()
 
     def list_stock_transfers(
         self,

@@ -4,9 +4,6 @@ from .models import (
     BSTGateOut,
     BSTGateOutItem,
     BSTGateReturn,
-    DispatchGateLock,
-    DispatchGateOut,
-    DispatchGateOutLine,
     EmptyVehicleGateIn,
     EmptyVehicleGateOut,
     JobWorkGateIn,
@@ -28,41 +25,6 @@ class BSTGateOutItemInline(admin.TabularInline):
         "line_num", "item_code", "item_name", "quantity", "uom",
         "from_warehouse", "to_warehouse",
     )
-
-
-class DispatchGateOutLineInline(admin.TabularInline):
-    model = DispatchGateOutLine
-    extra = 0
-    readonly_fields = (
-        "line_num", "item_code", "item_name", "order_qty",
-        "dispatched_qty", "uom", "warehouse",
-    )
-
-
-@admin.register(DispatchGateOut)
-class DispatchGateOutAdmin(admin.ModelAdmin):
-    list_display = (
-        "entry_no", "company", "sap_invoice_doc_num", "vehicle", "driver",
-        "gate_out_date", "status", "gatepass_no", "print_commit", "created_at",
-    )
-    list_filter = ("company", "status", "gate_out_date", "gate_printed", "print_commit")
-    search_fields = (
-        "entry_no", "sap_invoice_doc_num", "customer_name",
-        "vehicle__vehicle_number", "driver__name", "gatepass_no",
-    )
-    readonly_fields = (
-        "entry_no", "gatepass_no", "gatepass_code", "gate_printed",
-        "printed_at", "committed_at", "created_at", "updated_at",
-    )
-    inlines = [DispatchGateOutLineInline]
-
-
-@admin.register(DispatchGateLock)
-class DispatchGateLockAdmin(admin.ModelAdmin):
-    list_display = ("company", "locked", "changed_by", "locked_at", "unlocked_at")
-    list_filter = ("locked",)
-    search_fields = ("company__name", "company__code", "reason")
-    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(BSTGateOut)
