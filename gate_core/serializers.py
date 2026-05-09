@@ -521,12 +521,15 @@ class RejectedQCReturnEntrySerializer(serializers.ModelSerializer):
             "id", "entry_no", "company", "vehicle", "vehicle_number",
             "driver", "driver_name", "driver_mobile", "gate_out_date",
             "out_time", "challan_no", "eway_bill_no", "manual_sap_reference",
-            "security_name", "remarks", "status", "items",
+            "security_name", "gross_weight", "tare_weight", "net_weight",
+            "weighbridge_slip_no", "first_weighment_time",
+            "second_weighment_time", "gatepass_documents", "remarks", "status", "items",
             "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "entry_no", "company", "vehicle_number", "driver_name",
-            "driver_mobile", "status", "items", "created_at", "updated_at",
+            "driver_mobile", "net_weight", "gatepass_documents", "status", "items",
+            "created_at", "updated_at",
         ]
 
 
@@ -539,8 +542,32 @@ class RejectedQCReturnCreateSerializer(serializers.Serializer):
     eway_bill_no = serializers.CharField(required=False, allow_blank=True, default="")
     manual_sap_reference = serializers.CharField(required=False, allow_blank=True, default="")
     security_name = serializers.CharField(required=False, allow_blank=True, default="")
+    gross_weight = serializers.DecimalField(max_digits=12, decimal_places=3)
+    tare_weight = serializers.DecimalField(max_digits=12, decimal_places=3)
+    weighbridge_slip_no = serializers.CharField(required=False, allow_blank=True, default="")
+    first_weighment_time = serializers.DateTimeField(required=False, allow_null=True)
+    second_weighment_time = serializers.DateTimeField(required=False, allow_null=True)
+    gatepass_documents = serializers.ListField(
+        child=serializers.CharField(allow_blank=False, trim_whitespace=True),
+        min_length=1,
+    )
     remarks = serializers.CharField(required=False, allow_blank=True, default="")
     inspection_ids = serializers.ListField(
         child=serializers.IntegerField(),
         min_length=1,
     )
+
+    def validate(self, attrs):
+        gross_weight = attrs.get("gross_weight")
+        tare_weight = attrs.get("tare_weight")
+
+        if gross_weight is None or gross_weight <= 0:
+            raise serializers.ValidationError({"gross_weight": "Gross weight is required."})
+        if tare_weight is None or tare_weight < 0:
+            raise serializers.ValidationError({"tare_weight": "Tare weight is required."})
+        if tare_weight > gross_weight:
+            raise serializers.ValidationError(
+                {"tare_weight": "Tare weight cannot be greater than gross weight."}
+            )
+
+        return attrs

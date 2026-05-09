@@ -67,6 +67,39 @@ from .serializers import (
     UnitChoiceSerializer,
 )
 
+
+def has_required_weighment(vehicle_entry):
+    if not hasattr(vehicle_entry, "weighment"):
+        return False
+
+    weighment = vehicle_entry.weighment
+    return (
+        weighment.gross_weight is not None
+        and weighment.tare_weight is not None
+        and weighment.gross_weight > 0
+        and weighment.tare_weight >= 0
+        and weighment.tare_weight <= weighment.gross_weight
+    )
+
+
+def required_weighment_response():
+    return Response(
+        {"detail": "Weighment is required before completing this gate-out entry"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def has_gatepass_attachment(vehicle_entry):
+    return GateAttachment.objects.filter(gate_entry=vehicle_entry).exists()
+
+
+def required_gatepass_response():
+    return Response(
+        {"detail": "Gatepass document upload is required before completing this gate-out entry"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
 class GateAttachmentListCreateView(APIView):
     """
     API view to list and create gate attachments for a specific gate entry
@@ -1086,6 +1119,12 @@ class BSTGateOutCompleteView(APIView):
     def post(self, request, vehicle_entry_id):
         bst_out = get_active_bst_gate_out_by_vehicle_entry(request, vehicle_entry_id)
 
+        if not has_required_weighment(bst_out.vehicle_entry):
+            return required_weighment_response()
+
+        if not has_gatepass_attachment(bst_out.vehicle_entry):
+            return required_gatepass_response()
+
         with transaction.atomic():
             bst_out.status = "COMPLETED"
             bst_out.updated_by = request.user
@@ -1649,6 +1688,12 @@ class JobWorkGateInCompleteView(APIView):
 
     def post(self, request, vehicle_entry_id):
         job_work = get_active_job_work_by_vehicle_entry(request, vehicle_entry_id)
+
+        if not has_required_weighment(job_work.vehicle_entry):
+            return required_weighment_response()
+
+        if not has_gatepass_attachment(job_work.vehicle_entry):
+            return required_gatepass_response()
 
         with transaction.atomic():
             job_work.status = "COMPLETED"
@@ -2350,6 +2395,12 @@ class EmptyVehicleGateOutListCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if not has_required_weighment(vehicle_entry):
+            return required_weighment_response()
+
+        if not has_gatepass_attachment(vehicle_entry):
+            return required_gatepass_response()
+
         if EmptyVehicleGateOut.objects.filter(
             vehicle_entry=vehicle_entry,
             is_active=True,
@@ -2530,6 +2581,12 @@ class RejectedQCReturnListCreateView(APIView):
                 eway_bill_no=data.get("eway_bill_no", ""),
                 manual_sap_reference=data.get("manual_sap_reference", ""),
                 security_name=data.get("security_name", ""),
+                gross_weight=data["gross_weight"],
+                tare_weight=data["tare_weight"],
+                weighbridge_slip_no=data.get("weighbridge_slip_no", ""),
+                first_weighment_time=data.get("first_weighment_time"),
+                second_weighment_time=data.get("second_weighment_time"),
+                gatepass_documents=data["gatepass_documents"],
                 remarks=data.get("remarks", ""),
                 created_by=request.user,
                 updated_by=request.user,
