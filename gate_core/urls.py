@@ -15,6 +15,14 @@ from .views import (
     BSTGateReturnDetailView,
     BSTGateReturnEligibleOutsView,
     BSTGateReturnListCreateView,
+    DispatchGateLockView,
+    DispatchGateOutAttachmentView,
+    DispatchGateOutCancelView,
+    DispatchGateOutCommitPrintView,
+    DispatchGateOutCompleteView,
+    DispatchGateOutDetailView,
+    DispatchGateOutListCreateView,
+    DispatchGateOutRejectView,
     EmptyVehicleEligibleEntriesView,
     EmptyVehicleGateInDetailView,
     EmptyVehicleGateInEligibleView,
@@ -53,6 +61,16 @@ urlpatterns = [
     # Rejected QC Return gate-out URLs
     path('rejected-qc-returns/', RejectedQCReturnListCreateView.as_view(), name='rejected_qc_return_list_create'),
     path('rejected-qc-returns/<int:entry_id>/', RejectedQCReturnDetailView.as_view(), name='rejected_qc_return_detail'),
+
+    # Sales dispatch gate-out URLs
+    path('dispatch-gate-lock/', DispatchGateLockView.as_view(), name='dispatch_gate_lock'),
+    path('sales-dispatch-outs/', DispatchGateOutListCreateView.as_view(), name='dispatch_gate_out_list_create'),
+    path('sales-dispatch-outs/<int:entry_id>/attachments/', DispatchGateOutAttachmentView.as_view(), name='dispatch_gate_out_attachments'),
+    path('sales-dispatch-outs/<int:entry_id>/complete/', DispatchGateOutCompleteView.as_view(), name='dispatch_gate_out_complete'),
+    path('sales-dispatch-outs/<int:entry_id>/commit-print/', DispatchGateOutCommitPrintView.as_view(), name='dispatch_gate_out_commit_print'),
+    path('sales-dispatch-outs/<int:entry_id>/cancel/', DispatchGateOutCancelView.as_view(), name='dispatch_gate_out_cancel'),
+    path('sales-dispatch-outs/<int:entry_id>/reject/', DispatchGateOutRejectView.as_view(), name='dispatch_gate_out_reject'),
+    path('sales-dispatch-outs/<int:entry_id>/', DispatchGateOutDetailView.as_view(), name='dispatch_gate_out_detail'),
 
     # Empty Vehicle gate-in URLs
     path('empty-vehicle-ins/reasons/', EmptyVehicleGateInReasonListView.as_view(), name='empty_vehicle_gate_in_reasons'),
