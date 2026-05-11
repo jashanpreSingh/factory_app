@@ -397,6 +397,14 @@ class ProductionQCSessionSerializer(serializers.ModelSerializer):
         source="submitted_by.full_name", read_only=True,
         allow_null=True, default=None
     )
+    approved_by_name = serializers.CharField(
+        source="approved_by.full_name", read_only=True,
+        allow_null=True, default=None
+    )
+    rejected_by_name = serializers.CharField(
+        source="rejected_by.full_name", read_only=True,
+        allow_null=True, default=None
+    )
     material_type_name = serializers.CharField(
         source="material_type.name", read_only=True
     )
@@ -416,6 +424,10 @@ class ProductionQCSessionSerializer(serializers.ModelSerializer):
             "checked_at", "checked_by", "checked_by_name",
             "overall_result", "workflow_status",
             "submitted_by", "submitted_by_name", "submitted_at",
+            "approved_by", "approved_by_name", "approved_at",
+            "approval_remarks",
+            "rejected_by", "rejected_by_name", "rejected_at",
+            "rejection_remarks",
             "remarks", "results",
             "created_at", "updated_at",
         ]
@@ -424,6 +436,10 @@ class ProductionQCSessionSerializer(serializers.ModelSerializer):
             "session_number", "overall_result", "workflow_status",
             "checked_by", "checked_by_name",
             "submitted_by", "submitted_by_name", "submitted_at",
+            "approved_by", "approved_by_name", "approved_at",
+            "approval_remarks",
+            "rejected_by", "rejected_by_name", "rejected_at",
+            "rejection_remarks",
             "created_at", "updated_at",
         ]
 
@@ -493,3 +509,14 @@ class ProductionQCResultBulkUpdateSerializer(serializers.Serializer):
 class ProductionQCSubmitSerializer(serializers.Serializer):
     """For submitting/finalizing a QC session with PASS/FAIL result."""
     overall_result = serializers.ChoiceField(choices=["PASS", "FAIL"])
+
+
+class ProductionQCApprovalSerializer(serializers.Serializer):
+    """For approving a submitted production QC session."""
+    overall_result = serializers.ChoiceField(choices=["PASS", "FAIL"], required=False)
+    remarks = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class ProductionQCRejectSerializer(serializers.Serializer):
+    """For rejecting a submitted production QC session."""
+    remarks = serializers.CharField(required=False, allow_blank=True, default="")

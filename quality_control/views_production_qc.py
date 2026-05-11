@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 
 from company.permissions import HasCompanyContext
 from production_execution.models import ProductionRun
@@ -25,11 +26,14 @@ from .serializers import (
     ProductionQCSessionCreateSerializer,
     ProductionQCResultBulkUpdateSerializer,
     ProductionQCSubmitSerializer,
+    ProductionQCApprovalSerializer,
+    ProductionQCRejectSerializer,
 )
 from .permissions import (
     CanViewProductionQC,
     CanCreateProductionQC,
     CanSubmitProductionQC,
+    CanApproveProductionQC,
 )
 
 
@@ -302,6 +306,93 @@ class ProductionQCSubmitAPI(APIView):
 
 
 # ===========================================================================
+# Production QC Approval
+# ===========================================================================
+
+class ProductionQCPendingAPI(APIView):
+    """List submitted production QC sessions awaiting approval."""
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveProductionQC]
+
+    def get(self, request):
+        company = _get_company(request)
+        sessions = ProductionQCSession.objects.filter(
+            production_run__company=company,
+            workflow_status=ProductionQCWorkflowStatus.SUBMITTED,
+            is_active=True,
+        ).select_related(
+            "material_type", "checked_by", "production_run__line"
+        ).prefetch_related("results")
+
+        serializer = ProductionQCSessionListSerializer(sessions, many=True)
+        return Response(serializer.data)
+
+
+class ProductionQCApproveAPI(APIView):
+    """Approve a submitted production QC session."""
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveProductionQC]
+
+    def post(self, request, session_id):
+        ser = ProductionQCApprovalSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(
+                {"detail": "Invalid data.", "errors": ser.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = _get_company(request)
+        with transaction.atomic():
+            session = get_object_or_404(
+                ProductionQCSession.objects.select_for_update(),
+                id=session_id,
+                production_run__company=company,
+                is_active=True,
+            )
+            try:
+                session.approve(
+                    user=request.user,
+                    overall_result=ser.validated_data.get("overall_result"),
+                    remarks=ser.validated_data.get("remarks", ""),
+                )
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ProductionQCSessionSerializer(session)
+        return Response(serializer.data)
+
+
+class ProductionQCRejectAPI(APIView):
+    """Reject a submitted production QC session."""
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveProductionQC]
+
+    def post(self, request, session_id):
+        ser = ProductionQCRejectSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(
+                {"detail": "Invalid data.", "errors": ser.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = _get_company(request)
+        with transaction.atomic():
+            session = get_object_or_404(
+                ProductionQCSession.objects.select_for_update(),
+                id=session_id,
+                production_run__company=company,
+                is_active=True,
+            )
+            try:
+                session.reject(
+                    user=request.user,
+                    remarks=ser.validated_data.get("remarks", ""),
+                )
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ProductionQCSessionSerializer(session)
+        return Response(serializer.data)
+
+
+# ===========================================================================
 # Production QC Dashboard / Listing Endpoints
 # ===========================================================================
 
@@ -361,4 +452,6 @@ class ProductionQCCountsAPI(APIView):
         return Response({
             "draft": qs.filter(workflow_status=ProductionQCWorkflowStatus.DRAFT).count(),
             "submitted": qs.filter(workflow_status=ProductionQCWorkflowStatus.SUBMITTED).count(),
+            "approved": qs.filter(workflow_status=ProductionQCWorkflowStatus.APPROVED).count(),
+            "rejected": qs.filter(workflow_status=ProductionQCWorkflowStatus.REJECTED).count(),
         })

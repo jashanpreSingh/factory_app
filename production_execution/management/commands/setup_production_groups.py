@@ -200,6 +200,7 @@ QC_GROUPS = {
         "quality_control.can_view_production_qc",
         "quality_control.can_create_production_qc",
         "quality_control.can_submit_production_qc",
+        "quality_control.can_approve_production_qc",
     ],
 }
 
