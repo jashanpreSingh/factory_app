@@ -26,11 +26,22 @@ class StockDashboardFilterSerializer(serializers.Serializer):
         default="",
         help_text="Comma-separated warehouse codes to filter by (e.g. 'WH-01,BH-PM')",
     )
+    item_group = serializers.CharField(
+        required=False,
+        default="",
+        allow_blank=True,
+        max_length=100,
+        help_text="Item group name from OITB to filter by (e.g. 'PACKAGING MATERIAL')",
+    )
 
     def validate_warehouse(self, value):
         if not value:
             return []
         return [w.strip() for w in value.split(",") if w.strip()]
+
+    def validate_item_group(self, value):
+        return value.strip() if value else ""
+
     status = serializers.CharField(
         required=False,
         default="",
@@ -48,6 +59,25 @@ class StockDashboardFilterSerializer(serializers.Serializer):
                 f"Invalid status values: {', '.join(invalid)}. Allowed: {', '.join(sorted(allowed))}"
             )
         return statuses
+
+    movement_status = serializers.CharField(
+        required=False,
+        default="",
+        help_text="Comma-separated movement statuses to filter by (planned,recent,slow)",
+    )
+
+    def validate_movement_status(self, value):
+        if not value:
+            return []
+        allowed = {"planned", "recent", "slow"}
+        statuses = [s.strip() for s in value.split(",") if s.strip()]
+        invalid = set(statuses) - allowed
+        if invalid:
+            raise serializers.ValidationError(
+                f"Invalid movement status values: {', '.join(invalid)}. Allowed: {', '.join(sorted(allowed))}"
+            )
+        return statuses
+
     sort_by = serializers.ChoiceField(
         choices=["item_code", "item_name", "warehouse", "on_hand", "min_stock", "health_ratio"],
         default="health_ratio",
@@ -78,6 +108,19 @@ class StockItemSerializer(serializers.Serializer):
     uom = serializers.CharField()
     stock_status = serializers.CharField()
     health_ratio = serializers.FloatField()
+    movement_status = serializers.CharField(default="slow")
+    last_consumption_date = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        default=None,
+    )
+    days_since_last_consumption = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    has_open_plan = serializers.BooleanField(default=False)
     # Grouped-only fields
     warehouse_count = serializers.IntegerField(default=1)
     has_warning = serializers.BooleanField(default=False)

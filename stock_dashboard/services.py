@@ -16,6 +16,7 @@ from .hana_reader import HanaStockDashboardReader
 logger = logging.getLogger(__name__)
 
 _STATUS_SEVERITY = {"healthy": 0, "unset": 1, "low": 2, "critical": 3}
+SLOW_MOVING_DAYS = 180
 
 
 class StockDashboardService:
@@ -44,20 +45,13 @@ class StockDashboardService:
         warehouse_list = filters.get("warehouse", [])
         is_grouped = len(warehouse_list) >= 2
 
-        # Global stats (no status/warehouse filter) for benchmark cards
-        global_filters = {k: v for k, v in filters.items() if k not in ("status", "warehouse")}
-        global_stats = self.reader.get_stock_stats(global_filters)
         warehouses = self.reader.get_warehouses()
 
-        # Filtered stats for pagination
-        has_filters = filters.get("status") or filters.get("warehouse")
-        if has_filters:
-            if is_grouped:
-                filtered_stats = self.reader.get_grouped_stock_stats(filters)
-            else:
-                filtered_stats = self.reader.get_stock_stats(filters)
+        # Stats and pagination must come from the same filtered row shape as the table.
+        if is_grouped:
+            filtered_stats = self.reader.get_grouped_stock_stats(filters)
         else:
-            filtered_stats = global_stats
+            filtered_stats = self.reader.get_stock_stats(filters)
 
         filtered_total = filtered_stats["total_items"]
         total_pages = max(1, (filtered_total + page_size - 1) // page_size)
@@ -73,9 +67,9 @@ class StockDashboardService:
             "data": rows,
             "meta": {
                 "total_items": filtered_total,
-                "healthy_count": global_stats["healthy_count"],
-                "low_stock_count": global_stats["low_count"],
-                "critical_stock_count": global_stats["critical_count"],
+                "healthy_count": filtered_stats["healthy_count"],
+                "low_stock_count": filtered_stats["low_count"],
+                "critical_stock_count": filtered_stats["critical_count"],
                 "warehouses": warehouses,
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
                 "page": page,
@@ -95,22 +89,24 @@ class StockDashboardService:
     # ------------------------------------------------------------------
 
     def _enrich_rows(self, rows: List[Dict]) -> None:
-        """Adds stock_status and health_ratio to individual rows."""
+        """Adds stock and movement status to individual rows."""
         for row in rows:
             row["stock_status"] = self._stock_status(row["on_hand"], row["min_stock"])
             row["health_ratio"] = (
                 round(row["on_hand"] / row["min_stock"], 2)
                 if row["min_stock"] > 0 else 0.0
             )
+            row["movement_status"] = self._movement_status(row)
 
     def _enrich_grouped_rows(self, rows: List[Dict]) -> None:
-        """Adds computed fields to grouped (multi-warehouse) rows."""
+        """Adds computed stock and movement fields to grouped rows."""
         for row in rows:
             row["stock_status"] = self._stock_status(row["on_hand"], row["min_stock"])
             row["health_ratio"] = (
                 round(row["on_hand"] / row["min_stock"], 2)
                 if row["min_stock"] > 0 else 0.0
             )
+            row["movement_status"] = self._movement_status(row)
             row["warehouse"] = f"{row['warehouse_count']} warehouses"
 
             # Determine worst individual warehouse status
@@ -134,3 +130,17 @@ class StockDashboardService:
         if on_hand >= min_stock * 0.6:
             return "low"
         return "critical"
+
+    @staticmethod
+    def _movement_status(row: Dict) -> str:
+        if row.get("has_open_plan"):
+            return "planned"
+
+        days_since_consumption = row.get("days_since_last_consumption")
+        if (
+            days_since_consumption is not None
+            and days_since_consumption <= SLOW_MOVING_DAYS
+        ):
+            return "recent"
+
+        return "slow"
