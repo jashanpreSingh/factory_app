@@ -36,7 +36,7 @@ def send_stock_alerts():
     Main job entry point. Called by the APScheduler.
 
     For each active company:
-      1. Queries SAP for items where OnHand < MinStock
+      1. Queries SAP for items where OnHand is below benchmark
       2. Checks StockAlertLog for cooldown
       3. Sends notifications via NotificationService
       4. Creates/updates StockAlertLog records
@@ -101,7 +101,7 @@ def _process_company(company: Company, cooldown_minutes: int, now) -> int:
         title = f"{severity} Stock Alert: {row['item_name']}"
         body = (
             f"{row['item_name']} ({item_code}) in warehouse {warehouse}: "
-            f"{row['on_hand']:,.0f} on hand vs {row['min_stock']:,.0f} minimum "
+            f"{row['on_hand']:,.0f} on hand vs {row['min_stock']:,.0f} benchmark "
             f"({row['uom']})"
         )
 

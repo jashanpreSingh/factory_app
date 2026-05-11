@@ -24,9 +24,9 @@ All endpoints require:
 | `search` | string | Case-insensitive match against item code, item name, or warehouse code. |
 | `warehouse` | comma-separated string | Warehouse codes. Two or more warehouses switch the service to grouped item rows. |
 | `item_group` | string | SAP item group name from `OITB.ItmsGrpNam`, for example `PACKAGING MATERIAL`. |
-| `status` | comma-separated string | Allowed values: `healthy`, `low`, `critical`, `unset`. |
+| `status` | comma-separated string | Allowed values: `healthy`, `low`, `critical`, `unset`. The `unset` value is displayed as No Benchmark Set. |
 | `movement_status` | comma-separated string | Allowed values: `planned`, `recent`, `slow`. Omit to include all movement states. |
-| `sort_by` | string | `item_code`, `item_name`, `warehouse`, `on_hand`, `min_stock`, `health_ratio`. |
+| `sort_by` | string | `item_code`, `item_name`, `warehouse`, `on_hand`, `min_stock`, `health_ratio`. The `min_stock` sort is the Benchmark column. |
 | `sort_dir` | string | `asc` or `desc`. |
 | `page` | integer | Page number, minimum 1. |
 | `page_size` | integer | Page size, minimum 1, maximum 200. |
@@ -41,7 +41,7 @@ All endpoints require:
 
 | SAP table | Usage |
 |-----------|-------|
-| `OITW` | Item warehouse stock, `OnHand`, `MinStock`, warehouse code |
+| `OITW` | Item warehouse stock, `OnHand`, benchmark (`MinStock`), warehouse code |
 | `OITM` | Item name, inventory UOM, inventory item flag |
 | `OITB` | Item group name for material type filtering |
 | `OINM` | Inventory audit trail for outbound consumption history |
@@ -64,13 +64,13 @@ The backend owns stock status so filtering, returned rows, grouped rows, and met
 
 | Status | Rule |
 |--------|------|
-| `healthy` | `MinStock > 0` and `OnHand >= MinStock` |
-| `low` | `MinStock > 0`, `OnHand < MinStock`, and `OnHand >= MinStock * 0.6` |
-| `critical` | `MinStock > 0` and `OnHand < MinStock * 0.6` |
-| `critical` | `MinStock = 0` and open planning demand exists |
-| `unset` | `MinStock = 0` and no open planning demand exists |
+| `healthy` | Benchmark is set and `OnHand >= Benchmark` |
+| `low` | Benchmark is set, `OnHand < Benchmark`, and `OnHand >= Benchmark * 0.6` |
+| `critical` | Benchmark is set and `OnHand < Benchmark * 0.6` |
+| `critical` | Benchmark is not set and open planning demand exists |
+| `unset` | Benchmark is not set and no open planning demand exists |
 
-The planned-without-benchmark rule is intentional: a planned item with no benchmark is Critical because SAP shows real demand but no configured minimum stock level.
+The SAP field behind Benchmark is `MinStock`; the API field remains `min_stock` for compatibility. The planned-without-benchmark rule is intentional: a planned item with no benchmark is Critical because SAP shows real demand but no configured benchmark.
 
 ## Movement Rules
 
@@ -89,7 +89,7 @@ Planning takes precedence over consumption age.
 If two or more warehouses are selected, the service returns grouped item rows:
 
 - `on_hand` is summed across selected warehouses.
-- `min_stock` is summed across selected warehouses.
+- Benchmark (`min_stock`) is summed across selected warehouses.
 - `warehouse` is displayed as `<n> warehouses`.
 - `warehouse_count` contains the number of contributing warehouse rows.
 - `has_warning` is set when a child warehouse has a worse status than the aggregate row.

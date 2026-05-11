@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 class StockDashboardAPI(APIView):
     """
-    Stock level dashboard showing items against minimum stock thresholds.
+    Stock level dashboard showing items against benchmark levels.
 
     Returns one row per item-warehouse or grouped item with current on-hand
     qty, health ratio, stock status, and movement status.
