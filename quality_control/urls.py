@@ -36,6 +36,7 @@ from .views import (
 )
 from .views_production_qc import (
     ProductionQCSessionListCreateAPI,
+    ProductionQCFinalRequestAPI,
     ProductionQCSessionDetailAPI,
     ProductionQCResultsAPI,
     ProductionQCSubmitAPI,
@@ -208,6 +209,11 @@ urlpatterns = [
         "production-qc/runs/<int:run_id>/sessions/",
         ProductionQCSessionListCreateAPI.as_view(),
         name="production-qc-session-list-create"
+    ),
+    path(
+        "production-qc/runs/<int:run_id>/request-final/",
+        ProductionQCFinalRequestAPI.as_view(),
+        name="production-qc-final-request"
     ),
     path(
         "production-qc/sessions/<int:session_id>/",

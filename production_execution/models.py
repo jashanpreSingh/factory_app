@@ -432,7 +432,8 @@ class MachineBreakdown(models.Model):
         ProductionRun, on_delete=models.CASCADE, related_name='breakdowns'
     )
     machine = models.ForeignKey(
-        Machine, on_delete=models.PROTECT, related_name='breakdowns'
+        Machine, on_delete=models.SET_NULL, related_name='breakdowns',
+        null=True, blank=True
     )
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
@@ -454,11 +455,12 @@ class MachineBreakdown(models.Model):
 
     class Meta:
         ordering = ['start_time']
-        verbose_name = 'Machine Breakdown'
-        verbose_name_plural = 'Machine Breakdowns'
+        verbose_name = 'Breakdown'
+        verbose_name_plural = 'Breakdowns'
 
     def __str__(self):
-        return f"{self.machine.name} — {self.reason[:50]}"
+        category = self.breakdown_category.name if self.breakdown_category else "Breakdown"
+        return f"{category} - {self.reason[:50]}"
 
 
 class ProductionMaterialUsage(models.Model):

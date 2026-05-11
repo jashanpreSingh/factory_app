@@ -477,8 +477,10 @@ class ProductionExecutionService:
             active_segment.is_active = False
             active_segment.save()
 
-        # Validate machine and category
-        machine = self._get_machine_or_raise(data['machine_id'])
+        # Machine tracking is optional; breakdowns can be logged by category alone.
+        machine = None
+        if data.get('machine_id'):
+            machine = self._get_machine_or_raise(data['machine_id'])
         category = self._get_breakdown_category_or_raise(data['breakdown_category_id'])
 
         breakdown = MachineBreakdown.objects.create(
@@ -723,7 +725,10 @@ class ProductionExecutionService:
             raise ValueError(f"Breakdown {breakdown_id} not found.")
 
         if 'machine_id' in data:
-            breakdown.machine = self._get_machine_or_raise(data['machine_id'])
+            breakdown.machine = (
+                self._get_machine_or_raise(data['machine_id'])
+                if data['machine_id'] else None
+            )
         if 'breakdown_category_id' in data:
             breakdown.breakdown_category = self._get_breakdown_category_or_raise(
                 data['breakdown_category_id']

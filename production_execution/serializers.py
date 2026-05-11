@@ -197,7 +197,9 @@ class BreakdownUpdateSerializer(serializers.Serializer):
 
 
 class MachineBreakdownSerializer(serializers.ModelSerializer):
-    machine_name = serializers.CharField(source='machine.name', read_only=True)
+    machine_name = serializers.CharField(
+        source='machine.name', read_only=True, allow_null=True, default=None
+    )
     breakdown_category_name = serializers.CharField(
         source='breakdown_category.name', read_only=True, default=''
     )
@@ -254,7 +256,7 @@ class ProductionRunDetailSerializer(serializers.ModelSerializer):
 class AddBreakdownSerializer(serializers.Serializer):
     """Used when operator clicks 'Add Breakdown' on the timeline."""
     breakdown_category_id = serializers.IntegerField()
-    machine_id = serializers.IntegerField()
+    machine_id = serializers.IntegerField(required=False, allow_null=True)
     reason = serializers.CharField(max_length=500)
     produced_cases = serializers.DecimalField(
         max_digits=12, decimal_places=1, required=False, default=0,

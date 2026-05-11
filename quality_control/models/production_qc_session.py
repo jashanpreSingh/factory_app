@@ -33,6 +33,8 @@ class ProductionQCSession(BaseModel):
         "quality_control.MaterialType",
         on_delete=models.PROTECT,
         related_name="production_qc_sessions",
+        null=True,
+        blank=True,
         help_text="Product/material type defining which QC parameters to check"
     )
 

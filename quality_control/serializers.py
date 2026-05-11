@@ -406,10 +406,12 @@ class ProductionQCSessionSerializer(serializers.ModelSerializer):
         allow_null=True, default=None
     )
     material_type_name = serializers.CharField(
-        source="material_type.name", read_only=True
+        source="material_type.name", read_only=True,
+        allow_null=True, default=None
     )
     material_type_code = serializers.CharField(
-        source="material_type.code", read_only=True
+        source="material_type.code", read_only=True,
+        allow_null=True, default=None
     )
     run_number = serializers.IntegerField(
         source="production_run.run_number", read_only=True
@@ -451,7 +453,8 @@ class ProductionQCSessionListSerializer(serializers.ModelSerializer):
         allow_null=True, default=None
     )
     material_type_name = serializers.CharField(
-        source="material_type.name", read_only=True
+        source="material_type.name", read_only=True,
+        allow_null=True, default=None
     )
     run_number = serializers.IntegerField(
         source="production_run.run_number", read_only=True
