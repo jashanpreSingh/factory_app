@@ -65,8 +65,32 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         )
 
         self.assertIn('IFNULL(plan."OpenPlanCount", 0) > 0', query)
-        self.assertIn('DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE) <= 180', query)
+        self.assertIn('DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE) <= 30', query)
         self.assertNotIn("WHERE WHERE", query)
+
+    def test_critical_status_includes_planned_items_without_benchmark(self):
+        query, _ = self.reader._build_query({"status": ["critical"]})
+
+        self.assertIn(
+            'w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) > 0',
+            query,
+        )
+
+    def test_unset_status_excludes_planned_items_without_benchmark(self):
+        query, _ = self.reader._build_query({"status": ["unset"]})
+
+        self.assertIn(
+            'w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) = 0',
+            query,
+        )
+
+    def test_stock_stats_count_planned_items_without_benchmark_as_critical(self):
+        query, _ = self.reader._build_stats_query({})
+
+        self.assertIn(
+            'w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) > 0',
+            query,
+        )
 
     def test_grouped_stats_query_filters_by_item_group_name(self):
         query, params = self.reader._build_grouped_stats_query(
@@ -84,8 +108,14 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
 
         self.assertIn("days_since_last_consumption", query)
         self.assertIn("has_open_plan", query)
-        self.assertIn("days_since_last_consumption > 180", query)
+        self.assertIn("days_since_last_consumption > 30", query)
         self.assertNotIn("WHERE WHERE", query)
+
+    def test_grouped_critical_status_includes_planned_without_benchmark(self):
+        query, _ = self.reader._build_grouped_query({"status": ["critical"]})
+
+        self.assertIn("planned_without_benchmark > 0", query)
+        self.assertIn("AS planned_without_benchmark", query)
 
 
 class StockDashboardServiceTests(SimpleTestCase):
@@ -162,6 +192,32 @@ class StockDashboardServiceTests(SimpleTestCase):
         self.assertEqual(result["meta"]["low_stock_count"], 1)
         self.assertEqual(result["meta"]["critical_stock_count"], 4)
 
+    def test_planned_item_without_benchmark_is_critical(self):
+        service = self.make_service(Mock())
+
+        status = service._stock_status(0, 0, has_open_plan=True)
+
+        self.assertEqual(status, "critical")
+
+    def test_unplanned_item_without_benchmark_is_unset(self):
+        service = self.make_service(Mock())
+
+        status = service._stock_status(0, 0, has_open_plan=False)
+
+        self.assertEqual(status, "unset")
+
+    def test_grouped_planned_without_benchmark_overrides_health(self):
+        service = self.make_service(Mock())
+
+        status = service._stock_status(
+            100,
+            10,
+            has_open_plan=True,
+            planned_without_benchmark=True,
+        )
+
+        self.assertEqual(status, "critical")
+
     def test_movement_status_prefers_open_plan(self):
         service = self.make_service(Mock())
 
@@ -184,7 +240,7 @@ class StockDashboardServiceTests(SimpleTestCase):
         service = self.make_service(Mock())
 
         status = service._movement_status(
-            {"has_open_plan": False, "days_since_last_consumption": 181}
+            {"has_open_plan": False, "days_since_last_consumption": 31}
         )
 
         self.assertEqual(status, "slow")

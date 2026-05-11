@@ -16,7 +16,7 @@ from .hana_reader import HanaStockDashboardReader
 logger = logging.getLogger(__name__)
 
 _STATUS_SEVERITY = {"healthy": 0, "unset": 1, "low": 2, "critical": 3}
-SLOW_MOVING_DAYS = 180
+SLOW_MOVING_DAYS = 30
 
 
 class StockDashboardService:
@@ -91,7 +91,11 @@ class StockDashboardService:
     def _enrich_rows(self, rows: List[Dict]) -> None:
         """Adds stock and movement status to individual rows."""
         for row in rows:
-            row["stock_status"] = self._stock_status(row["on_hand"], row["min_stock"])
+            row["stock_status"] = self._stock_status(
+                row["on_hand"],
+                row["min_stock"],
+                has_open_plan=row.get("has_open_plan", False),
+            )
             row["health_ratio"] = (
                 round(row["on_hand"] / row["min_stock"], 2)
                 if row["min_stock"] > 0 else 0.0
@@ -101,7 +105,12 @@ class StockDashboardService:
     def _enrich_grouped_rows(self, rows: List[Dict]) -> None:
         """Adds computed stock and movement fields to grouped rows."""
         for row in rows:
-            row["stock_status"] = self._stock_status(row["on_hand"], row["min_stock"])
+            row["stock_status"] = self._stock_status(
+                row["on_hand"],
+                row["min_stock"],
+                has_open_plan=row.get("has_open_plan", False),
+                planned_without_benchmark=row.get("planned_without_benchmark", 0) > 0,
+            )
             row["health_ratio"] = (
                 round(row["on_hand"] / row["min_stock"], 2)
                 if row["min_stock"] > 0 else 0.0
@@ -122,9 +131,16 @@ class StockDashboardService:
             )
 
     @staticmethod
-    def _stock_status(on_hand: float, min_stock: float) -> str:
+    def _stock_status(
+        on_hand: float,
+        min_stock: float,
+        has_open_plan: bool = False,
+        planned_without_benchmark: bool = False,
+    ) -> str:
+        if planned_without_benchmark:
+            return "critical"
         if min_stock <= 0:
-            return "unset"
+            return "critical" if has_open_plan else "unset"
         if on_hand >= min_stock:
             return "healthy"
         if on_hand >= min_stock * 0.6:
