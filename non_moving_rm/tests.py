@@ -38,7 +38,7 @@ def _make_report_row(
     days_since_last_movement=2200,
     consumption_ratio=46.5,
 ):
-    """Returns a tuple in the same column order as REPORT_BP_NON_MOVING_RM1."""
+    """Returns a tuple in the same column order as the non-moving HANA query."""
     return (
         branch,
         item_code,
@@ -70,6 +70,7 @@ class TestHanaNonMovingRMReaderRowMapping(TestCase):
         from non_moving_rm.hana_reader import HanaNonMovingRMReader
 
         context = MagicMock()
+        context.company_code = "JIVO_OIL"
         context.hana = {
             "host": "localhost",
             "port": 30015,
@@ -140,6 +141,24 @@ class TestHanaNonMovingRMReaderRowMapping(TestCase):
         self.assertEqual(result["item_group_code"], 106)
         self.assertEqual(result["item_group_name"], "")
 
+    def test_build_report_query_uses_company_schema_not_stored_procedure(self):
+        query, params = self.reader._build_report_query(age=45, item_group=105)
+
+        self.assertIn('"TEST"."OITW"', query)
+        self.assertIn('"TEST"."OITM"', query)
+        self.assertIn('"TEST"."OINM"', query)
+        self.assertIn('"TEST"."OITB"', query)
+        self.assertNotIn("REPORT_BP_NON_MOVING", query)
+        self.assertNotIn("JIVO_OIL_HANADB", query)
+        self.assertNotIn("JIVO_BEVERAGES_HANADB", query)
+        self.assertEqual(params, [105, -45, "OIL", 45, 45])
+
+    def test_build_report_query_all_item_groups_omits_group_filter(self):
+        query, params = self.reader._build_report_query(age=365, item_group=0)
+
+        self.assertNotIn('T0."ItmsGrpCod" = ?', query)
+        self.assertEqual(params, [-365, "OIL", 365, 365])
+
 
 # ---------------------------------------------------------------------------
 # 2. NonMovingRMService Tests
@@ -184,6 +203,23 @@ class TestNonMovingRMService(TestCase):
         self.assertEqual(result["summary"]["total_items"], 3)
         self.assertEqual(result["summary"]["total_value"], 451.50)
         self.assertEqual(result["summary"]["total_quantity"], 150.0)
+
+    def test_get_report_applies_age_threshold_to_rows_and_summary(self):
+        service = self._make_service()
+        service.reader.get_non_moving_report.return_value = [
+            {"branch": "B1", "value": 100.0, "quantity": 10.0, "days_since_last_movement": 44},
+            {"branch": "B1", "value": 200.0, "quantity": 20.0, "days_since_last_movement": 45},
+            {"branch": "B2", "value": 300.0, "quantity": 30.0, "days_since_last_movement": 365},
+        ]
+
+        result = service.get_report(age=45, item_group=105)
+
+        self.assertEqual(len(result["data"]), 2)
+        self.assertEqual(result["summary"]["total_items"], 2)
+        self.assertEqual(result["summary"]["total_value"], 500.0)
+        self.assertTrue(
+            all(row["days_since_last_movement"] >= 45 for row in result["data"])
+        )
 
     def test_get_report_branch_summary(self):
         service = self._make_service()
@@ -244,8 +280,13 @@ class TestNonMovingRMFilterSerializer(TestCase):
         self.assertFalse(s.is_valid())
         self.assertIn("age", s.errors)
 
-    def test_missing_item_group_invalid(self):
+    def test_missing_item_group_defaults_to_all(self):
         s = self.Serializer(data={"age": 45})
+        self.assertTrue(s.is_valid(), s.errors)
+        self.assertEqual(s.validated_data["item_group"], 0)
+
+    def test_negative_item_group_invalid(self):
+        s = self.Serializer(data={"age": 45, "item_group": -1})
         self.assertFalse(s.is_valid())
         self.assertIn("item_group", s.errors)
 
@@ -387,6 +428,16 @@ class TestNonMovingRMAPIViews(APITestCase):
             {"age": 90, "item_group": 106},
         )
         MockService.return_value.get_report.assert_called_once_with(age=90, item_group=106)
+
+    @patch("non_moving_rm.views.NonMovingRMService")
+    def test_report_omitted_item_group_means_all(self, MockService):
+        MockService.return_value.get_report.return_value = self._mock_report_response()
+        response = self.client.get(
+            "/api/v1/non-moving-rm/report/",
+            {"age": 90},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        MockService.return_value.get_report.assert_called_once_with(age=90, item_group=0)
 
     def test_report_missing_params_returns_400(self):
         response = self.client.get("/api/v1/non-moving-rm/report/")

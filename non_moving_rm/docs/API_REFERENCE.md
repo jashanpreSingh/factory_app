@@ -52,14 +52,16 @@ Returns all SAP item groups from the OITB table. Use this to populate the item g
 GET /api/v1/non-moving-rm/report/?age=<days>&item_group=<code>
 ```
 
-Calls the `REPORT_BP_NON_MOVING_RM` stored procedure and returns item-level data with summary aggregations.
+Reads the selected company's SAP HANA schema directly and returns item-level data with summary aggregations.
 
 **Query Parameters:**
 
 | Parameter    | Type | Required | Min | Description                                  |
 |-------------|------|----------|-----|----------------------------------------------|
 | `age`       | int  | Yes      | 1   | Minimum days since last movement              |
-| `item_group`| int  | Yes      | -   | Item group code from OITB (from dropdown)     |
+| `item_group`| int  | No       | 0   | Item group code from OITB; omit or pass `0` for all groups |
+
+The API returns only rows where `days_since_last_movement >= age`. The HANA query is scoped to the company selected by the `Company-Code` header, and the service layer re-applies the threshold before building `data` and `summary`.
 
 **Response (200):**
 
@@ -71,7 +73,6 @@ Calls the `REPORT_BP_NON_MOVING_RM` stored procedure and returns item-level data
 | `data[].item_name`                     | string  | Item description                               |
 | `data[].item_group_name`               | string  | Item group name                                |
 | `data[].quantity`                       | float   | Current stock quantity                         |
-| `data[].litres`                         | float   | Quantity in litres                             |
 | `data[].sub_group`                      | string  | Sub group (e.g., LABEL, CARTON, CAPS)          |
 | `data[].value`                          | float   | Inventory value                                |
 | `data[].last_movement_date`             | string  | Last movement date (YYYY-MM-DD HH:MM:SS)      |
@@ -98,8 +99,7 @@ Calls the `REPORT_BP_NON_MOVING_RM` stored procedure and returns item-level data
 {
   "detail": "Invalid query parameters.",
   "errors": {
-    "age": ["This field is required."],
-    "item_group": ["This field is required."]
+    "age": ["This field is required."]
   }
 }
 ```
@@ -134,33 +134,19 @@ Calls the `REPORT_BP_NON_MOVING_RM` stored procedure and returns item-level data
 
 ---
 
-## Stored Procedure Reference
+## HANA Data Reference
 
-### REPORT_BP_NON_MOVING_RM
+The report no longer calls `REPORT_BP_NON_MOVING_RM`. It is built from the company schema resolved by `Company-Code`.
 
-```sql
-CALL "REPORT_BP_NON_MOVING_RM"(<Age>, <ItemGroup>)
-```
+| Table | Purpose |
+|-------|---------|
+| `OITW` | Current on-hand quantity by item and warehouse |
+| `OITM` | Item master, item name, sub group, and fallback price |
+| `OITB` | Item group names and item group filter |
+| `OWHS` | Warehouse metadata and inactive warehouse exclusion |
+| `OINM` | Last movement date, calculated price, and recent consumption |
 
-**Parameters:**
-- `Age` (INT): Number of days since last movement
-- `ItemGroup` (INT): Item group code from OITB
-
-**Returns:**
-
-| Column                  | Type     | Description                         |
-|-------------------------|----------|-------------------------------------|
-| Branch                  | VARCHAR  | Branch/plant code                   |
-| ItemCode                | VARCHAR  | SAP item code                       |
-| ItemName                | VARCHAR  | Item description                    |
-| ItmsGrpNam              | VARCHAR  | Item group name                     |
-| Quantity                | DECIMAL  | Current stock quantity               |
-| Litres                  | DECIMAL  | Quantity in litres                   |
-| U_Sub_Group             | VARCHAR  | Sub group classification             |
-| Value                   | DECIMAL  | Inventory value                      |
-| LastMovementDate        | DATETIME | Date of last stock movement          |
-| DaysSinceLastMovement   | INT      | Number of days since last movement   |
-| ConsumptionRatio        | DECIMAL  | Consumption ratio percentage         |
+The age filter is applied against the last non-transfer stock movement (`TransType <> 67`) per item and warehouse. Items with no movement history are aged from the SAP item `CreateDate`.
 
 ### OITB (Item Groups Table)
 

@@ -34,14 +34,14 @@ class NonMovingRMReportAPI(APIView):
     """
     Non-moving raw material report.
 
-    Calls the REPORT_BP_NON_MOVING_RM stored procedure with Age and ItemGroup
+    Reads the selected company's SAP schema with Age and optional ItemGroup
     parameters and returns detailed item-level data with summary aggregations.
 
     GET /api/v1/non-moving-rm/report/?age=45&item_group=105
 
     Query parameters:
-        age         — (required) Number of days since last movement (e.g. 45, 90, 180)
-        item_group  — (required) Item group code from OITB (e.g. 105, 106)
+        age         - (required) Number of days since last movement (e.g. 45, 90, 180)
+        item_group  - (optional) Item group code from OITB (e.g. 105, 106); omit or 0 for all
     """
 
     permission_classes = [IsAuthenticated, HasCompanyContext, CanViewNonMovingRM]
