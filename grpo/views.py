@@ -19,6 +19,12 @@ from .serializers import (
     GRPOAttachmentSerializer,
     GRPOAttachmentUploadSerializer,
     AllGRPOEntrySerializer,
+    ServiceGRPOPendingEntrySerializer,
+    ServiceGRPOPreviewSerializer,
+    ServiceGRPOPostRequestSerializer,
+    ServiceGRPOOptionsSerializer,
+    ServiceGRPOPostingSerializer,
+    ServiceGRPOPostResponseSerializer,
 )
 from .permissions import (
     CanViewPendingGRPO,
@@ -355,6 +361,244 @@ class PostGRPOAPI(APIView):
                 {"detail": f"SAP error: {str(e)}"},
                 status=status.HTTP_502_BAD_GATEWAY
             )
+
+
+class PendingServiceGRPOListAPI(APIView):
+    """
+    Returns booked dispatch plans pending transport service GRPO posting.
+
+    GET /api/grpo/service/pending/
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewPendingGRPO]
+
+    def get(self, request):
+        service = GRPOService(company_code=request.company.company.code)
+        dispatch_plans = service.get_pending_service_grpo_entries()
+
+        result = []
+        for plan in dispatch_plans:
+            vehicle_no = plan.vehicle_no or (
+                plan.vehicle.vehicle_number if plan.vehicle_id else ""
+            )
+            result.append({
+                "dispatch_plan_id": plan.id,
+                "sap_invoice_doc_entry": plan.sap_invoice_doc_entry,
+                "sap_invoice_doc_num": plan.sap_invoice_doc_num,
+                "booking_status": plan.booking_status,
+                "dispatch_date": plan.dispatch_date,
+                "vehicle_no": vehicle_no,
+                "driver_name": plan.driver_name,
+                "transporter_name": plan.transporter_name,
+                "transporter_gstin": plan.transporter_gstin,
+                "bilty_no": plan.bilty_no,
+                "bilty_date": plan.bilty_date,
+                "freight": plan.freight,
+                "total_freight": plan.total_freight,
+                "created_at": plan.created_at,
+                "updated_at": plan.updated_at,
+            })
+
+        serializer = ServiceGRPOPendingEntrySerializer(result, many=True)
+        return Response(serializer.data)
+
+
+class ServiceGRPOOptionsAPI(APIView):
+    """
+    Returns SAP options for service GRPO selectable fields.
+
+    GET /api/grpo/service/options/
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanPreviewGRPO]
+
+    def get(self, request):
+        service = GRPOService(company_code=request.company.company.code)
+        try:
+            options = service.get_service_grpo_options()
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError as e:
+            return Response(
+                {"detail": f"SAP data error: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(ServiceGRPOOptionsSerializer(options).data)
+
+
+class ServiceGRPOPreviewAPI(APIView):
+    """
+    Returns dispatch booking data required for service GRPO posting.
+
+    GET /api/grpo/service/preview/<dispatch_plan_id>/
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanPreviewGRPO]
+
+    def get(self, request, dispatch_plan_id):
+        service = GRPOService(company_code=request.company.company.code)
+        try:
+            preview_data = service.get_service_grpo_preview_data(dispatch_plan_id)
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ServiceGRPOPreviewSerializer(preview_data)
+        return Response(serializer.data)
+
+
+class PostServiceGRPOAPI(APIView):
+    """
+    Post a transport service GRPO to SAP for a booked dispatch plan.
+
+    POST /api/grpo/service/post/
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanCreateGRPOPosting]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request):
+        if request.content_type and "multipart" in request.content_type:
+            try:
+                raw_data = request.data.get("data", "{}")
+                if isinstance(raw_data, str):
+                    parsed_data = json.loads(raw_data)
+                else:
+                    parsed_data = raw_data
+            except json.JSONDecodeError:
+                return Response(
+                    {"detail": "Invalid JSON in 'data' field"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            attachments = request.FILES.getlist("attachments")
+        else:
+            parsed_data = request.data
+            attachments = []
+
+        serializer = ServiceGRPOPostRequestSerializer(data=parsed_data)
+        if not serializer.is_valid():
+            return Response(
+                {"detail": "Invalid request data", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = GRPOService(company_code=request.company.company.code)
+
+        try:
+            grpo_posting = service.post_service_grpo(
+                dispatch_plan_id=serializer.validated_data["dispatch_plan_id"],
+                user=request.user,
+                vendor_code=serializer.validated_data["vendor_code"],
+                branch_id=serializer.validated_data["branch_id"],
+                service_description=serializer.validated_data["service_description"],
+                amount=serializer.validated_data["amount"],
+                tax_code=serializer.validated_data.get("tax_code"),
+                gl_account=serializer.validated_data.get("gl_account"),
+                comments=serializer.validated_data.get("comments"),
+                vendor_ref=serializer.validated_data.get("vendor_ref"),
+                extra_charges=serializer.validated_data.get("extra_charges"),
+                attachments=attachments,
+                doc_date=serializer.validated_data.get("doc_date"),
+                doc_due_date=serializer.validated_data.get("doc_due_date"),
+                tax_date=serializer.validated_data.get("tax_date"),
+                should_roundoff=serializer.validated_data.get("should_roundoff", False),
+            )
+
+            response_data = {
+                "success": True,
+                "service_grpo_posting_id": grpo_posting.id,
+                "sap_doc_entry": grpo_posting.sap_doc_entry,
+                "sap_doc_num": grpo_posting.sap_doc_num,
+                "sap_doc_total": grpo_posting.sap_doc_total,
+                "message": (
+                    "Service GRPO posted successfully. "
+                    f"SAP Doc Num: {grpo_posting.sap_doc_num}"
+                ),
+                "attachments": grpo_posting.attachments.all(),
+            }
+
+            return Response(
+                ServiceGRPOPostResponseSerializer(
+                    response_data, context={"request": request}
+                ).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except SAPValidationError as e:
+            return Response(
+                {"detail": f"SAP validation error: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        except SAPDataError as e:
+            return Response(
+                {"detail": f"SAP error: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+class ServiceGRPOPostingHistoryAPI(APIView):
+    """
+    Returns transport service GRPO posting history.
+
+    GET /api/grpo/service/history/
+    GET /api/grpo/service/history/?dispatch_plan_id=123
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewGRPOHistory]
+
+    def get(self, request):
+        dispatch_plan_id = request.GET.get("dispatch_plan_id")
+
+        service = GRPOService(company_code=request.company.company.code)
+        postings = service.get_service_grpo_posting_history(
+            dispatch_plan_id=int(dispatch_plan_id) if dispatch_plan_id else None
+        )
+
+        serializer = ServiceGRPOPostingSerializer(postings, many=True)
+        return Response(serializer.data)
+
+
+class ServiceGRPOPostingDetailAPI(APIView):
+    """
+    Returns details of a specific service GRPO posting.
+
+    GET /api/grpo/service/<posting_id>/
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewGRPOPosting]
+
+    def get(self, request, posting_id):
+        from .models import ServiceGRPOPosting
+
+        try:
+            posting = ServiceGRPOPosting.objects.select_related(
+                "dispatch_plan",
+                "posted_by",
+            ).prefetch_related("lines", "attachments").get(id=posting_id)
+        except ServiceGRPOPosting.DoesNotExist:
+            return Response(
+                {"detail": "Service GRPO posting not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ServiceGRPOPostingSerializer(
+            posting,
+            context={"request": request},
+        )
+        return Response(serializer.data)
 
 
 class GRPOPostingHistoryAPI(APIView):
