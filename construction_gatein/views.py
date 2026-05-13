@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 
 from driver_management.models import VehicleEntry
+from gate_core.models import GateAttachment
 from .models import ConstructionGateEntry, ConstructionMaterialCategory
 from .serializers import ConstructionGateEntrySerializer, ConstructionMaterialCategorySerializer
 from .services import complete_construction_gate_entry
@@ -167,6 +168,12 @@ class ConstructionGateCompleteAPI(APIView):
             id=gate_entry_id,
             company=request.company.company
         )
+
+        if not GateAttachment.objects.filter(gate_entry=entry).exists():
+            return Response(
+                {"detail": "Bill upload is required before completing this construction entry"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             complete_construction_gate_entry(entry)

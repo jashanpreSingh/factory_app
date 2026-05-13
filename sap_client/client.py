@@ -1,7 +1,9 @@
 from typing import List, Optional
 from .context import CompanyContext
+from .hana.grpo_reader import HanaGRPOReader
 from .hana.po_reader import HanaPOReader
 from .hana.service_grpo_options_reader import HanaServiceGRPOOptionsReader
+from .hana.stock_transfer_reader import HanaStockTransferReader
 from .hana.warehouse_reader import HanaWarehouseReader
 from .hana.vendor_reader import HanaVendorReader
 from .service_layer.grpo_writer import GRPOWriter
@@ -34,6 +36,46 @@ class SAPClient:
     def get_active_vendors(self) -> List[VendorDTO]:
         reader = HanaVendorReader(self.context)
         return reader.get_active_vendors()
+
+    def list_stock_transfers(
+        self,
+        search: str | None = None,
+        from_date=None,
+        to_date=None,
+        limit: int = 50,
+    ) -> list[dict]:
+        reader = HanaStockTransferReader(self.context)
+        return reader.list_transfers(
+            search=search,
+            from_date=from_date,
+            to_date=to_date,
+            limit=limit,
+        )
+
+    def get_stock_transfer(self, doc_entry: int) -> dict | None:
+        reader = HanaStockTransferReader(self.context)
+        return reader.get_transfer(doc_entry)
+
+    def list_grpos(
+        self,
+        search: str | None = None,
+        from_date=None,
+        to_date=None,
+        limit: int = 50,
+        crude_oil_only: bool = False,
+    ) -> list[dict]:
+        reader = HanaGRPOReader(self.context)
+        return reader.list_grpos(
+            search=search,
+            from_date=from_date,
+            to_date=to_date,
+            limit=limit,
+            crude_oil_only=crude_oil_only,
+        )
+
+    def get_grpo(self, doc_entry: int, crude_oil_only: bool = False) -> dict | None:
+        reader = HanaGRPOReader(self.context)
+        return reader.get_grpo(doc_entry, crude_oil_only=crude_oil_only)
 
     def get_service_grpo_options(self) -> dict:
         reader = HanaServiceGRPOOptionsReader(self.context)

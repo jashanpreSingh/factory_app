@@ -46,6 +46,33 @@ class ProductionOrderReader:
             logger.error(f"Failed to fetch released production orders: {e}")
             raise SAPReadError(f"Failed to fetch production orders: {e}")
 
+    def get_open_production_orders(self) -> list:
+        """Get planned/released production orders with remaining qty > 0."""
+        sql = """
+            SELECT
+                W."DocEntry",
+                W."DocNum",
+                W."ItemCode",
+                W."ProdName",
+                W."PlannedQty",
+                W."CmpltQty",
+                W."RjctQty",
+                (W."PlannedQty" - W."CmpltQty" - W."RjctQty") AS "RemainingQty",
+                W."StartDate",
+                W."DueDate",
+                W."Warehouse",
+                W."Status"
+            FROM "{schema}"."OWOR" W
+            WHERE W."Status" IN ('P', 'R')
+              AND (W."PlannedQty" - W."CmpltQty" - W."RjctQty") > 0
+            ORDER BY W."DueDate" ASC
+        """.format(schema=self.client.context.config['hana']['schema'])
+        try:
+            return self._execute(sql)
+        except Exception as e:
+            logger.error(f"Failed to fetch open production orders: {e}")
+            raise SAPReadError(f"Failed to fetch production orders: {e}")
+
     def get_production_order_detail(self, doc_entry: int) -> dict:
         """Get full detail of a production order including components.
         Tries DocEntry first, falls back to DocNum if not found."""

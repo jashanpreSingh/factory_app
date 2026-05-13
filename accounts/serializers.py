@@ -80,6 +80,7 @@ class MeSerializer(serializers.ModelSerializer):
             "employee_code",
             "is_active",
             "is_staff",
+            "is_superuser",
             "date_joined",
             "companies",
             "permissions",
