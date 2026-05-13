@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.db.models import Sum
 from rest_framework import serializers
 from .models import (
     ProductionLine, Machine, MachineChecklistTemplate,
@@ -98,6 +101,12 @@ class ProductionRunCreateSerializer(serializers.Serializer):
     )
     labour_count = serializers.IntegerField(min_value=0, required=False, default=0)
     other_manpower_count = serializers.IntegerField(min_value=0, required=False, default=0)
+    electricity_cost_per_unit = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
+    labour_cost_per_hour = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
     supervisor = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
     operators = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
     materials = serializers.ListField(
@@ -116,6 +125,12 @@ class ProductionRunUpdateSerializer(serializers.Serializer):
     )
     labour_count = serializers.IntegerField(min_value=0, required=False)
     other_manpower_count = serializers.IntegerField(min_value=0, required=False)
+    electricity_cost_per_unit = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
+    labour_cost_per_hour = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
     supervisor = serializers.CharField(max_length=200, required=False, allow_blank=True)
     operators = serializers.CharField(max_length=500, required=False, allow_blank=True)
     rejected_qty = serializers.DecimalField(
@@ -135,6 +150,7 @@ class ProductionRunListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'sap_doc_entry', 'run_number', 'date',
             'line', 'line_name', 'product', 'required_qty', 'rated_speed',
+            'electricity_cost_per_unit', 'labour_cost_per_hour',
             'total_production', 'total_running_minutes', 'total_breakdown_time',
             'rejected_qty', 'reworked_qty',
             'sap_receipt_doc_entry', 'sap_sync_status', 'sap_sync_error',
@@ -181,7 +197,9 @@ class BreakdownUpdateSerializer(serializers.Serializer):
 
 
 class MachineBreakdownSerializer(serializers.ModelSerializer):
-    machine_name = serializers.CharField(source='machine.name', read_only=True)
+    machine_name = serializers.CharField(
+        source='machine.name', read_only=True, allow_null=True, default=None
+    )
     breakdown_category_name = serializers.CharField(
         source='breakdown_category.name', read_only=True, default=''
     )
@@ -209,6 +227,7 @@ class ProductionRunDetailSerializer(serializers.ModelSerializer):
             'id', 'sap_doc_entry', 'run_number', 'date',
             'line', 'line_name', 'product', 'required_qty', 'rated_speed',
             'labour_count', 'other_manpower_count', 'supervisor', 'operators',
+            'electricity_cost_per_unit', 'labour_cost_per_hour',
             'total_production', 'total_running_minutes', 'total_breakdown_time',
             'rejected_qty', 'reworked_qty',
             'sap_receipt_doc_entry', 'sap_sync_status', 'sap_sync_error',
@@ -237,7 +256,7 @@ class ProductionRunDetailSerializer(serializers.ModelSerializer):
 class AddBreakdownSerializer(serializers.Serializer):
     """Used when operator clicks 'Add Breakdown' on the timeline."""
     breakdown_category_id = serializers.IntegerField()
-    machine_id = serializers.IntegerField()
+    machine_id = serializers.IntegerField(required=False, allow_null=True)
     reason = serializers.CharField(max_length=500)
     produced_cases = serializers.DecimalField(
         max_digits=12, decimal_places=1, required=False, default=0,
@@ -275,14 +294,99 @@ class StopProductionSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 class MaterialUsageSerializer(serializers.ModelSerializer):
+    bom_quantity = serializers.SerializerMethodField()
+    wastage_quantity = serializers.SerializerMethodField()
+    wastage_percentage = serializers.SerializerMethodField()
+    final_consumption_quantity = serializers.SerializerMethodField()
+    warehouse_request_id = serializers.SerializerMethodField()
+    warehouse_request_status = serializers.SerializerMethodField()
+    warehouse_line_status = serializers.SerializerMethodField()
+    warehouse_requested_qty = serializers.SerializerMethodField()
+    warehouse_approved_qty = serializers.SerializerMethodField()
+    warehouse_available_stock = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductionMaterialUsage
         fields = [
             'id', 'material_code', 'material_name',
             'opening_qty', 'issued_qty', 'closing_qty', 'wastage_qty',
+            'bom_quantity', 'wastage_percentage', 'wastage_quantity',
+            'final_consumption_quantity',
             'uom', 'created_at', 'updated_at',
+            'warehouse_request_id', 'warehouse_request_status',
+            'warehouse_line_status', 'warehouse_requested_qty',
+            'warehouse_approved_qty', 'warehouse_available_stock',
         ]
         read_only_fields = ['wastage_qty', 'created_at', 'updated_at']
+
+    def _format_quantity(self, value):
+        return str(Decimal(value or 0).quantize(Decimal('0.001')))
+
+    def _format_percentage(self, value):
+        return str(Decimal(value or 0).quantize(Decimal('0.01')))
+
+    def _get_bom_waste_quantity(self, obj):
+        cached = getattr(obj, '_bom_waste_quantity', None)
+        if cached is not None:
+            return cached
+
+        waste_logs = WasteLog.objects.filter(production_run=obj.production_run)
+        if obj.material_code:
+            waste_logs = waste_logs.filter(material_code=obj.material_code)
+        else:
+            waste_logs = waste_logs.filter(material_name=obj.material_name)
+
+        total = waste_logs.aggregate(total=Sum('wastage_qty'))['total'] or Decimal('0')
+        obj._bom_waste_quantity = total
+        return total
+
+    def get_bom_quantity(self, obj):
+        return self._format_quantity(obj.opening_qty)
+
+    def get_wastage_quantity(self, obj):
+        return self._format_quantity(self._get_bom_waste_quantity(obj))
+
+    def get_wastage_percentage(self, obj):
+        bom_quantity = Decimal(obj.opening_qty or 0)
+        if bom_quantity <= 0:
+            return self._format_percentage(0)
+
+        percentage = (self._get_bom_waste_quantity(obj) / bom_quantity) * Decimal('100')
+        return self._format_percentage(percentage)
+
+    def get_final_consumption_quantity(self, obj):
+        final_quantity = Decimal(obj.opening_qty or 0) + self._get_bom_waste_quantity(obj)
+        return self._format_quantity(final_quantity)
+
+    def _bom_request(self):
+        return self.context.get('bom_request')
+
+    def _bom_line(self, obj):
+        return self.context.get('bom_lines_by_material_id', {}).get(obj.id)
+
+    def get_warehouse_request_id(self, obj):
+        bom_request = self._bom_request()
+        return bom_request.id if bom_request else None
+
+    def get_warehouse_request_status(self, obj):
+        bom_request = self._bom_request()
+        return bom_request.status if bom_request else None
+
+    def get_warehouse_line_status(self, obj):
+        bom_line = self._bom_line(obj)
+        return bom_line.status if bom_line else None
+
+    def get_warehouse_requested_qty(self, obj):
+        bom_line = self._bom_line(obj)
+        return str(bom_line.required_qty) if bom_line else None
+
+    def get_warehouse_approved_qty(self, obj):
+        bom_line = self._bom_line(obj)
+        return str(bom_line.approved_qty) if bom_line else None
+
+    def get_warehouse_available_stock(self, obj):
+        bom_line = self._bom_line(obj)
+        return str(bom_line.available_stock) if bom_line else None
 
 
 class MaterialUsageCreateSerializer(serializers.Serializer):
@@ -374,7 +478,7 @@ class LineClearanceDetailSerializer(serializers.ModelSerializer):
             'id', 'production_run', 'run_number', 'date', 'line', 'line_name',
             'document_id', 'verified_by',
             'qa_approved', 'qa_approved_by', 'qa_approved_at',
-            'production_supervisor_sign', 'production_incharge_sign',
+            'all_checks_passed', 'production_supervisor_sign',
             'status', 'created_by', 'created_at', 'updated_at',
             'items',
         ]
@@ -388,17 +492,15 @@ class LineClearanceListSerializer(serializers.ModelSerializer):
         model = LineClearance
         fields = [
             'id', 'production_run', 'run_number', 'date', 'line', 'line_name',
-            'document_id', 'status', 'qa_approved',
+            'document_id', 'status', 'qa_approved', 'all_checks_passed',
+            'production_supervisor_sign',
             'created_by', 'created_at',
         ]
 
 
 class LineClearanceUpdateSerializer(serializers.Serializer):
-    items = LineClearanceItemUpdateSerializer(many=True, required=False)
+    all_checks_passed = serializers.BooleanField(required=False)
     production_supervisor_sign = serializers.CharField(
-        max_length=200, required=False, allow_blank=True
-    )
-    production_incharge_sign = serializers.CharField(
         max_length=200, required=False, allow_blank=True
     )
 
@@ -440,6 +542,9 @@ class WasteLogSerializer(serializers.ModelSerializer):
     run_number = serializers.IntegerField(source='production_run.run_number', read_only=True, default=None)
     run_date = serializers.DateField(source='production_run.date', read_only=True, default=None)
     run_product = serializers.CharField(source='production_run.product', read_only=True, default='')
+    approved_sign = serializers.SerializerMethodField()
+    approved_by = serializers.SerializerMethodField()
+    approved_at = serializers.SerializerMethodField()
 
     class Meta:
         model = WasteLog
@@ -450,19 +555,80 @@ class WasteLogSerializer(serializers.ModelSerializer):
             'am_sign', 'am_signed_by', 'am_signed_at',
             'store_sign', 'store_signed_by', 'store_signed_at',
             'hod_sign', 'hod_signed_by', 'hod_signed_at',
-            'wastage_approval_status',
+            'wastage_approval_status', 'approved_sign', 'approved_by', 'approved_at',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['created_at', 'updated_at']
 
+    def _approval_values(self, obj):
+        approval_fields = [
+            ('hod_sign', 'hod_signed_by_id', 'hod_signed_at'),
+            ('store_sign', 'store_signed_by_id', 'store_signed_at'),
+            ('am_sign', 'am_signed_by_id', 'am_signed_at'),
+            ('engineer_sign', 'engineer_signed_by_id', 'engineer_signed_at'),
+        ]
+        for sign_field, by_field, at_field in approval_fields:
+            sign = getattr(obj, sign_field, '')
+            if sign:
+                return {
+                    'sign': sign,
+                    'by': getattr(obj, by_field, None),
+                    'at': getattr(obj, at_field, None),
+                }
+        return {'sign': '', 'by': None, 'at': None}
+
+    def get_approved_sign(self, obj):
+        return self._approval_values(obj)['sign']
+
+    def get_approved_by(self, obj):
+        return self._approval_values(obj)['by']
+
+    def get_approved_at(self, obj):
+        return self._approval_values(obj)['at']
+
+
+class WasteLogCreateItemSerializer(serializers.Serializer):
+    material_code = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+    material_name = serializers.CharField(max_length=255)
+    wastage_qty = serializers.DecimalField(
+        max_digits=12, decimal_places=3, required=False, allow_null=True
+    )
+    uom = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    reason = serializers.CharField(required=False, allow_blank=True, default='')
+
 
 class WasteLogCreateSerializer(serializers.Serializer):
     production_run_id = serializers.IntegerField()
+    items = WasteLogCreateItemSerializer(many=True, required=False)
     material_code = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
-    material_name = serializers.CharField(max_length=255)
-    wastage_qty = serializers.DecimalField(max_digits=12, decimal_places=3)
+    material_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    wastage_qty = serializers.DecimalField(
+        max_digits=12, decimal_places=3, required=False, allow_null=True
+    )
     uom = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
     reason = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate(self, attrs):
+        items = attrs.get('items')
+        if items is not None:
+            entered_items = [
+                item for item in items
+                if item.get('wastage_qty') is not None and item['wastage_qty'] > Decimal('0')
+            ]
+            if not entered_items:
+                raise serializers.ValidationError({
+                    'items': 'Enter waste quantity for at least one BOM or manual item.'
+                })
+            attrs['items'] = entered_items
+            return attrs
+
+        if not attrs.get('material_name'):
+            raise serializers.ValidationError({'material_name': 'This field is required.'})
+        if attrs.get('wastage_qty') is None or attrs['wastage_qty'] <= Decimal('0'):
+            raise serializers.ValidationError({
+                'wastage_qty': 'Enter a waste quantity greater than zero.'
+            })
+        return attrs
 
 
 class WasteApprovalSerializer(serializers.Serializer):
@@ -675,6 +841,7 @@ class LineSkuConfigSerializer(serializers.ModelSerializer):
             'id', 'line', 'line_name', 'config_name',
             'sku_code', 'sku_name',
             'rated_speed', 'labour_count', 'other_manpower_count',
+            'electricity_cost_per_unit', 'labour_cost_per_hour',
             'supervisor', 'operators', 'is_active',
             'created_at', 'updated_at',
         ]
@@ -689,6 +856,8 @@ class LineSkuConfigCreateSerializer(serializers.Serializer):
     rated_speed = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     labour_count = serializers.IntegerField(min_value=0, required=False, default=0)
     other_manpower_count = serializers.IntegerField(min_value=0, required=False, default=0)
+    electricity_cost_per_unit = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
+    labour_cost_per_hour = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
     supervisor = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
     operators = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
 
@@ -700,5 +869,7 @@ class LineSkuConfigUpdateSerializer(serializers.Serializer):
     rated_speed = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     labour_count = serializers.IntegerField(min_value=0, required=False)
     other_manpower_count = serializers.IntegerField(min_value=0, required=False)
+    electricity_cost_per_unit = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
+    labour_cost_per_hour = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
     supervisor = serializers.CharField(max_length=200, required=False, allow_blank=True)
     operators = serializers.CharField(max_length=500, required=False, allow_blank=True)

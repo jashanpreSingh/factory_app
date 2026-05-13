@@ -407,6 +407,34 @@ class MaterialUsageTests(BaseTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(resp.data), 1)
 
+    def test_material_consumption_includes_bom_wastage(self):
+        r = self.client.post(f'{BASE_URL}/runs/{self.run_id}/materials/', {
+            'material_code': 'RM-001',
+            'material_name': 'Coconut Oil',
+            'opening_qty': '100.000',
+            'issued_qty': '0.000',
+            'closing_qty': '0.000',
+            'uom': 'KG',
+        })
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        waste = self.client.post(f'{BASE_URL}/waste/', {
+            'production_run_id': self.run_id,
+            'material_code': 'RM-001',
+            'material_name': 'Coconut Oil',
+            'wastage_qty': '5.000',
+            'uom': 'KG',
+            'reason': 'BOM wastage',
+        })
+        self.assertEqual(waste.status_code, status.HTTP_201_CREATED)
+
+        resp = self.client.get(f'{BASE_URL}/runs/{self.run_id}/materials/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        material = next(m for m in resp.data if m['material_code'] == 'RM-001')
+        self.assertEqual(material['bom_quantity'], '100.000')
+        self.assertEqual(material['wastage_percentage'], '5.00')
+        self.assertEqual(material['wastage_quantity'], '5.000')
+        self.assertEqual(material['final_consumption_quantity'], '105.000')
+
     def test_update_material(self):
         r = self.client.post(f'{BASE_URL}/runs/{self.run_id}/materials/', {
             'material_name': 'Sesame Oil',
@@ -666,43 +694,33 @@ class WasteLogTests(BaseTestCase):
         resp = self.client.get(f'{BASE_URL}/waste/')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    def test_approve_engineer(self):
+    def test_approve_waste_single_step(self):
+        r = self._create_waste()
+        waste_id = r.data['id']
+        resp = self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/', {
+            'sign': 'QA John',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['wastage_approval_status'], 'FULLY_APPROVED')
+        self.assertEqual(resp.data['approved_sign'], 'QA John')
+
+    def test_legacy_approve_endpoint_uses_single_step(self):
         r = self._create_waste()
         waste_id = r.data['id']
         resp = self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/engineer/', {
-            'sign': 'Eng. John',
+            'sign': 'QA John',
         })
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['wastage_approval_status'], 'FULLY_APPROVED')
 
-    def test_approve_am(self):
+    def test_approve_waste_rejects_duplicate_approval(self):
         r = self._create_waste()
         waste_id = r.data['id']
-        self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/engineer/', {'sign': 'Eng. John'})
-        resp = self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/am/', {
-            'sign': 'AM. Jane',
+        self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/', {'sign': 'QA John'})
+        resp = self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/', {
+            'sign': 'QA Jane',
         })
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-
-    def test_approve_store(self):
-        r = self._create_waste()
-        waste_id = r.data['id']
-        self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/engineer/', {'sign': 'Eng. John'})
-        self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/am/', {'sign': 'AM. Jane'})
-        resp = self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/store/', {
-            'sign': 'Store. Mike',
-        })
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-
-    def test_approve_hod(self):
-        r = self._create_waste()
-        waste_id = r.data['id']
-        self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/engineer/', {'sign': 'Eng. John'})
-        self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/am/', {'sign': 'AM. Jane'})
-        self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/store/', {'sign': 'Store. Mike'})
-        resp = self.client.post(f'{BASE_URL}/waste/{waste_id}/approve/hod/', {
-            'sign': 'HOD. Boss',
-        })
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_unauthenticated_returns_401(self):
         unauthenticated_client = APIClient()

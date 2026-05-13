@@ -201,6 +201,14 @@ class LineSkuConfig(models.Model):
     other_manpower_count = models.PositiveIntegerField(
         default=0, help_text="Standard other manpower count"
     )
+    electricity_cost_per_unit = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True,
+        help_text="Preset electricity cost per unit"
+    )
+    labour_cost_per_hour = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True,
+        help_text="Preset labour cost per hour"
+    )
     supervisor = models.CharField(
         max_length=200, blank=True, default='',
         help_text="Default supervisor name"
@@ -274,6 +282,14 @@ class ProductionRun(models.Model):
     )
     other_manpower_count = models.PositiveIntegerField(
         default=0, help_text="Other manpower count"
+    )
+    electricity_cost_per_unit = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True,
+        help_text="Preset electricity cost per unit copied from the selected line config"
+    )
+    labour_cost_per_hour = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True,
+        help_text="Preset labour cost per hour copied from the selected line config"
     )
     supervisor = models.CharField(max_length=200, blank=True, default='')
     operators = models.CharField(
@@ -416,7 +432,8 @@ class MachineBreakdown(models.Model):
         ProductionRun, on_delete=models.CASCADE, related_name='breakdowns'
     )
     machine = models.ForeignKey(
-        Machine, on_delete=models.PROTECT, related_name='breakdowns'
+        Machine, on_delete=models.SET_NULL, related_name='breakdowns',
+        null=True, blank=True
     )
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
@@ -438,11 +455,12 @@ class MachineBreakdown(models.Model):
 
     class Meta:
         ordering = ['start_time']
-        verbose_name = 'Machine Breakdown'
-        verbose_name_plural = 'Machine Breakdowns'
+        verbose_name = 'Breakdown'
+        verbose_name_plural = 'Breakdowns'
 
     def __str__(self):
-        return f"{self.machine.name} — {self.reason[:50]}"
+        category = self.breakdown_category.name if self.breakdown_category else "Breakdown"
+        return f"{category} - {self.reason[:50]}"
 
 
 class ProductionMaterialUsage(models.Model):
@@ -552,10 +570,8 @@ class LineClearance(models.Model):
     )
     qa_approved_at = models.DateTimeField(null=True, blank=True)
 
+    all_checks_passed = models.BooleanField(default=False)
     production_supervisor_sign = models.CharField(
-        max_length=200, blank=True, default=''
-    )
-    production_incharge_sign = models.CharField(
         max_length=200, blank=True, default=''
     )
 

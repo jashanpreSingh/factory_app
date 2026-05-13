@@ -58,7 +58,7 @@ class MachineBreakdownInline(admin.TabularInline):
     model = MachineBreakdown
     extra = 0
     readonly_fields = [
-        'machine', 'start_time', 'end_time', 'breakdown_minutes',
+        'start_time', 'end_time', 'breakdown_minutes',
         'breakdown_category', 'reason',
     ]
     can_delete = False
@@ -92,7 +92,7 @@ class ProductionSegmentAdmin(admin.ModelAdmin):
 @admin.register(MachineBreakdown)
 class MachineBreakdownAdmin(admin.ModelAdmin):
     list_display = [
-        'id', 'production_run', 'machine', 'start_time', 'end_time',
+        'id', 'production_run', 'start_time', 'end_time',
         'breakdown_minutes', 'breakdown_category', 'reason',
     ]
     list_filter = ['breakdown_category']

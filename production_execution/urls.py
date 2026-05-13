@@ -26,7 +26,7 @@ from .views import (
     MachineChecklistDetailAPI,
     # Waste Management
     WasteLogListCreateAPI, WasteLogDetailAPI,
-    WasteApproveEngineerAPI, WasteApproveAMAPI,
+    WasteApproveAPI, WasteApproveEngineerAPI, WasteApproveAMAPI,
     WasteApproveStoreAPI, WasteApproveHODAPI,
     # Reports
     DailyProductionReportAPI, YieldReportAPI,
@@ -146,6 +146,7 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path('waste/', WasteLogListCreateAPI.as_view(), name='pe-waste-list-create'),
     path('waste/<int:waste_id>/', WasteLogDetailAPI.as_view(), name='pe-waste-detail'),
+    path('waste/<int:waste_id>/approve/', WasteApproveAPI.as_view(), name='pe-waste-approve'),
     path('waste/<int:waste_id>/approve/engineer/', WasteApproveEngineerAPI.as_view(), name='pe-waste-approve-engineer'),
     path('waste/<int:waste_id>/approve/am/', WasteApproveAMAPI.as_view(), name='pe-waste-approve-am'),
     path('waste/<int:waste_id>/approve/store/', WasteApproveStoreAPI.as_view(), name='pe-waste-approve-store'),

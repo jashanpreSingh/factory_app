@@ -5,9 +5,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.db import transaction
+from django.utils import timezone
 
 from company.permissions import HasCompanyContext
-from production_execution.models import ProductionRun
+from production_execution.models import ProductionRun, RunStatus
 
 from .models import (
     MaterialType,
@@ -25,16 +27,49 @@ from .serializers import (
     ProductionQCSessionCreateSerializer,
     ProductionQCResultBulkUpdateSerializer,
     ProductionQCSubmitSerializer,
+    ProductionQCApprovalSerializer,
+    ProductionQCRejectSerializer,
 )
 from .permissions import (
     CanViewProductionQC,
     CanCreateProductionQC,
     CanSubmitProductionQC,
+    CanApproveProductionQC,
 )
 
 
 def _get_company(request):
     return request.company.company
+
+
+def _next_session_number(run):
+    last_session = run.qc_sessions.filter(is_active=True).order_by(
+        "-session_number"
+    ).first()
+    return (last_session.session_number + 1) if last_session else 1
+
+
+def _populate_session_results(session, material_type, user):
+    update_fields = {"is_active": False}
+    if getattr(user, "pk", None):
+        update_fields["updated_by_id"] = user.pk
+    session.results.filter(is_active=True).update(**update_fields)
+
+    parameters = QCParameterMaster.objects.filter(
+        material_type=material_type,
+        is_active=True,
+    ).order_by("sequence")
+
+    ProductionQCResult.objects.bulk_create([
+        ProductionQCResult(
+            session=session,
+            parameter_master=param,
+            parameter_name=param.parameter_name,
+            standard_value=param.standard_value,
+            created_by=user,
+        )
+        for param in parameters
+    ])
 
 
 # ===========================================================================
@@ -87,55 +122,109 @@ class ProductionQCSessionListCreateAPI(APIView):
             MaterialType, id=material_type_id, company=company, is_active=True
         )
 
-        # For FINAL sessions, only allow one per run
-        if session_type == ProductionQCSessionType.FINAL:
-            existing = run.qc_sessions.filter(
-                session_type=ProductionQCSessionType.FINAL, is_active=True
+        with transaction.atomic():
+            # For FINAL sessions, only allow one per run. If production already
+            # requested FG QC, QC can attach the parameter set to that draft.
+            if session_type == ProductionQCSessionType.FINAL:
+                existing = run.qc_sessions.select_for_update().filter(
+                    session_type=ProductionQCSessionType.FINAL,
+                    is_active=True,
+                ).order_by("-created_at").first()
+                if existing:
+                    if (
+                        existing.workflow_status == ProductionQCWorkflowStatus.DRAFT
+                        and existing.material_type_id is None
+                    ):
+                        existing.material_type = material_type
+                        existing.checked_at = data["checked_at"]
+                        existing.checked_by = request.user
+                        existing.remarks = data.get("remarks", existing.remarks)
+                        existing.updated_by = request.user
+                        existing.save(update_fields=[
+                            "material_type", "checked_at", "checked_by",
+                            "remarks", "updated_by", "updated_at",
+                        ])
+                        _populate_session_results(existing, material_type, request.user)
+                        existing.refresh_from_db()
+                        response_serializer = ProductionQCSessionSerializer(existing)
+                        return Response(response_serializer.data)
+
+                    return Response(
+                        {"detail": "A Final QC session already exists for this run."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            session = ProductionQCSession.objects.create(
+                production_run=run,
+                material_type=material_type,
+                session_number=_next_session_number(run),
+                session_type=session_type,
+                checked_at=data["checked_at"],
+                checked_by=request.user,
+                remarks=data.get("remarks", ""),
+                created_by=request.user,
             )
-            if existing.exists():
+            _populate_session_results(session, material_type, request.user)
+            session.refresh_from_db()
+        response_serializer = ProductionQCSessionSerializer(session)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ProductionQCFinalRequestAPI(APIView):
+    """
+    Production requests final FG QC approval.
+
+    This only creates a draft Final QC shell. QC owns parameter selection,
+    result entry, submission, and approval.
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, run_id):
+        if not (
+            request.user.has_perm("production_execution.can_edit_production_run")
+            or request.user.has_perm("production_execution.can_complete_production_run")
+        ):
+            return Response(
+                {"detail": "You do not have permission to request FG QC approval."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        company = _get_company(request)
+        with transaction.atomic():
+            run = get_object_or_404(
+                ProductionRun.objects.select_for_update(),
+                id=run_id,
+                company=company,
+            )
+
+            if run.status != RunStatus.COMPLETED:
                 return Response(
-                    {"detail": "A Final QC session already exists for this run."},
+                    {"detail": "FG QC approval can only be requested for completed runs."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # Auto-calculate session number
-        last_session = run.qc_sessions.filter(is_active=True).order_by(
-            "-session_number"
-        ).first()
-        session_number = (last_session.session_number + 1) if last_session else 1
+            existing = ProductionQCSession.objects.select_for_update().filter(
+                production_run=run,
+                session_type=ProductionQCSessionType.FINAL,
+                is_active=True,
+            ).order_by("-created_at").first()
+            if existing:
+                serializer = ProductionQCSessionSerializer(existing)
+                return Response(serializer.data)
 
-        # Create the session
-        session = ProductionQCSession.objects.create(
-            production_run=run,
-            material_type=material_type,
-            session_number=session_number,
-            session_type=session_type,
-            checked_at=data["checked_at"],
-            checked_by=request.user,
-            remarks=data.get("remarks", ""),
-            created_by=request.user,
-        )
-
-        # Auto-populate parameter results from material type's QC parameters
-        parameters = QCParameterMaster.objects.filter(
-            material_type=material_type, is_active=True
-        ).order_by("sequence")
-
-        results_to_create = []
-        for param in parameters:
-            results_to_create.append(ProductionQCResult(
-                session=session,
-                parameter_master=param,
-                parameter_name=param.parameter_name,
-                standard_value=param.standard_value,
+            session = ProductionQCSession.objects.create(
+                production_run=run,
+                material_type=None,
+                session_number=_next_session_number(run),
+                session_type=ProductionQCSessionType.FINAL,
+                checked_at=timezone.now(),
+                checked_by=None,
+                remarks="FG QC approval requested by production.",
                 created_by=request.user,
-            ))
-        ProductionQCResult.objects.bulk_create(results_to_create)
+            )
 
-        # Return full session with results
-        session.refresh_from_db()
-        response_serializer = ProductionQCSessionSerializer(session)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        serializer = ProductionQCSessionSerializer(session)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 # ===========================================================================
@@ -275,6 +364,12 @@ class ProductionQCSubmitAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if not session.material_type_id or not session.results.filter(is_active=True).exists():
+            return Response(
+                {"detail": "Select QC parameters before submitting this session."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Validate all mandatory parameters have values
         mandatory_empty = session.results.filter(
             parameter_master__is_mandatory=True,
@@ -296,6 +391,93 @@ class ProductionQCSubmitAPI(APIView):
             )
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ProductionQCSessionSerializer(session)
+        return Response(serializer.data)
+
+
+# ===========================================================================
+# Production QC Approval
+# ===========================================================================
+
+class ProductionQCPendingAPI(APIView):
+    """List submitted production QC sessions awaiting approval."""
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveProductionQC]
+
+    def get(self, request):
+        company = _get_company(request)
+        sessions = ProductionQCSession.objects.filter(
+            production_run__company=company,
+            workflow_status=ProductionQCWorkflowStatus.SUBMITTED,
+            is_active=True,
+        ).select_related(
+            "material_type", "checked_by", "production_run__line"
+        ).prefetch_related("results")
+
+        serializer = ProductionQCSessionListSerializer(sessions, many=True)
+        return Response(serializer.data)
+
+
+class ProductionQCApproveAPI(APIView):
+    """Approve a submitted production QC session."""
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveProductionQC]
+
+    def post(self, request, session_id):
+        ser = ProductionQCApprovalSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(
+                {"detail": "Invalid data.", "errors": ser.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = _get_company(request)
+        with transaction.atomic():
+            session = get_object_or_404(
+                ProductionQCSession.objects.select_for_update(),
+                id=session_id,
+                production_run__company=company,
+                is_active=True,
+            )
+            try:
+                session.approve(
+                    user=request.user,
+                    overall_result=ser.validated_data.get("overall_result"),
+                    remarks=ser.validated_data.get("remarks", ""),
+                )
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ProductionQCSessionSerializer(session)
+        return Response(serializer.data)
+
+
+class ProductionQCRejectAPI(APIView):
+    """Reject a submitted production QC session."""
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanApproveProductionQC]
+
+    def post(self, request, session_id):
+        ser = ProductionQCRejectSerializer(data=request.data)
+        if not ser.is_valid():
+            return Response(
+                {"detail": "Invalid data.", "errors": ser.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = _get_company(request)
+        with transaction.atomic():
+            session = get_object_or_404(
+                ProductionQCSession.objects.select_for_update(),
+                id=session_id,
+                production_run__company=company,
+                is_active=True,
+            )
+            try:
+                session.reject(
+                    user=request.user,
+                    remarks=ser.validated_data.get("remarks", ""),
+                )
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = ProductionQCSessionSerializer(session)
         return Response(serializer.data)
@@ -343,6 +525,8 @@ class ProductionQCAllListAPI(APIView):
         if date_to:
             sessions = sessions.filter(production_run__date__lte=date_to)
 
+        sessions = sessions.order_by("-created_at", "-id")
+
         serializer = ProductionQCSessionListSerializer(sessions, many=True)
         return Response(serializer.data)
 
@@ -361,4 +545,6 @@ class ProductionQCCountsAPI(APIView):
         return Response({
             "draft": qs.filter(workflow_status=ProductionQCWorkflowStatus.DRAFT).count(),
             "submitted": qs.filter(workflow_status=ProductionQCWorkflowStatus.SUBMITTED).count(),
+            "approved": qs.filter(workflow_status=ProductionQCWorkflowStatus.APPROVED).count(),
+            "rejected": qs.filter(workflow_status=ProductionQCWorkflowStatus.REJECTED).count(),
         })

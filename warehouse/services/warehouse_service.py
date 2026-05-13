@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict, deque
 from decimal import Decimal as D
 from django.db import transaction
 from django.utils import timezone
@@ -57,10 +58,31 @@ class WarehouseService:
         if existing:
             raise ValueError("An active BOM request already exists for this run.")
 
-        # Fetch BOM components from SAP
-        components = self._fetch_bom_components(run)
-        if not components:
-            raise ValueError("No BOM components found for this production order.")
+        material_usages = list(run.material_usages.all().order_by('id'))
+
+        if material_usages:
+            try:
+                components = self._fetch_bom_components(run)
+            except ValueError as e:
+                logger.warning(
+                    f"Could not fetch SAP BOM metadata for run {run.id}; "
+                    f"using production material snapshot only: {e}"
+                )
+                components = []
+            bom_lines = self._build_bom_lines_from_material_usage(
+                material_usages=material_usages,
+                sap_components=components,
+                required_qty=required_qty,
+            )
+        else:
+            components = self._fetch_bom_components(run)
+            if not components:
+                raise ValueError("No BOM components found for this production order.")
+            bom_lines = self._build_bom_lines_from_sap_components(
+                components=components,
+                run=run,
+                required_qty=required_qty,
+            )
 
         # Create the BOM request
         bom_request = BOMRequest.objects.create(
@@ -73,30 +95,16 @@ class WarehouseService:
             requested_by=user,
         )
 
-        # Create scaled BOM lines
-        for idx, comp in enumerate(components):
-            per_unit = D(str(comp.get('PlannedQty', 0)))
-            # For production-order BOM (WOR1), PlannedQty is already total planned
-            # For item-master BOM (ITT1), PlannedQty is per-unit
-            # We detect by checking if sap_doc_entry was used
-            if run.sap_doc_entry:
-                # WOR1: PlannedQty is for the full order, scale proportionally
-                order_planned = D(str(comp.get('_order_planned_qty', 0))) or D('1')
-                per_unit = per_unit / order_planned if order_planned else per_unit
-                scaled_qty = per_unit * required_qty
-            else:
-                # ITT1: PlannedQty IS per-unit
-                scaled_qty = per_unit * required_qty
-
+        for line in bom_lines:
             BOMRequestLine.objects.create(
                 bom_request=bom_request,
-                item_code=comp.get('ItemCode') or '',
-                item_name=comp.get('ItemName') or '',
-                per_unit_qty=per_unit,
-                required_qty=scaled_qty.quantize(D('0.001')),
-                warehouse=comp.get('Warehouse') or '',
-                uom=comp.get('UomCode') or '',
-                base_line=comp.get('LineNum') if comp.get('LineNum') is not None else idx,
+                item_code=line['item_code'],
+                item_name=line['item_name'],
+                per_unit_qty=line['per_unit_qty'],
+                required_qty=line['required_qty'],
+                warehouse=line['warehouse'],
+                uom=line['uom'],
+                base_line=line['base_line'],
                 status=BOMLineStatus.PENDING,
             )
 
@@ -107,6 +115,77 @@ class WarehouseService:
 
         logger.info(f"BOM request #{bom_request.id} created for run #{run.id}")
         return bom_request
+
+    def _build_bom_lines_from_material_usage(
+        self,
+        material_usages,
+        sap_components: list,
+        required_qty: D,
+    ) -> list:
+        """
+        Build warehouse BOM lines from the production run material snapshot.
+        SAP components are used only for metadata needed during SAP issue.
+        """
+        components_by_code = defaultdict(deque)
+        for idx, comp in enumerate(sap_components):
+            code = comp.get('ItemCode') or ''
+            components_by_code[code].append({
+                'warehouse': comp.get('Warehouse') or '',
+                'uom': comp.get('UomCode') or '',
+                'base_line': (
+                    comp.get('LineNum') if comp.get('LineNum') is not None else idx
+                ),
+            })
+
+        lines = []
+        for idx, usage in enumerate(material_usages):
+            required_line_qty = D(str(usage.opening_qty or 0))
+            matched = None
+            if usage.material_code:
+                matched_queue = components_by_code.get(usage.material_code)
+                if matched_queue:
+                    matched = matched_queue.popleft()
+
+            per_unit_qty = D('0')
+            if required_qty:
+                per_unit_qty = required_line_qty / required_qty
+
+            lines.append({
+                'item_code': usage.material_code or '',
+                'item_name': usage.material_name or '',
+                'per_unit_qty': per_unit_qty.quantize(D('0.0001')),
+                'required_qty': required_line_qty.quantize(D('0.001')),
+                'warehouse': (matched or {}).get('warehouse', ''),
+                'uom': usage.uom or (matched or {}).get('uom', ''),
+                'base_line': (matched or {}).get('base_line', idx),
+            })
+        return lines
+
+    def _build_bom_lines_from_sap_components(
+        self,
+        components: list,
+        run,
+        required_qty: D,
+    ) -> list:
+        """Fallback builder for runs that do not have saved material usages."""
+        lines = []
+        for idx, comp in enumerate(components):
+            per_unit = D(str(comp.get('PlannedQty', 0)))
+            if run.sap_doc_entry:
+                order_planned = D(str(comp.get('_order_planned_qty', 0))) or D('1')
+                per_unit = per_unit / order_planned if order_planned else per_unit
+
+            scaled_qty = per_unit * required_qty
+            lines.append({
+                'item_code': comp.get('ItemCode') or '',
+                'item_name': comp.get('ItemName') or '',
+                'per_unit_qty': per_unit.quantize(D('0.0001')),
+                'required_qty': scaled_qty.quantize(D('0.001')),
+                'warehouse': comp.get('Warehouse') or '',
+                'uom': comp.get('UomCode') or '',
+                'base_line': comp.get('LineNum') if comp.get('LineNum') is not None else idx,
+            })
+        return lines
 
     def _fetch_bom_components(self, run) -> list:
         """Fetch BOM from SAP — uses production order components or item BOM."""
@@ -201,12 +280,27 @@ class WarehouseService:
             approved_qty = D(str(line_data.get('approved_qty', line.required_qty)))
 
             # Update available stock
-            line.available_stock = D(str(stock_map.get(line.item_code, {}).get('OnHand', 0)))
+            available_stock = D(str(stock_map.get(line.item_code, {}).get('OnHand', 0)))
+            line.available_stock = available_stock
 
             if line_status == 'APPROVED':
+                if approved_qty <= 0:
+                    raise ValueError(f"Approved qty must be greater than 0 for {line.item_code}.")
+                if approved_qty > line.required_qty:
+                    raise ValueError(
+                        f"Approved qty {approved_qty} exceeds required qty {line.required_qty} "
+                        f"for {line.item_code}."
+                    )
+                if approved_qty > available_stock:
+                    raise ValueError(
+                        f"Approved qty {approved_qty} exceeds in-stock qty {available_stock} "
+                        f"for {line.item_code}."
+                    )
                 line.approved_qty = approved_qty
                 line.status = BOMLineStatus.APPROVED
                 any_approved = True
+                if approved_qty < line.required_qty:
+                    all_approved = False
             elif line_status == 'REJECTED':
                 line.approved_qty = 0
                 line.status = BOMLineStatus.REJECTED
@@ -550,23 +644,32 @@ class WarehouseService:
         Called automatically or manually by warehouse.
         """
         from production_execution.models import ProductionRun
+        from quality_control.models.production_qc_session import (
+            ProductionQCSession,
+            ProductionQCSessionType,
+            ProductionQCWorkflowStatus,
+        )
 
         run_id = data['production_run_id']
         try:
-            run = ProductionRun.objects.get(id=run_id, company=self.company)
+            run = ProductionRun.objects.select_for_update().get(id=run_id, company=self.company)
         except ProductionRun.DoesNotExist:
             raise ValueError(f"Production run {run_id} not found.")
 
         if run.status != 'COMPLETED':
             raise ValueError("Can only create FG receipt for completed runs.")
 
-        # Check if already received
-        existing = FinishedGoodsReceipt.objects.filter(
+        has_approved_final_qc = ProductionQCSession.objects.filter(
             production_run=run,
-            status__in=[FGReceiptStatus.RECEIVED, FGReceiptStatus.SAP_POSTED]
+            session_type=ProductionQCSessionType.FINAL,
+            workflow_status=ProductionQCWorkflowStatus.APPROVED,
+            overall_result='PASS',
+            is_active=True,
         ).exists()
-        if existing:
-            raise ValueError("Finished goods already received for this run.")
+        if not has_approved_final_qc:
+            raise ValueError(
+                "Final QC must be approved with PASS before sending finished goods to warehouse."
+            )
 
         produced_qty = run.total_production
         rejected_qty = run.rejected_qty
@@ -585,9 +688,60 @@ class WarehouseService:
                 header = detail.get('header', {})
                 item_code = header.get('ItemCode', '')
                 item_name = header.get('ProdName', '')
-                warehouse = header.get('Warehouse', '')
+                warehouse = warehouse or header.get('Warehouse', '')
             except Exception as e:
                 logger.warning(f"Could not fetch SAP order detail for FG receipt: {e}")
+
+        existing_receipts = list(
+            FinishedGoodsReceipt.objects.select_for_update().filter(
+                production_run=run,
+                company=self.company,
+            ).order_by('-created_at')
+        )
+        if existing_receipts:
+            has_locked_receipt = any(
+                receipt.status != FGReceiptStatus.PENDING or receipt.received_at is not None
+                for receipt in existing_receipts
+            )
+            if has_locked_receipt:
+                raise ValueError("Finished goods receipt has already been received by warehouse.")
+
+            editable_receipt = next(
+                (
+                    receipt for receipt in existing_receipts
+                    if receipt.status == FGReceiptStatus.PENDING and receipt.received_at is None
+                ),
+                None,
+            )
+            if editable_receipt is None:
+                raise ValueError("Finished goods receipt has already been received by warehouse.")
+
+            obsolete_ids = [
+                receipt.id for receipt in existing_receipts
+                if receipt.id != editable_receipt.id
+            ]
+            if obsolete_ids:
+                FinishedGoodsReceipt.objects.filter(id__in=obsolete_ids).delete()
+                logger.info(
+                    f"Removed duplicate pending FG receipts for run #{run.id}: {obsolete_ids}"
+                )
+
+            editable_receipt.sap_doc_entry = run.sap_doc_entry
+            editable_receipt.item_code = item_code
+            editable_receipt.item_name = item_name
+            editable_receipt.produced_qty = produced_qty
+            editable_receipt.good_qty = good_qty
+            editable_receipt.rejected_qty = rejected_qty
+            editable_receipt.warehouse = warehouse
+            editable_receipt.uom = data.get('uom', editable_receipt.uom)
+            editable_receipt.posting_date = data.get('posting_date', editable_receipt.posting_date)
+            editable_receipt.save(update_fields=[
+                'sap_doc_entry', 'item_code', 'item_name',
+                'produced_qty', 'good_qty', 'rejected_qty',
+                'warehouse', 'uom', 'posting_date', 'updated_at',
+            ])
+            logger.info(f"FG receipt #{editable_receipt.id} updated for run #{run.id}")
+            return editable_receipt
 
         receipt = FinishedGoodsReceipt.objects.create(
             company=self.company,
@@ -611,7 +765,7 @@ class WarehouseService:
     def receive_finished_goods(self, receipt_id: int, user) -> FinishedGoodsReceipt:
         """Warehouse confirms receipt of finished goods."""
         try:
-            receipt = FinishedGoodsReceipt.objects.get(
+            receipt = FinishedGoodsReceipt.objects.select_for_update().get(
                 id=receipt_id, company=self.company
             )
         except FinishedGoodsReceipt.DoesNotExist:
@@ -619,6 +773,35 @@ class WarehouseService:
 
         if receipt.status not in [FGReceiptStatus.PENDING, FGReceiptStatus.FAILED]:
             raise ValueError("Receipt is already processed.")
+
+        sibling_receipts = list(
+            FinishedGoodsReceipt.objects.select_for_update().filter(
+                company=self.company,
+                production_run=receipt.production_run,
+            )
+        )
+        already_received = any(
+            other.id != receipt.id and (
+                other.status in [FGReceiptStatus.RECEIVED, FGReceiptStatus.SAP_POSTED] or
+                other.received_at is not None
+            )
+            for other in sibling_receipts
+        )
+        if already_received:
+            raise ValueError("Finished goods have already been received for this run.")
+
+        duplicate_pending_ids = [
+            other.id for other in sibling_receipts
+            if other.id != receipt.id and
+            other.status == FGReceiptStatus.PENDING and
+            other.received_at is None
+        ]
+        if duplicate_pending_ids:
+            FinishedGoodsReceipt.objects.filter(id__in=duplicate_pending_ids).delete()
+            logger.info(
+                f"Removed duplicate pending FG receipts for run #{receipt.production_run_id}: "
+                f"{duplicate_pending_ids}"
+            )
 
         receipt.status = FGReceiptStatus.RECEIVED
         receipt.received_by = user
@@ -634,7 +817,7 @@ class WarehouseService:
         import requests as http_requests
 
         try:
-            receipt = FinishedGoodsReceipt.objects.get(
+            receipt = FinishedGoodsReceipt.objects.select_for_update().get(
                 id=receipt_id, company=self.company
             )
         except FinishedGoodsReceipt.DoesNotExist:
@@ -642,6 +825,19 @@ class WarehouseService:
 
         if receipt.status not in [FGReceiptStatus.RECEIVED, FGReceiptStatus.FAILED]:
             raise ValueError("Receipt must be in RECEIVED or FAILED status to post to SAP.")
+
+        sibling_receipts = list(
+            FinishedGoodsReceipt.objects.select_for_update().filter(
+                company=self.company,
+                production_run=receipt.production_run,
+            )
+        )
+        already_posted = any(
+            other.id != receipt.id and other.status == FGReceiptStatus.SAP_POSTED
+            for other in sibling_receipts
+        )
+        if already_posted:
+            raise ValueError("Finished goods have already been posted to SAP for this run.")
 
         if not receipt.sap_doc_entry:
             raise ValueError("No SAP production order linked.")
