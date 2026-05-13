@@ -59,6 +59,13 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         self.assertIn('"LastConsumptionDate"', query)
         self.assertIn('"OpenPlanCount"', query)
 
+    def test_stock_movement_is_item_level_not_selected_warehouse_level(self):
+        query, _ = self.reader._build_query({"warehouse": ["BH-BS", "BH-PM"]})
+
+        self.assertIn('GROUP BY n."ItemCode"', query)
+        self.assertNotIn('GROUP BY n."ItemCode", n."Warehouse"', query)
+        self.assertNotIn('mov."Warehouse" = w."WhsCode"', query)
+
     def test_stock_query_filters_by_movement_status(self):
         query, _ = self.reader._build_query(
             {"movement_status": ["planned", "recent"]}
@@ -67,6 +74,24 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         self.assertIn('IFNULL(plan."OpenPlanCount", 0) > 0', query)
         self.assertIn('DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE) <= 30', query)
         self.assertNotIn("WHERE WHERE", query)
+
+    def test_single_status_filter_excludes_slow_moving_rows(self):
+        query, _ = self.reader._build_query({"status": ["healthy"]})
+
+        self.assertIn('NOT (IFNULL(plan."OpenPlanCount", 0) = 0', query)
+        self.assertIn('mov."LastConsumptionDate" IS NULL', query)
+        self.assertIn('DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE) > 30', query)
+        self.assertNotIn('OR (IFNULL(plan."OpenPlanCount", 0) = 0', query)
+
+    def test_default_operational_status_filter_keeps_benchmarked_no_status_slow_rows(self):
+        query, _ = self.reader._build_query({"status": ["healthy", "low", "critical"]})
+
+        self.assertIn(
+            'OR (w."MinStock" > 0 AND IFNULL(plan."OpenPlanCount", 0) = 0 AND '
+            '(mov."LastConsumptionDate" IS NULL OR '
+            'DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE) > 30))',
+            query,
+        )
 
     def test_critical_status_includes_planned_items_without_benchmark(self):
         query, _ = self.reader._build_query({"status": ["critical"]})
@@ -91,6 +116,7 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
             'w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) > 0',
             query,
         )
+        self.assertIn('AND NOT (IFNULL(plan."OpenPlanCount", 0) = 0', query)
 
     def test_grouped_stats_query_filters_by_item_group_name(self):
         query, params = self.reader._build_grouped_stats_query(
@@ -116,6 +142,19 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
 
         self.assertIn("planned_without_benchmark > 0", query)
         self.assertIn("AS planned_without_benchmark", query)
+        self.assertIn("NOT (IFNULL(has_open_plan, 0) = 0", query)
+
+    def test_grouped_default_operational_status_filter_keeps_benchmarked_no_status_slow_rows(self):
+        query, _ = self.reader._build_grouped_query(
+            {"status": ["healthy", "low", "critical"]}
+        )
+
+        self.assertIn(
+            "OR (min_stock > 0 AND IFNULL(has_open_plan, 0) = 0 AND "
+            "(days_since_last_consumption IS NULL OR "
+            "days_since_last_consumption > 30))",
+            query,
+        )
 
 
 class StockDashboardServiceTests(SimpleTestCase):
@@ -217,6 +256,30 @@ class StockDashboardServiceTests(SimpleTestCase):
         )
 
         self.assertEqual(status, "critical")
+
+    def test_slow_moving_item_has_no_stock_status(self):
+        service = self.make_service(Mock())
+
+        status = service._stock_status(
+            0,
+            100,
+            has_open_plan=False,
+            movement_status="slow",
+        )
+
+        self.assertEqual(status, "none")
+
+    def test_slow_moving_healthy_item_has_no_stock_status(self):
+        service = self.make_service(Mock())
+
+        status = service._stock_status(
+            200,
+            100,
+            has_open_plan=False,
+            movement_status="slow",
+        )
+
+        self.assertEqual(status, "none")
 
     def test_movement_status_prefers_open_plan(self):
         service = self.make_service(Mock())

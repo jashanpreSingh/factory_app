@@ -15,7 +15,7 @@ from .hana_reader import HanaStockDashboardReader
 
 logger = logging.getLogger(__name__)
 
-_STATUS_SEVERITY = {"healthy": 0, "unset": 1, "low": 2, "critical": 3}
+_STATUS_SEVERITY = {"none": 0, "healthy": 0, "unset": 1, "low": 2, "critical": 3}
 SLOW_MOVING_DAYS = 30
 
 
@@ -91,31 +91,33 @@ class StockDashboardService:
     def _enrich_rows(self, rows: List[Dict]) -> None:
         """Adds stock and movement status to individual rows."""
         for row in rows:
+            row["movement_status"] = self._movement_status(row)
             row["stock_status"] = self._stock_status(
                 row["on_hand"],
                 row["min_stock"],
                 has_open_plan=row.get("has_open_plan", False),
+                movement_status=row["movement_status"],
             )
             row["health_ratio"] = (
                 round(row["on_hand"] / row["min_stock"], 2)
                 if row["min_stock"] > 0 else 0.0
             )
-            row["movement_status"] = self._movement_status(row)
 
     def _enrich_grouped_rows(self, rows: List[Dict]) -> None:
         """Adds computed stock and movement fields to grouped rows."""
         for row in rows:
+            row["movement_status"] = self._movement_status(row)
             row["stock_status"] = self._stock_status(
                 row["on_hand"],
                 row["min_stock"],
                 has_open_plan=row.get("has_open_plan", False),
                 planned_without_benchmark=row.get("planned_without_benchmark", 0) > 0,
+                movement_status=row["movement_status"],
             )
             row["health_ratio"] = (
                 round(row["on_hand"] / row["min_stock"], 2)
                 if row["min_stock"] > 0 else 0.0
             )
-            row["movement_status"] = self._movement_status(row)
             row["warehouse"] = f"{row['warehouse_count']} warehouses"
 
             # Determine worst individual warehouse status
@@ -136,7 +138,10 @@ class StockDashboardService:
         min_stock: float,
         has_open_plan: bool = False,
         planned_without_benchmark: bool = False,
+        movement_status: str | None = None,
     ) -> str:
+        if movement_status == "slow":
+            return "none"
         if planned_without_benchmark:
             return "critical"
         if min_stock <= 0:

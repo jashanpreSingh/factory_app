@@ -24,7 +24,7 @@ All endpoints require:
 | `search` | string | Case-insensitive match against item code, item name, or warehouse code. |
 | `warehouse` | comma-separated string | Warehouse codes. Two or more warehouses switch the service to grouped item rows. |
 | `item_group` | string | SAP item group name from `OITB.ItmsGrpNam`, for example `PACKAGING MATERIAL`. |
-| `status` | comma-separated string | Allowed values: `healthy`, `low`, `critical`, `unset`. The `unset` value is displayed as No Benchmark Set. |
+| `status` | comma-separated string | Allowed values: `healthy`, `low`, `critical`, `unset`. The `unset` value is displayed as No Benchmark Set. When the default operational set `healthy,low,critical` is used without a movement filter excluding slow rows, slow rows with a benchmark are still returned with no stock status so the Movement filter owns slow-moving visibility. |
 | `movement_status` | comma-separated string | Allowed values: `planned`, `recent`, `slow`. Omit to include all movement states. |
 | `sort_by` | string | `item_code`, `item_name`, `warehouse`, `on_hand`, `min_stock`, `health_ratio`. The `min_stock` sort is the Benchmark column. |
 | `sort_dir` | string | `asc` or `desc`. |
@@ -44,7 +44,7 @@ All endpoints require:
 | `OITW` | Item warehouse stock, `OnHand`, benchmark (`MinStock`), warehouse code |
 | `OITM` | Item name, inventory UOM, inventory item flag |
 | `OITB` | Item group name for material type filtering |
-| `OINM` | Inventory audit trail for outbound consumption history |
+| `OINM` | Inventory audit trail for item-level outbound consumption history |
 | `OWOR` | Open production orders |
 | `WOR1` | Production order component demand and component warehouse |
 
@@ -57,18 +57,20 @@ Outbound consumption is taken from `OINM` rows with `OutQty > 0` and transaction
 | `202` | Production Order |
 
 Open planning demand is based on `OWOR.Status IN ('P', 'R')`, component rows with `ItemType = 4`, inventory items, and remaining demand where `PlannedQty - IssuedQty > 0`.
+Stock and benchmark quantities are limited to the selected warehouses. Movement age is item-level: recent consumption in any warehouse prevents the item from being classified as slow-moving in Stock Benchmark.
 
 ## Stock Status Rules
 
 The backend owns stock status so filtering, returned rows, grouped rows, and meta counts stay consistent.
+Rows classified as `slow` movement do not receive a stock health status and are not counted as Healthy, Low, Critical, or No Benchmark Set. Benchmarked slow rows remain visible in the default Stock Benchmark view as no-status rows; slow rows with no benchmark stay out of the default operational status view.
 
 | Status | Rule |
 |--------|------|
-| `healthy` | Benchmark is set and `OnHand >= Benchmark` |
-| `low` | Benchmark is set, `OnHand < Benchmark`, and `OnHand >= Benchmark * 0.6` |
-| `critical` | Benchmark is set and `OnHand < Benchmark * 0.6` |
+| `healthy` | Not slow-moving, benchmark is set, and `OnHand >= Benchmark` |
+| `low` | Not slow-moving, benchmark is set, `OnHand < Benchmark`, and `OnHand >= Benchmark * 0.6` |
+| `critical` | Not slow-moving, benchmark is set, and `OnHand < Benchmark * 0.6` |
 | `critical` | Benchmark is not set and open planning demand exists |
-| `unset` | Benchmark is not set and no open planning demand exists |
+| `unset` | Not slow-moving, benchmark is not set, and no open planning demand exists |
 
 The SAP field behind Benchmark is `MinStock`; the API field remains `min_stock` for compatibility. The planned-without-benchmark rule is intentional: a planned item with no benchmark is Critical because SAP shows real demand but no configured benchmark.
 
@@ -83,6 +85,7 @@ The SAP field behind Benchmark is `MinStock`; the API field remains `min_stock` 
 | `slow` | No open planning demand, and no outbound consumption exists or the last outbound consumption is older than 30 days. |
 
 Planning takes precedence over consumption age.
+Consumption age is checked by item code across SAP inventory movement, not only the selected Stock Benchmark warehouses.
 
 ## Grouped Rows
 
@@ -101,14 +104,14 @@ The response meta contains:
 
 | Field | Description |
 |-------|-------------|
-| `total_items` | Number of rows after the active backend filters. |
-| `healthy_count` | Count of rows classified as Healthy. |
-| `low_stock_count` | Count of rows classified as Low. |
-| `critical_stock_count` | Count of rows classified as Critical, including planned-without-benchmark rows. |
+| `total_items` | Number of rows after the active backend filters, including no-status slow rows when they are visible. |
+| `healthy_count` | Count of non-slow rows classified as Healthy. |
+| `low_stock_count` | Count of non-slow rows classified as Low. |
+| `critical_stock_count` | Count of non-slow rows classified as Critical, including planned-without-benchmark rows. |
 | `warehouses` | Distinct warehouse list from SAP. |
 | `page`, `page_size`, `total_pages` | Pagination metadata. |
 
-The frontend Stock Benchmark page uses a separate pinned stats query for the top cards. That query uses default Packing Material, warehouses `BH-BS,BH-PM`, statuses `healthy,low,critical`, and no movement filter.
+The frontend Stock Benchmark page uses a separate pinned stats query for the top cards. That query uses default Packing Material, warehouses `BH-BS,BH-PM`, statuses `healthy,low,critical`, and movements `planned,recent`.
 
 ## Tests
 
