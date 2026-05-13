@@ -112,7 +112,44 @@ class DailyNeedGateEntry(models.Model):
 
     def __str__(self):
         return f"{self.material_name} ({self.quantity} {self.unit})"
-    
+
+
+class DailyNeedGateEntryItem(models.Model):
+    daily_need_entry = models.ForeignKey(
+        DailyNeedGateEntry,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    line_no = models.PositiveIntegerField(default=1)
+    material_name = models.CharField(max_length=200)
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"), message="Quantity must be positive")],
+    )
+    unit = models.ForeignKey(
+        UnitChoice,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="daily_need_entry_items",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["line_no", "id"]
+        indexes = [
+            models.Index(fields=["daily_need_entry", "line_no"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["daily_need_entry", "line_no"],
+                name="unique_daily_need_entry_line",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.line_no}. {self.material_name} ({self.quantity} {self.unit})"
 
 
 

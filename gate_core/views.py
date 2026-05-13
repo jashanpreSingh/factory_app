@@ -25,6 +25,7 @@ from .permissions import (
     CanViewMaintenanceFullEntry,
     CanViewConstructionFullEntry,
 )
+from .enums import GRPO_READY_STATUSES
 from .models import (
     BSTGateIn,
     BSTGateInItem,
@@ -1692,9 +1693,6 @@ class JobWorkGateInCompleteView(APIView):
         if not has_required_weighment(job_work.vehicle_entry):
             return required_weighment_response()
 
-        if not has_gatepass_attachment(job_work.vehicle_entry):
-            return required_gatepass_response()
-
         with transaction.atomic():
             job_work.status = "COMPLETED"
             job_work.updated_by = request.user
@@ -1932,6 +1930,9 @@ class BSTGateInListCreateView(APIView):
                 driver=bst_out.driver,
                 gate_in_date=data["gate_in_date"],
                 in_time=data["in_time"],
+                sap_receipt_doc_num=data.get("sap_receipt_doc_num", ""),
+                sap_receipt_doc_date=data.get("sap_receipt_doc_date"),
+                sap_receipt_reference=data.get("sap_receipt_reference", ""),
                 security_name=data.get("security_name", ""),
                 remarks=data.get("remarks", ""),
                 created_by=request.user,
@@ -1986,6 +1987,9 @@ def update_bst_gate_in(request, bst_in):
 
         bst_in.gate_in_date = data["gate_in_date"]
         bst_in.in_time = data["in_time"]
+        bst_in.sap_receipt_doc_num = data.get("sap_receipt_doc_num", "")
+        bst_in.sap_receipt_doc_date = data.get("sap_receipt_doc_date")
+        bst_in.sap_receipt_reference = data.get("sap_receipt_reference", "")
         bst_in.security_name = data.get("security_name", "")
         bst_in.remarks = data.get("remarks", "")
         bst_in.updated_by = request.user
@@ -2059,6 +2063,12 @@ class BSTGateInCompleteView(APIView):
 
     def post(self, request, vehicle_entry_id):
         bst_in = get_active_bst_gate_in_by_vehicle_entry(request, vehicle_entry_id)
+
+        if not (bst_in.sap_receipt_doc_num or "").strip():
+            return Response(
+                {"detail": "SAP receiving document is required before completing this BST in entry"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         with transaction.atomic():
             bst_in.status = "COMPLETED"
@@ -2180,6 +2190,9 @@ class BSTGateReturnListCreateView(APIView):
                 driver=bst_out.driver,
                 gate_in_date=data["gate_in_date"],
                 in_time=data["in_time"],
+                sap_return_doc_num=data.get("sap_return_doc_num", ""),
+                sap_return_doc_date=data.get("sap_return_doc_date"),
+                sap_return_reference=data.get("sap_return_reference", ""),
                 security_name=data.get("security_name", ""),
                 remarks=data.get("remarks", ""),
                 created_by=request.user,
@@ -2232,6 +2245,9 @@ def update_bst_gate_return(request, bst_return):
 
         bst_return.gate_in_date = data["gate_in_date"]
         bst_return.in_time = data["in_time"]
+        bst_return.sap_return_doc_num = data.get("sap_return_doc_num", "")
+        bst_return.sap_return_doc_date = data.get("sap_return_doc_date")
+        bst_return.sap_return_reference = data.get("sap_return_reference", "")
         bst_return.security_name = data.get("security_name", "")
         bst_return.remarks = data.get("remarks", "")
         bst_return.updated_by = request.user
@@ -2302,6 +2318,12 @@ class BSTGateReturnCompleteView(APIView):
     def post(self, request, vehicle_entry_id):
         bst_return = get_active_bst_gate_return_by_vehicle_entry(request, vehicle_entry_id)
 
+        if not (bst_return.sap_return_doc_num or "").strip():
+            return Response(
+                {"detail": "SAP return/reversal document is required before completing this BST return entry"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         with transaction.atomic():
             bst_return.status = "COMPLETED"
             bst_return.updated_by = request.user
@@ -2324,7 +2346,7 @@ class EmptyVehicleEligibleEntriesView(APIView):
         qs = (
             VehicleEntry.objects
             .filter(company=request.company.company)
-            .exclude(status="CANCELLED")
+            .filter(status__in=list(GRPO_READY_STATUSES))
             .select_related("vehicle", "vehicle__vehicle_type", "driver", "company")
             .order_by("-entry_time")
         )
@@ -2392,6 +2414,12 @@ class EmptyVehicleGateOutListCreateView(APIView):
         if vehicle_entry.status == "CANCELLED":
             return Response(
                 {"detail": "Cancelled gate entries cannot be marked out"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if vehicle_entry.status not in GRPO_READY_STATUSES:
+            return Response(
+                {"detail": "This gate entry must be completed before empty vehicle out"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -2933,6 +2961,7 @@ class DailyNeedGateEntryFullView(APIView):
                     "security_check",
                     "daily_need_entry"
                 )
+                .prefetch_related("daily_need_entry__items__unit")
                 .get(id=gate_entry_id)
             )
         except VehicleEntry.DoesNotExist:
@@ -3007,12 +3036,32 @@ class DailyNeedGateEntryFullView(APIView):
         # DAILY NEED SECTION
         # =========================
         if daily:
+            daily_items = [
+                {
+                    "id": item.id,
+                    "line_no": item.line_no,
+                    "material_name": item.material_name,
+                    "quantity": float(item.quantity),
+                    "unit": item.unit.name if item.unit else None,
+                }
+                for item in daily.items.all()
+            ]
+            if not daily_items:
+                daily_items = [{
+                    "id": None,
+                    "line_no": 1,
+                    "material_name": daily.material_name,
+                    "quantity": float(daily.quantity),
+                    "unit": daily.unit.name if daily.unit else None,
+                }]
+
             response["daily_need_details"] = {
                 "category": daily.item_category.category_name,
                 "supplier_name": daily.supplier_name,
                 "material_name": daily.material_name,
                 "quantity": float(daily.quantity),
                 "unit": daily.unit.name if daily.unit else None,
+                "items": daily_items,
                 "receiving_department": daily.receiving_department.name,
 
                 "bill_number": daily.bill_number,

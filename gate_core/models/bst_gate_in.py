@@ -41,6 +41,9 @@ class BSTGateIn(BaseModel):
     )
     gate_in_date = models.DateField()
     in_time = models.TimeField()
+    sap_receipt_doc_num = models.CharField(max_length=50, blank=True)
+    sap_receipt_doc_date = models.DateField(null=True, blank=True)
+    sap_receipt_reference = models.CharField(max_length=100, blank=True)
     security_name = models.CharField(max_length=100, blank=True)
     remarks = models.TextField(blank=True)
     status = models.CharField(

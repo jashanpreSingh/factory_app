@@ -266,8 +266,9 @@ class BSTGateInSerializer(serializers.ModelSerializer):
             "driver", "driver_name", "driver_mobile", "sap_doc_entry",
             "sap_doc_num", "sap_doc_date", "sap_from_warehouse",
             "sap_to_warehouse", "sap_reference", "sap_comments", "gate_in_date",
-            "in_time", "security_name", "remarks", "status", "items",
-            "created_at", "updated_at",
+            "in_time", "sap_receipt_doc_num", "sap_receipt_doc_date",
+            "sap_receipt_reference", "security_name", "remarks", "status",
+            "items", "created_at", "updated_at",
         ]
         read_only_fields = fields
 
@@ -276,6 +277,9 @@ class BSTGateInCreateSerializer(serializers.Serializer):
     bst_gate_out_id = serializers.IntegerField()
     gate_in_date = serializers.DateField()
     in_time = serializers.TimeField()
+    sap_receipt_doc_num = serializers.CharField(required=False, allow_blank=True, default="")
+    sap_receipt_doc_date = serializers.DateField(required=False, allow_null=True)
+    sap_receipt_reference = serializers.CharField(required=False, allow_blank=True, default="")
     security_name = serializers.CharField(required=False, allow_blank=True, default="")
     remarks = serializers.CharField(required=False, allow_blank=True, default="")
     items = serializers.ListField(
@@ -320,8 +324,9 @@ class BSTGateReturnSerializer(serializers.ModelSerializer):
             "driver", "driver_name", "driver_mobile", "sap_doc_entry",
             "sap_doc_num", "sap_doc_date", "sap_from_warehouse",
             "sap_to_warehouse", "sap_reference", "sap_comments", "gate_in_date",
-            "in_time", "security_name", "remarks", "status", "items",
-            "created_at", "updated_at",
+            "in_time", "sap_return_doc_num", "sap_return_doc_date",
+            "sap_return_reference", "security_name", "remarks", "status",
+            "items", "created_at", "updated_at",
         ]
         read_only_fields = fields
 
@@ -330,6 +335,9 @@ class BSTGateReturnCreateSerializer(serializers.Serializer):
     bst_gate_out_id = serializers.IntegerField()
     gate_in_date = serializers.DateField()
     in_time = serializers.TimeField()
+    sap_return_doc_num = serializers.CharField(required=False, allow_blank=True, default="")
+    sap_return_doc_date = serializers.DateField(required=False, allow_null=True)
+    sap_return_reference = serializers.CharField(required=False, allow_blank=True, default="")
     security_name = serializers.CharField(required=False, allow_blank=True, default="")
     remarks = serializers.CharField(required=False, allow_blank=True, default="")
 

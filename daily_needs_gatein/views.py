@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 
 from driver_management.models import VehicleEntry
+from gate_core.models import GateAttachment
 from .models import DailyNeedGateEntry
 from .serializers import CategoryListSerializer, DailyNeedGateEntrySerializer
 from .services import complete_daily_need_gate_entry
@@ -65,13 +66,11 @@ class DailyNeedGateEntryCreateAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if hasattr(entry, "daily_need_entry"):
-            return Response(
-                {"detail": "Daily need entry already exists"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        serializer = DailyNeedGateEntrySerializer(data=request.data)
+        existing_daily_entry = getattr(entry, "daily_need_entry", None)
+        serializer = DailyNeedGateEntrySerializer(
+            existing_daily_entry,
+            data=request.data,
+        ) if existing_daily_entry else DailyNeedGateEntrySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         daily_entry = serializer.save(
@@ -80,16 +79,16 @@ class DailyNeedGateEntryCreateAPI(APIView):
         )
 
         logger.info(
-            f"Daily need entry created. ID: {daily_entry.id}, "
+            f"Daily need entry saved. ID: {daily_entry.id}, "
             f"Gate entry: {gate_entry_id}, User: {request.user}"
         )
 
         return Response(
             {
-                "message": "Daily need gate entry created",
+                "message": "Daily need gate entry saved",
                 "id": daily_entry.id
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_200_OK if existing_daily_entry else status.HTTP_201_CREATED
         )
 
 
@@ -101,6 +100,12 @@ class DailyNeedGateCompleteAPI(APIView):
 
     def post(self, request, gate_entry_id):
         entry = get_object_or_404(VehicleEntry, id=gate_entry_id, company=request.company.company)
+
+        if not GateAttachment.objects.filter(gate_entry=entry).exists():
+            return Response(
+                {"detail": "Bill upload is required before completing this daily need entry"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             complete_daily_need_gate_entry(entry)
