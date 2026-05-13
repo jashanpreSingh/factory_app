@@ -1,6 +1,7 @@
 from typing import List, Optional
 from .context import CompanyContext
 from .hana.po_reader import HanaPOReader
+from .hana.service_grpo_options_reader import HanaServiceGRPOOptionsReader
 from .hana.warehouse_reader import HanaWarehouseReader
 from .hana.vendor_reader import HanaVendorReader
 from .service_layer.grpo_writer import GRPOWriter
@@ -33,6 +34,10 @@ class SAPClient:
     def get_active_vendors(self) -> List[VendorDTO]:
         reader = HanaVendorReader(self.context)
         return reader.get_active_vendors()
+
+    def get_service_grpo_options(self) -> dict:
+        reader = HanaServiceGRPOOptionsReader(self.context)
+        return reader.get_options()
 
     # ---- WRITE ----
     def create_production_order(self, payload: dict) -> dict:
