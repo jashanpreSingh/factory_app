@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.db import transaction
 
 from gate_core.enums import GateEntryStatus
+from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import VehicleEntry
 from raw_material_gatein.models import POReceipt, POItemReceipt
 from quality_control.enums import InspectionStatus
@@ -19,6 +20,9 @@ from .models import (
     GRPOStatus,
     GRPOAttachment,
     SAPAttachmentStatus,
+    ServiceGRPOPosting,
+    ServiceGRPOLinePosting,
+    ServiceGRPOAttachment,
 )
 
 logger = logging.getLogger(__name__)
@@ -532,6 +536,385 @@ class GRPOService:
             grpo_posting.save()
             logger.error(f"SAP data error posting GRPO: {e}")
             raise
+
+    def get_pending_service_grpo_entries(self) -> List[DispatchPlan]:
+        """
+        Get booked dispatch plans pending transport service GRPO posting.
+        A plan appears here only after the transport booking is marked BOOKED.
+        """
+        return (
+            DispatchPlan.objects.filter(
+                company__code=self.company_code,
+                booking_status=DispatchPlanStatus.BOOKED,
+                is_active=True,
+            )
+            .exclude(service_grpo_postings__status=GRPOStatus.POSTED)
+            .select_related(
+                "company",
+                "vehicle",
+                "transporter",
+                "driver",
+                "linked_vehicle_entry",
+            )
+            .prefetch_related("service_grpo_postings")
+            .distinct()
+            .order_by("-updated_at", "-created_at")
+        )
+
+    def get_service_grpo_preview_data(self, dispatch_plan_id: int) -> Dict[str, Any]:
+        """Get dispatch booking data required for service GRPO posting."""
+        try:
+            dispatch_plan = (
+                DispatchPlan.objects.select_related(
+                    "company",
+                    "vehicle",
+                    "transporter",
+                    "driver",
+                    "linked_vehicle_entry",
+                )
+                .prefetch_related("service_grpo_postings")
+                .get(
+                    id=dispatch_plan_id,
+                    company__code=self.company_code,
+                    is_active=True,
+                )
+            )
+        except DispatchPlan.DoesNotExist:
+            raise ValueError(f"Dispatch plan {dispatch_plan_id} not found")
+
+        existing_grpo = dispatch_plan.service_grpo_postings.filter(
+            status=GRPOStatus.POSTED
+        ).first()
+        is_ready = (
+            dispatch_plan.booking_status == DispatchPlanStatus.BOOKED
+            and existing_grpo is None
+        )
+
+        amount = dispatch_plan.total_freight
+        if amount is None:
+            amount = dispatch_plan.freight
+        if amount is None:
+            amount = Decimal("0")
+
+        bill_no = dispatch_plan.sap_invoice_doc_num or str(
+            dispatch_plan.sap_invoice_doc_entry
+        )
+        vehicle_no = dispatch_plan.vehicle_no or (
+            dispatch_plan.vehicle.vehicle_number if dispatch_plan.vehicle_id else ""
+        )
+        service_description = f"Transport freight for dispatch bill {bill_no}"
+        if vehicle_no:
+            service_description = f"{service_description} - {vehicle_no}"
+
+        latest_grpo = dispatch_plan.service_grpo_postings.order_by("-created_at").first()
+
+        return {
+            "dispatch_plan_id": dispatch_plan.id,
+            "sap_invoice_doc_entry": dispatch_plan.sap_invoice_doc_entry,
+            "sap_invoice_doc_num": dispatch_plan.sap_invoice_doc_num,
+            "booking_status": dispatch_plan.booking_status,
+            "dispatch_date": dispatch_plan.dispatch_date,
+            "is_ready_for_grpo": is_ready,
+            "vehicle_no": vehicle_no,
+            "driver_name": dispatch_plan.driver_name,
+            "transporter_name": dispatch_plan.transporter_name,
+            "transporter_gstin": dispatch_plan.transporter_gstin,
+            "bilty_no": dispatch_plan.bilty_no,
+            "bilty_date": dispatch_plan.bilty_date,
+            "freight": dispatch_plan.freight,
+            "total_freight": dispatch_plan.total_freight,
+            "created_at": dispatch_plan.created_at,
+            "updated_at": dispatch_plan.updated_at,
+            "default_amount": amount,
+            "default_service_description": service_description[:255],
+            "grpo_status": existing_grpo.status if existing_grpo else (
+                latest_grpo.status if latest_grpo else None
+            ),
+            "sap_doc_num": existing_grpo.sap_doc_num if existing_grpo else (
+                latest_grpo.sap_doc_num if latest_grpo else None
+            ),
+            "total_amount": existing_grpo.sap_doc_total if existing_grpo else (
+                latest_grpo.sap_doc_total if latest_grpo else None
+            ),
+        }
+
+    def _build_service_structured_comments(
+        self,
+        user,
+        dispatch_plan: DispatchPlan,
+        user_comments: Optional[str] = None,
+    ) -> str:
+        """Build structured comments string for SAP service GRPO."""
+        full_name = user.get_full_name() if hasattr(user, "get_full_name") else str(user)
+        username = getattr(user, "username", getattr(user, "email", str(user)))
+        bill_no = dispatch_plan.sap_invoice_doc_num or dispatch_plan.sap_invoice_doc_entry
+
+        parts = [
+            "App: FactoryApp v2",
+            f"User: {full_name} ({username})",
+            f"Service GRPO: Transport",
+            f"Dispatch Bill: {bill_no}",
+        ]
+
+        if dispatch_plan.vehicle_no:
+            parts.append(f"Vehicle: {dispatch_plan.vehicle_no}")
+        if dispatch_plan.bilty_no:
+            parts.append(f"Bilty: {dispatch_plan.bilty_no}")
+        if user_comments:
+            parts.append(user_comments)
+
+        return " | ".join(parts)
+
+    @transaction.atomic
+    def post_service_grpo(
+        self,
+        dispatch_plan_id: int,
+        user,
+        vendor_code: str,
+        branch_id: int,
+        service_description: str,
+        amount: Decimal,
+        tax_code: Optional[str] = None,
+        gl_account: Optional[str] = None,
+        comments: Optional[str] = None,
+        vendor_ref: Optional[str] = None,
+        extra_charges: Optional[List[Dict[str, Any]]] = None,
+        attachments: Optional[list] = None,
+        doc_date: Optional[str] = None,
+        doc_due_date: Optional[str] = None,
+        tax_date: Optional[str] = None,
+        should_roundoff: bool = False,
+    ) -> ServiceGRPOPosting:
+        """
+        Post a service-type GRPO to SAP for a booked dispatch transport plan.
+        The SAP document is a PurchaseDeliveryNotes document with service lines.
+        """
+        try:
+            dispatch_plan = DispatchPlan.objects.select_related(
+                "company",
+                "transporter",
+            ).get(
+                id=dispatch_plan_id,
+                company__code=self.company_code,
+                is_active=True,
+            )
+        except DispatchPlan.DoesNotExist:
+            raise ValueError(f"Dispatch plan {dispatch_plan_id} not found")
+
+        if dispatch_plan.booking_status != DispatchPlanStatus.BOOKED:
+            raise ValueError(
+                "Service GRPO can be posted only after the vehicle booking is Booked."
+            )
+
+        existing_grpo = dispatch_plan.service_grpo_postings.filter(
+            status=GRPOStatus.POSTED
+        ).first()
+        if existing_grpo:
+            raise ValueError(
+                f"Service GRPO already posted for this dispatch plan. "
+                f"SAP Doc Num: {existing_grpo.sap_doc_num}"
+            )
+
+        amount = Decimal(str(amount))
+        if amount <= 0:
+            raise ValueError("Service amount must be greater than zero.")
+
+        vendor_code = (vendor_code or "").strip()
+        if not vendor_code:
+            raise ValueError("SAP vendor code is required.")
+
+        service_description = (
+            service_description
+            or f"Transport freight for dispatch bill {dispatch_plan.sap_invoice_doc_num}"
+        ).strip()[:255]
+        if not service_description:
+            raise ValueError("Service description is required.")
+
+        grpo_posting = ServiceGRPOPosting.objects.create(
+            dispatch_plan=dispatch_plan,
+            vendor_code=vendor_code,
+            vendor_name=dispatch_plan.transporter_name,
+            status=GRPOStatus.PENDING,
+            posted_by=user,
+        )
+
+        document_line = {
+            "ItemDescription": service_description,
+            "LineTotal": float(amount),
+        }
+        if gl_account:
+            document_line["AccountCode"] = gl_account
+        if tax_code:
+            document_line["TaxCode"] = tax_code
+
+        structured_comments = self._build_service_structured_comments(
+            user, dispatch_plan, comments
+        )
+
+        grpo_payload = {
+            "DocType": "dDocument_Service",
+            "CardCode": vendor_code,
+            "BPL_IDAssignedToInvoice": branch_id,
+            "Comments": structured_comments,
+            "DocumentLines": [document_line],
+        }
+
+        if doc_date:
+            grpo_payload["DocDate"] = str(doc_date)
+        if doc_due_date:
+            grpo_payload["DocDueDate"] = str(doc_due_date)
+        if tax_date:
+            grpo_payload["TaxDate"] = str(tax_date)
+        if vendor_ref:
+            grpo_payload["NumAtCard"] = vendor_ref
+
+        subtotal = amount
+        if extra_charges:
+            additional_expenses = []
+            for charge in extra_charges:
+                charge_amount = Decimal(str(charge["amount"]))
+                subtotal += charge_amount
+                expense = {
+                    "ExpenseCode": charge["expense_code"],
+                    "LineTotal": float(charge_amount),
+                }
+                if charge.get("remarks"):
+                    expense["Remarks"] = charge["remarks"]
+                if charge.get("tax_code"):
+                    expense["TaxCode"] = charge["tax_code"]
+                additional_expenses.append(expense)
+            grpo_payload["DocumentAdditionalExpenses"] = additional_expenses
+
+        if should_roundoff and subtotal > 0:
+            rounded = subtotal.quantize(Decimal("1"), rounding="ROUND_HALF_UP")
+            round_dif = float(rounded - subtotal)
+            if round_dif != 0:
+                grpo_payload["RoundDif"] = round_dif
+
+        sap_client = SAPClient(company_code=self.company_code)
+        attachment_records = []
+        sap_absolute_entry = None
+
+        if attachments:
+            for uploaded_file in attachments:
+                suffix = os.path.splitext(uploaded_file.name)[1]
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                    for chunk in uploaded_file.chunks():
+                        tmp.write(chunk)
+                    tmp_path = tmp.name
+
+                try:
+                    if sap_absolute_entry:
+                        sap_client.add_line_to_existing_attachment(
+                            absolute_entry=sap_absolute_entry,
+                            file_path=tmp_path,
+                            filename=uploaded_file.name,
+                        )
+                        abs_entry = sap_absolute_entry
+                    else:
+                        sap_result = sap_client.upload_attachment(
+                            file_path=tmp_path,
+                            filename=uploaded_file.name,
+                        )
+                        abs_entry = sap_result.get("AbsoluteEntry")
+                    if abs_entry:
+                        sap_absolute_entry = abs_entry
+                        attachment_records.append({
+                            "file": uploaded_file,
+                            "filename": uploaded_file.name,
+                            "sap_absolute_entry": abs_entry,
+                        })
+                finally:
+                    os.unlink(tmp_path)
+
+            if sap_absolute_entry:
+                grpo_payload["AttachmentEntry"] = sap_absolute_entry
+
+        logger.info(
+            "Service GRPO payload for dispatch plan %s: %s",
+            dispatch_plan.id,
+            grpo_payload,
+        )
+
+        try:
+            result = sap_client.create_grpo(grpo_payload)
+
+            grpo_posting.sap_doc_entry = result.get("DocEntry")
+            grpo_posting.sap_doc_num = result.get("DocNum")
+            grpo_posting.sap_doc_total = Decimal(str(result.get("DocTotal", 0)))
+            grpo_posting.status = GRPOStatus.POSTED
+            grpo_posting.posted_at = timezone.now()
+            grpo_posting.posted_by = user
+            grpo_posting.save()
+
+            ServiceGRPOLinePosting.objects.create(
+                service_grpo_posting=grpo_posting,
+                service_description=service_description,
+                amount=amount,
+                tax_code=tax_code or "",
+                gl_account=gl_account or "",
+            )
+
+            for att_data in attachment_records:
+                uploaded_file = att_data["file"]
+                if hasattr(uploaded_file, "seek"):
+                    uploaded_file.seek(0)
+                ServiceGRPOAttachment.objects.create(
+                    service_grpo_posting=grpo_posting,
+                    file=uploaded_file,
+                    original_filename=att_data["filename"],
+                    sap_attachment_status=SAPAttachmentStatus.LINKED,
+                    sap_absolute_entry=att_data["sap_absolute_entry"],
+                    uploaded_by=user,
+                )
+
+            logger.info(
+                "Service GRPO posted for dispatch plan %s. SAP DocNum: %s",
+                dispatch_plan.id,
+                grpo_posting.sap_doc_num,
+            )
+            return grpo_posting
+
+        except SAPValidationError as e:
+            grpo_posting.status = GRPOStatus.FAILED
+            grpo_posting.error_message = str(e)
+            grpo_posting.save()
+            logger.error(f"SAP validation error posting service GRPO: {e}")
+            raise
+
+        except SAPConnectionError as e:
+            grpo_posting.status = GRPOStatus.FAILED
+            grpo_posting.error_message = "SAP system unavailable"
+            grpo_posting.save()
+            logger.error(f"SAP connection error posting service GRPO: {e}")
+            raise
+
+        except SAPDataError as e:
+            grpo_posting.status = GRPOStatus.FAILED
+            grpo_posting.error_message = str(e)
+            grpo_posting.save()
+            logger.error(f"SAP data error posting service GRPO: {e}")
+            raise
+
+    def get_service_grpo_posting_history(
+        self,
+        dispatch_plan_id: Optional[int] = None,
+    ) -> List[ServiceGRPOPosting]:
+        """Get service GRPO posting history."""
+        queryset = ServiceGRPOPosting.objects.select_related(
+            "dispatch_plan",
+            "posted_by",
+        ).prefetch_related("lines", "attachments")
+
+        if dispatch_plan_id:
+            queryset = queryset.filter(dispatch_plan_id=dispatch_plan_id)
+
+        return queryset.order_by("-created_at")
+
+    def get_service_grpo_options(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Get SAP master-data options used by the service GRPO form."""
+        sap_client = SAPClient(company_code=self.company_code)
+        return sap_client.get_service_grpo_options()
 
     def get_grpo_posting_history(
         self,

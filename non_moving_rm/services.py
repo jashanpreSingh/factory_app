@@ -38,7 +38,10 @@ class NonMovingRMService:
         """
         Returns non-moving raw material report with summary stats.
         """
-        rows = self.reader.get_non_moving_report(age, item_group)
+        rows = [
+            row for row in self.reader.get_non_moving_report(age, item_group)
+            if self._meets_age_threshold(row, age)
+        ]
 
         total_items = len(rows)
         total_value = sum(r["value"] for r in rows)
@@ -96,3 +99,10 @@ class NonMovingRMService:
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
             },
         }
+
+    @staticmethod
+    def _meets_age_threshold(row: Dict, age: int) -> bool:
+        days_since_last_movement = row.get("days_since_last_movement")
+        if days_since_last_movement is None:
+            return True
+        return int(days_since_last_movement) >= age

@@ -3,6 +3,9 @@ from .models import (
     GRPOPosting,
     GRPOLinePosting,
     GRPOAttachment,
+    ServiceGRPOPosting,
+    ServiceGRPOLinePosting,
+    ServiceGRPOAttachment,
 )
 
 
@@ -15,6 +18,24 @@ class GRPOLinePostingInline(admin.TabularInline):
 
 class GRPOAttachmentInline(admin.TabularInline):
     model = GRPOAttachment
+    extra = 0
+    readonly_fields = [
+        "file", "original_filename", "sap_attachment_status",
+        "sap_absolute_entry", "sap_error_message",
+        "uploaded_at", "uploaded_by"
+    ]
+    can_delete = True
+
+
+class ServiceGRPOLinePostingInline(admin.TabularInline):
+    model = ServiceGRPOLinePosting
+    extra = 0
+    readonly_fields = ["service_description", "amount", "tax_code", "gl_account"]
+    can_delete = False
+
+
+class ServiceGRPOAttachmentInline(admin.TabularInline):
+    model = ServiceGRPOAttachment
     extra = 0
     readonly_fields = [
         "file", "original_filename", "sap_attachment_status",
@@ -82,3 +103,49 @@ class GRPOPostingAdmin(admin.ModelAdmin):
             return ", ".join(f"{po.po_number} ({po.supplier_name})" for po in pos)
         return "-"
     get_merged_po_list.short_description = "Merged PO Receipts"
+
+
+@admin.register(ServiceGRPOPosting)
+class ServiceGRPOPostingAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "get_dispatch_bill_no",
+        "vendor_code",
+        "vendor_name",
+        "status",
+        "sap_doc_num",
+        "sap_doc_total",
+        "posted_at",
+        "posted_by",
+    ]
+    list_filter = ["status", "posted_at"]
+    search_fields = [
+        "dispatch_plan__sap_invoice_doc_num",
+        "dispatch_plan__vehicle_no",
+        "dispatch_plan__transporter_name",
+        "vendor_code",
+        "vendor_name",
+        "sap_doc_num",
+    ]
+    readonly_fields = [
+        "dispatch_plan",
+        "vendor_code",
+        "vendor_name",
+        "sap_doc_entry",
+        "sap_doc_num",
+        "sap_doc_total",
+        "status",
+        "error_message",
+        "posted_at",
+        "posted_by",
+        "created_at",
+        "updated_at",
+    ]
+    inlines = [ServiceGRPOLinePostingInline, ServiceGRPOAttachmentInline]
+
+    def get_dispatch_bill_no(self, obj):
+        return (
+            obj.dispatch_plan.sap_invoice_doc_num
+            or obj.dispatch_plan.sap_invoice_doc_entry
+        )
+    get_dispatch_bill_no.short_description = "Dispatch Bill"

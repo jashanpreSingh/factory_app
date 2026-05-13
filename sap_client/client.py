@@ -2,6 +2,7 @@ from typing import List, Optional
 from .context import CompanyContext
 from .hana.grpo_reader import HanaGRPOReader
 from .hana.po_reader import HanaPOReader
+from .hana.service_grpo_options_reader import HanaServiceGRPOOptionsReader
 from .hana.stock_transfer_reader import HanaStockTransferReader
 from .hana.warehouse_reader import HanaWarehouseReader
 from .hana.vendor_reader import HanaVendorReader
@@ -75,6 +76,10 @@ class SAPClient:
     def get_grpo(self, doc_entry: int, crude_oil_only: bool = False) -> dict | None:
         reader = HanaGRPOReader(self.context)
         return reader.get_grpo(doc_entry, crude_oil_only=crude_oil_only)
+
+    def get_service_grpo_options(self) -> dict:
+        reader = HanaServiceGRPOOptionsReader(self.context)
+        return reader.get_options()
 
     # ---- WRITE ----
     def create_production_order(self, payload: dict) -> dict:

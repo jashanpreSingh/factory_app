@@ -51,11 +51,11 @@ class TransporterAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Transporter Information", {
-            "fields": ("name",),
+            "fields": ("name", "gstin"),
             "description": "Transporter/Logistics company details"
         }),
         ("Contact Information", {
-            "fields": ("contact_person", "mobile_no", "gstin"),
+            "fields": ("contact_person", "mobile_no"),
             "classes": ("wide",),
         }),
         ("Status", {

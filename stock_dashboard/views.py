@@ -33,15 +33,18 @@ logger = logging.getLogger(__name__)
 
 class StockDashboardAPI(APIView):
     """
-    Stock level dashboard showing items with minimum stock thresholds.
+    Stock level dashboard showing items against benchmark levels.
 
-    Returns one row per item-warehouse where MinStock is configured,
-    with current on-hand qty, health ratio, and stock status.
+    Returns one row per item-warehouse or grouped item with current on-hand
+    qty, health ratio, stock status, and movement status.
 
     GET /api/v1/dashboards/stock/
 
     Query parameters:
-        warehouse — warehouse code (optional)
+        warehouse - comma-separated warehouse codes
+        item_group - SAP item group name
+        status - comma-separated healthy, low, critical, unset
+        movement_status - comma-separated planned, recent, slow
     """
 
     permission_classes = [IsAuthenticated, HasCompanyContext, CanViewStockDashboard]

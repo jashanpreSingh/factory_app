@@ -2,7 +2,7 @@
 inventory_age/services.py
 
 Business logic for the Inventory Age & Value dashboard.
-Filters SP results, computes summary statistics.
+Filters HANA query results and computes summary statistics.
 """
 
 import logging
@@ -35,15 +35,14 @@ class InventoryAgeService:
         return self.reader.get_filter_options()
 
     # ------------------------------------------------------------------
-    # Full report (requires at least item_group filter)
+    # Full report
     # ------------------------------------------------------------------
 
     def get_inventory_age(self, filters: Dict[str, Any]) -> Dict:
         """
         Returns filtered inventory age data with summary stats.
-        Caller must ensure item_group is provided.
         """
-        rows = self.reader.get_inventory_age()
+        rows = self.reader.get_inventory_age(filters)
 
         # Apply filters
         rows = self._apply_filters(rows, filters)

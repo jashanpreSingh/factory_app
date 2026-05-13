@@ -21,8 +21,10 @@ class NonMovingRMFilterSerializer(serializers.Serializer):
         help_text="Number of days since last movement (e.g. 45, 90, 180)",
     )
     item_group = serializers.IntegerField(
-        required=True,
-        help_text="Item group code from OITB (e.g. 105 for Packaging Material, 106 for Raw Material)",
+        required=False,
+        default=0,
+        min_value=0,
+        help_text="Item group code from OITB, or 0/all omitted for all groups",
     )
 
 

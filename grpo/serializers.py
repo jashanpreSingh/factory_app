@@ -3,6 +3,9 @@ from .models import (
     GRPOPosting,
     GRPOLinePosting,
     GRPOAttachment,
+    ServiceGRPOPosting,
+    ServiceGRPOLinePosting,
+    ServiceGRPOAttachment,
 )
 
 
@@ -213,6 +216,101 @@ class GRPOPostRequestSerializer(serializers.Serializer):
         return value
 
 
+class ServiceGRPOPendingEntrySerializer(serializers.Serializer):
+    """Serializer for booked dispatch plans pending service GRPO."""
+
+    dispatch_plan_id = serializers.IntegerField()
+    sap_invoice_doc_entry = serializers.IntegerField()
+    sap_invoice_doc_num = serializers.CharField(allow_blank=True)
+    booking_status = serializers.CharField()
+    dispatch_date = serializers.DateField(allow_null=True)
+    vehicle_no = serializers.CharField(allow_blank=True)
+    driver_name = serializers.CharField(allow_blank=True)
+    transporter_name = serializers.CharField(allow_blank=True)
+    transporter_gstin = serializers.CharField(allow_blank=True)
+    bilty_no = serializers.CharField(allow_blank=True)
+    bilty_date = serializers.DateField(allow_null=True)
+    freight = serializers.DecimalField(
+        max_digits=18, decimal_places=2, allow_null=True
+    )
+    total_freight = serializers.DecimalField(
+        max_digits=18, decimal_places=2, allow_null=True
+    )
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
+class ServiceGRPOPreviewSerializer(ServiceGRPOPendingEntrySerializer):
+    """Serializer for service GRPO preview data."""
+
+    is_ready_for_grpo = serializers.BooleanField()
+    default_amount = serializers.DecimalField(max_digits=18, decimal_places=2)
+    default_service_description = serializers.CharField()
+    grpo_status = serializers.CharField(allow_null=True)
+    sap_doc_num = serializers.IntegerField(allow_null=True)
+    total_amount = serializers.DecimalField(
+        max_digits=18, decimal_places=2, allow_null=True
+    )
+
+
+class ServiceGRPOPostRequestSerializer(serializers.Serializer):
+    """Serializer for transport service GRPO posting request."""
+
+    dispatch_plan_id = serializers.IntegerField(required=True)
+    vendor_code = serializers.CharField(
+        required=True,
+        max_length=50,
+        help_text="SAP transporter/vendor Business Partner code",
+    )
+    branch_id = serializers.IntegerField(
+        required=True,
+        help_text="SAP Branch/Business Place ID (BPLId)",
+    )
+    service_description = serializers.CharField(required=True, max_length=255)
+    amount = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        required=True,
+        min_value=0,
+    )
+    tax_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    gl_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    comments = serializers.CharField(required=False, allow_blank=True)
+    vendor_ref = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    extra_charges = ExtraChargeInputSerializer(many=True, required=False)
+    doc_date = serializers.DateField(required=False, allow_null=True)
+    doc_due_date = serializers.DateField(required=False, allow_null=True)
+    tax_date = serializers.DateField(required=False, allow_null=True)
+    should_roundoff = serializers.BooleanField(required=False, default=False)
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero.")
+        return value
+
+
+class ServiceGRPOBranchOptionSerializer(serializers.Serializer):
+    branch_id = serializers.IntegerField()
+    branch_name = serializers.CharField()
+
+
+class ServiceGRPOTaxCodeOptionSerializer(serializers.Serializer):
+    tax_code = serializers.CharField()
+    tax_name = serializers.CharField()
+    rate = serializers.FloatField(allow_null=True)
+
+
+class ServiceGRPOGLAccountOptionSerializer(serializers.Serializer):
+    account_code = serializers.CharField()
+    account_name = serializers.CharField()
+
+
+class ServiceGRPOOptionsSerializer(serializers.Serializer):
+    branches = ServiceGRPOBranchOptionSerializer(many=True)
+    tax_codes = ServiceGRPOTaxCodeOptionSerializer(many=True)
+    gl_accounts = ServiceGRPOGLAccountOptionSerializer(many=True)
+
+
 class GRPOLinePostingSerializer(serializers.ModelSerializer):
     item_code = serializers.CharField(source='po_item_receipt.po_item_code', read_only=True)
     item_name = serializers.CharField(source='po_item_receipt.item_name', read_only=True)
@@ -339,3 +437,105 @@ class GRPOPostResponseSerializer(serializers.Serializer):
     sap_doc_total = serializers.DecimalField(max_digits=18, decimal_places=2, allow_null=True)
     message = serializers.CharField()
     attachments = GRPOAttachmentSerializer(many=True, read_only=True)
+
+
+class ServiceGRPOLinePostingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceGRPOLinePosting
+        fields = [
+            "id",
+            "service_description",
+            "amount",
+            "tax_code",
+            "gl_account",
+        ]
+
+
+class ServiceGRPOAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceGRPOAttachment
+        fields = [
+            "id",
+            "file",
+            "original_filename",
+            "sap_attachment_status",
+            "sap_absolute_entry",
+            "sap_error_message",
+            "uploaded_at",
+            "uploaded_by",
+        ]
+        read_only_fields = [
+            "id",
+            "original_filename",
+            "sap_attachment_status",
+            "sap_absolute_entry",
+            "sap_error_message",
+            "uploaded_at",
+            "uploaded_by",
+        ]
+
+
+class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
+    lines = ServiceGRPOLinePostingSerializer(many=True, read_only=True)
+    attachments = ServiceGRPOAttachmentSerializer(many=True, read_only=True)
+    dispatch_bill_no = serializers.SerializerMethodField()
+    sap_invoice_doc_entry = serializers.IntegerField(
+        source="dispatch_plan.sap_invoice_doc_entry", read_only=True
+    )
+    vehicle_no = serializers.CharField(
+        source="dispatch_plan.vehicle_no", read_only=True
+    )
+    transporter_name = serializers.CharField(
+        source="dispatch_plan.transporter_name", read_only=True
+    )
+    total_amount = serializers.DecimalField(
+        source="sap_doc_total",
+        max_digits=18,
+        decimal_places=2,
+        allow_null=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = ServiceGRPOPosting
+        fields = [
+            "id",
+            "dispatch_plan",
+            "dispatch_bill_no",
+            "sap_invoice_doc_entry",
+            "vehicle_no",
+            "transporter_name",
+            "vendor_code",
+            "vendor_name",
+            "sap_doc_entry",
+            "sap_doc_num",
+            "sap_doc_total",
+            "total_amount",
+            "status",
+            "error_message",
+            "posted_at",
+            "posted_by",
+            "created_at",
+            "lines",
+            "attachments",
+        ]
+
+    def get_dispatch_bill_no(self, obj):
+        return (
+            obj.dispatch_plan.sap_invoice_doc_num
+            or str(obj.dispatch_plan.sap_invoice_doc_entry)
+        )
+
+
+class ServiceGRPOPostResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    service_grpo_posting_id = serializers.IntegerField()
+    sap_doc_entry = serializers.IntegerField(allow_null=True)
+    sap_doc_num = serializers.IntegerField(allow_null=True)
+    sap_doc_total = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        allow_null=True,
+    )
+    message = serializers.CharField()
+    attachments = ServiceGRPOAttachmentSerializer(many=True, read_only=True)

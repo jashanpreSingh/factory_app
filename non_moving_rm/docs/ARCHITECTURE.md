@@ -40,7 +40,7 @@ services.py (NonMovingRMService)
     ▼
 hana_reader.py (HanaNonMovingRMReader)
     ├── Connect to SAP HANA via HanaConnection
-    ├── Execute stored procedure / SQL query
+    ├── Execute company-scoped SAP B1 table query
     ├── Map raw rows to dicts
     ├── Close connection
     │

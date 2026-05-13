@@ -1,0 +1,121 @@
+import logging
+from typing import Any, Dict, List
+
+from hdbcli import dbapi
+
+from .connection import HanaConnection
+from ..exceptions import SAPConnectionError, SAPDataError
+
+logger = logging.getLogger(__name__)
+
+
+class HanaServiceGRPOOptionsReader:
+    """Reads SAP master-data options used by service GRPO posting."""
+
+    def __init__(self, context):
+        self.connection = HanaConnection(context.hana)
+
+    def get_options(self) -> Dict[str, List[Dict[str, Any]]]:
+        conn = None
+        cursor = None
+
+        try:
+            conn = self.connection.connect()
+        except dbapi.Error as e:
+            logger.error(f"SAP HANA connection failed: {e}")
+            raise SAPConnectionError(
+                "Unable to connect to SAP HANA. Please try again later."
+            ) from e
+
+        try:
+            cursor = conn.cursor()
+            schema = self.connection.schema
+
+            return {
+                "branches": self._get_branches(cursor, schema),
+                "tax_codes": self._get_tax_codes(cursor, schema),
+                "gl_accounts": self._get_gl_accounts(cursor, schema),
+            }
+
+        except dbapi.ProgrammingError as e:
+            logger.error(f"SAP HANA query error for service GRPO options: {e}")
+            raise SAPDataError(
+                "Failed to retrieve service GRPO options from SAP. Invalid query or parameters."
+            ) from e
+        except dbapi.Error as e:
+            logger.error(f"SAP HANA data error for service GRPO options: {e}")
+            raise SAPDataError(
+                "Failed to retrieve service GRPO options from SAP. Please try again later."
+            ) from e
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    @staticmethod
+    def _get_branches(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "BPLId" AS branch_id,
+                    "BPLName" AS branch_name
+                FROM "{schema}"."OBPL"
+                WHERE IFNULL("Disabled", 'N') = 'N'
+                ORDER BY "BPLId"
+            """
+        )
+        return [
+            {
+                "branch_id": int(row[0]),
+                "branch_name": row[1] or str(row[0]),
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_tax_codes(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "Code" AS tax_code,
+                    "Name" AS tax_name,
+                    "Rate" AS rate
+                FROM "{schema}"."OSTC"
+                ORDER BY "Code"
+            """
+        )
+        return [
+            {
+                "tax_code": row[0],
+                "tax_name": row[1] or row[0],
+                "rate": float(row[2]) if row[2] is not None else None,
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_gl_accounts(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "AcctCode" AS account_code,
+                    "AcctName" AS account_name
+                FROM "{schema}"."OACT"
+                WHERE "Postable" = 'Y'
+                ORDER BY "AcctCode"
+            """
+        )
+        return [
+            {
+                "account_code": row[0],
+                "account_name": row[1] or row[0],
+            }
+            for row in cursor.fetchall()
+        ]

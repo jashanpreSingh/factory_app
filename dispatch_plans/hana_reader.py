@@ -1,0 +1,292 @@
+import logging
+from typing import Any, Dict, List, Sequence, Set
+
+from hdbcli import dbapi
+
+from sap_client.exceptions import SAPConnectionError, SAPDataError
+from sap_client.hana.connection import HanaConnection
+
+logger = logging.getLogger(__name__)
+
+
+class HanaDispatchBillReader:
+    """Reads SAP B1 A/R invoices that act as dispatch bills."""
+
+    def __init__(self, context):
+        self.connection = HanaConnection(context.hana)
+        self._columns_cache: Dict[str, Set[str]] = {}
+
+    def list_bills(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        query, params = self._build_bills_query(filters)
+        rows = self._execute(query, params)
+        return [self._map_bill_row(row) for row in rows]
+
+    def _build_bills_query(self, filters: Dict[str, Any]):
+        schema = self.connection.schema
+        header_columns = self._table_columns("OINV")
+        item_columns = self._table_columns("OITM")
+
+        dispatch_date = self._optional_raw(
+            header_columns, "U_Dipatch_Date", "sap_dispatch_date", "NULL"
+        )
+        bilty_date = self._optional_raw(
+            header_columns, "U_BiltyDate", "sap_bilty_date", "NULL"
+        )
+        bilty_no = self._optional_string(
+            header_columns, "U_BilltyNumber", "sap_bilty_no"
+        )
+        transporter_name = self._optional_string(
+            header_columns, "U_TransporterName", "sap_transporter_name"
+        )
+        vehicle_no = self._optional_string(
+            header_columns, "U_VehicleNoM", "sap_vehicle_no"
+        )
+        transporter_invoice = self._optional_string(
+            header_columns, "U_TransporterInvoice", "sap_transporter_invoice"
+        )
+        lr_number = self._optional_string(
+            header_columns, "U_LRNUmber", "sap_lr_number"
+        )
+
+        litre_expr = self._optional_item_number(item_columns, "U_UNE_TOTL")
+        box_expr = self._optional_item_number(item_columns, "U_UNE_TOTB")
+        gross_weight_expr = self._optional_item_number(item_columns, "U_Gross_Weight")
+
+        where_clauses = ['H."CANCELED" = \'N\'']
+        params: List[Any] = []
+
+        where_clauses.append('H."CreateDate" >= ?')
+        params.append(filters["date_from"])
+        where_clauses.append('H."CreateDate" <= ?')
+        params.append(filters["date_to"])
+
+        branch = (filters.get("branch") or "").strip()
+        if branch:
+            where_clauses.append(
+                '(LOWER(IFNULL(H."BPLName", \'\')) = ? OR CAST(H."BPLId" AS NVARCHAR(30)) = ?)'
+            )
+            params.extend([branch.lower(), branch])
+
+        limit = int(filters.get("limit") or 500)
+        limit = min(max(limit, 1), 2000)
+
+        query = f"""
+            WITH line_agg AS (
+                SELECT
+                    L."DocEntry" AS doc_entry,
+                    COUNT(L."LineNum") AS line_count,
+                    SUM(IFNULL(L."Quantity", 0)) AS total_quantity,
+                    SUM(
+                        CASE
+                            WHEN {litre_expr} > 0 THEN IFNULL(L."Quantity", 0) * {litre_expr}
+                            ELSE 0
+                        END
+                    ) AS total_litres,
+                    SUM(
+                        CASE
+                            WHEN {box_expr} > 0 THEN IFNULL(L."Quantity", 0) * {box_expr}
+                            ELSE 0
+                        END
+                    ) AS total_boxes,
+                    SUM(
+                        CASE
+                            WHEN IFNULL(L."Weight1", 0) > 0 THEN IFNULL(L."Weight1", 0)
+                            WHEN IFNULL(L."Weight2", 0) > 0 THEN IFNULL(L."Weight2", 0)
+                            WHEN {gross_weight_expr} > 0 THEN IFNULL(L."Quantity", 0) * {gross_weight_expr}
+                            ELSE 0
+                        END
+                    ) AS total_weight,
+                    SUM(IFNULL(L."LineTotal", 0)) AS total_line_amount,
+                    SUM(IFNULL(L."GTotal", 0)) AS total_gross_amount,
+                    STRING_AGG(IFNULL(L."WhsCode", ''), ', ') AS warehouses,
+                    STRING_AGG(
+                        IFNULL(L."ItemCode", '') || ' - ' || IFNULL(L."Dscription", ''),
+                        ', '
+                    ) AS item_summary,
+                    STRING_AGG(IFNULL(TO_NVARCHAR(L."BaseRef"), ''), ', ') AS base_refs
+                FROM "{schema}"."INV1" L
+                LEFT JOIN "{schema}"."OITM" I
+                    ON I."ItemCode" = L."ItemCode"
+                GROUP BY L."DocEntry"
+            )
+            SELECT
+                H."DocEntry" AS doc_entry,
+                TO_NVARCHAR(H."DocNum") AS doc_num,
+                H."DocDate" AS doc_date,
+                H."CreateDate" AS create_date,
+                H."DocTime" AS doc_time,
+                IFNULL(H."CardCode", '') AS card_code,
+                IFNULL(H."CardName", '') AS card_name,
+                IFNULL(H."DocTotal", 0) AS doc_total,
+                H."BPLId" AS branch_id,
+                IFNULL(H."BPLName", '') AS branch_name,
+                IFNULL(H."ShipToCode", '') AS ship_to_code,
+                IFNULL(H."Address2", '') AS ship_to_address,
+                IFNULL(A."StateS", '') AS state,
+                IFNULL(A."CityS", '') AS city,
+                IFNULL(A."BpGSTN", '') AS bp_gstin,
+                {dispatch_date},
+                {bilty_no},
+                {bilty_date},
+                {transporter_name},
+                {vehicle_no},
+                {transporter_invoice},
+                {lr_number},
+                IFNULL(A."Vehicle", '') AS gst_vehicle_no,
+                A."TransprtDT" AS gst_transport_date,
+                IFNULL(A."TransprtRS", '') AS gst_transport_reason,
+                IFNULL(LA.line_count, 0) AS line_count,
+                IFNULL(LA.total_quantity, 0) AS total_quantity,
+                IFNULL(LA.total_litres, 0) AS total_litres,
+                IFNULL(LA.total_boxes, 0) AS total_boxes,
+                IFNULL(LA.total_weight, 0) AS total_weight,
+                IFNULL(LA.total_line_amount, 0) AS total_line_amount,
+                IFNULL(LA.total_gross_amount, 0) AS total_gross_amount,
+                IFNULL(LA.warehouses, '') AS warehouses,
+                IFNULL(LA.item_summary, '') AS item_summary,
+                IFNULL(LA.base_refs, '') AS base_refs
+            FROM "{schema}"."OINV" H
+            LEFT JOIN "{schema}"."INV12" A
+                ON A."DocEntry" = H."DocEntry"
+            LEFT JOIN line_agg LA
+                ON LA.doc_entry = H."DocEntry"
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY H."CreateDate" DESC, H."DocTime" DESC, H."DocNum" DESC
+            LIMIT {limit}
+        """
+        return query, params
+
+    def _table_columns(self, table_name: str) -> Set[str]:
+        key = table_name.upper()
+        if key in self._columns_cache:
+            return self._columns_cache[key]
+
+        rows = self._execute(
+            """
+                SELECT "COLUMN_NAME"
+                FROM "SYS"."TABLE_COLUMNS"
+                WHERE "SCHEMA_NAME" = ? AND "TABLE_NAME" = ?
+            """,
+            [self.connection.schema, key],
+        )
+        columns = {row[0] for row in rows}
+        self._columns_cache[key] = columns
+        return columns
+
+    @staticmethod
+    def _optional_string(columns: Set[str], column: str, alias: str) -> str:
+        if column not in columns:
+            return f"'' AS {alias}"
+        return f'IFNULL(TO_NVARCHAR(H."{column}"), \'\') AS {alias}'
+
+    @staticmethod
+    def _optional_raw(
+        columns: Set[str], column: str, alias: str, fallback: str = "NULL"
+    ) -> str:
+        if column not in columns:
+            return f"{fallback} AS {alias}"
+        return f'H."{column}" AS {alias}'
+
+    @staticmethod
+    def _optional_item_number(columns: Set[str], column: str) -> str:
+        if column not in columns:
+            return "0"
+        return f'IFNULL(I."{column}", 0)'
+
+    def _map_bill_row(self, row: Sequence[Any]) -> Dict[str, Any]:
+        return {
+            "doc_entry": int(row[0]),
+            "doc_num": row[1] or "",
+            "doc_date": self._format_date(row[2]),
+            "create_date": self._format_date(row[3]),
+            "create_time": self._format_time(row[4]),
+            "card_code": row[5] or "",
+            "card_name": row[6] or "",
+            "doc_total": float(row[7] or 0),
+            "branch_id": int(row[8]) if row[8] is not None else None,
+            "branch_name": row[9] or "",
+            "ship_to_code": row[10] or "",
+            "ship_to_address": row[11] or "",
+            "state": row[12] or "",
+            "city": row[13] or "",
+            "bp_gstin": row[14] or "",
+            "sap_dispatch_date": self._format_date(row[15]),
+            "sap_bilty_no": row[16] or "",
+            "sap_bilty_date": self._format_date(row[17]),
+            "sap_transporter_name": row[18] or "",
+            "sap_vehicle_no": row[19] or "",
+            "sap_transporter_invoice": row[20] or "",
+            "sap_lr_number": row[21] or "",
+            "gst_vehicle_no": row[22] or "",
+            "gst_transport_date": self._format_date(row[23]),
+            "gst_transport_reason": row[24] or "",
+            "line_count": int(row[25] or 0),
+            "total_quantity": float(row[26] or 0),
+            "total_litres": float(row[27] or 0),
+            "total_boxes": float(row[28] or 0),
+            "total_weight": float(row[29] or 0),
+            "total_line_amount": float(row[30] or 0),
+            "total_gross_amount": float(row[31] or 0),
+            "warehouses": row[32] or "",
+            "item_summary": row[33] or "",
+            "base_refs": row[34] or "",
+        }
+
+    def _execute(self, query: str, params: List[Any]) -> List:
+        conn = None
+        cursor = None
+        try:
+            conn = self.connection.connect()
+        except dbapi.Error as e:
+            logger.error("SAP HANA connection failed for dispatch plans: %s", e)
+            raise SAPConnectionError(
+                "Unable to connect to SAP HANA. Please try again later."
+            ) from e
+
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return cursor.fetchall()
+        except dbapi.ProgrammingError as e:
+            logger.error("SAP HANA dispatch plans query error: %s", e)
+            raise SAPDataError(
+                "Failed to retrieve dispatch bills from SAP. Invalid query."
+            ) from e
+        except dbapi.Error as e:
+            logger.error("SAP HANA dispatch plans data error: %s", e)
+            raise SAPDataError(
+                "Failed to retrieve dispatch bills from SAP. Please try again."
+            ) from e
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    @staticmethod
+    def _format_date(value):
+        if not value:
+            return None
+        if hasattr(value, "strftime"):
+            return value.strftime("%Y-%m-%d")
+        text = str(value).strip()
+        return text or None
+
+    @staticmethod
+    def _format_time(value) -> str:
+        if value in (None, ""):
+            return ""
+        try:
+            value_int = int(value)
+        except (TypeError, ValueError):
+            return str(value)
+
+        hours = value_int // 100
+        minutes = value_int % 100
+        return f"{hours:02d}:{minutes:02d}"
