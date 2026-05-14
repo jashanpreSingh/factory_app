@@ -57,6 +57,23 @@ class DispatchPlansService:
             "meta": self._build_meta(data),
         }
 
+    def get_bill_by_number(self, invoice_number: str) -> Dict[str, Any] | None:
+        bill = self.reader.get_bill_by_number(invoice_number.strip())
+        if not bill:
+            return None
+
+        plan = DispatchPlan.objects.filter(
+            company=self.company,
+            sap_invoice_doc_entry=bill["doc_entry"],
+            is_active=True,
+        ).first()
+        bill["plan"] = (
+            DispatchPlanSerializer(plan).data
+            if plan
+            else self._empty_plan(bill["doc_entry"], bill["doc_num"])
+        )
+        return bill
+
     def update_plan(
         self,
         sap_invoice_doc_entry: int,

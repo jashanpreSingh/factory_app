@@ -8,8 +8,9 @@ from rest_framework.views import APIView
 from company.permissions import HasCompanyContext
 from sap_client.exceptions import SAPConnectionError, SAPDataError
 
-from .permissions import CanEditDispatchPlans, CanViewDispatchPlans
+from .permissions import CanEditDispatchPlans, CanLookupDispatchBill, CanViewDispatchPlans
 from .serializers import (
+    DispatchBillDetailSerializer,
     DispatchBillFilterSerializer,
     DispatchBillListResponseSerializer,
     DispatchPlanSerializer,
@@ -50,6 +51,41 @@ class DispatchBillListAPI(APIView):
             )
 
         return Response(DispatchBillListResponseSerializer(result).data)
+
+
+class DispatchBillByNumberAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanLookupDispatchBill]
+
+    def get(self, request, invoice_number: str):
+        invoice_number = (invoice_number or "").strip()
+        if not invoice_number:
+            return Response(
+                {"detail": "Invoice number is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = DispatchPlansService(company_code=request.company.company.code)
+
+        try:
+            bill = service.get_bill_by_number(invoice_number)
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError as e:
+            return Response(
+                {"detail": f"SAP data error: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not bill:
+            return Response(
+                {"detail": f"SAP invoice {invoice_number} was not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(DispatchBillDetailSerializer(bill).data)
 
 
 class DispatchPlanUpdateAPI(APIView):

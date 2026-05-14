@@ -157,6 +157,29 @@ class DispatchBillSerializer(serializers.Serializer):
     plan = DispatchPlanSerializer(allow_null=True)
 
 
+class DispatchBillLineSerializer(serializers.Serializer):
+    line_num = serializers.IntegerField()
+    item_code = serializers.CharField(allow_blank=True)
+    item_name = serializers.CharField(allow_blank=True)
+    quantity = serializers.FloatField()
+    uom = serializers.CharField(allow_blank=True)
+    rate = serializers.FloatField()
+    line_total = serializers.FloatField()
+    gross_total = serializers.FloatField()
+    warehouse_code = serializers.CharField(allow_blank=True)
+    base_ref = serializers.CharField(allow_blank=True)
+    base_entry = serializers.IntegerField(allow_null=True)
+    base_type = serializers.IntegerField(allow_null=True)
+    tax_code = serializers.CharField(allow_blank=True)
+    total_litres = serializers.FloatField()
+    total_boxes = serializers.FloatField()
+    total_weight = serializers.FloatField()
+
+
+class DispatchBillDetailSerializer(DispatchBillSerializer):
+    items = DispatchBillLineSerializer(many=True)
+
+
 class DispatchPlansMetaSerializer(serializers.Serializer):
     total_bills = serializers.IntegerField()
     pending_count = serializers.IntegerField()

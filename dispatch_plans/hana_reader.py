@@ -21,6 +21,76 @@ class HanaDispatchBillReader:
         rows = self._execute(query, params)
         return [self._map_bill_row(row) for row in rows]
 
+    def get_bill_by_number(self, invoice_number: str) -> Dict[str, Any] | None:
+        rows = self.list_bills({"invoice_doc_num": invoice_number, "limit": 1})
+        if not rows:
+            return None
+
+        bill = rows[0]
+        bill["items"] = self.list_bill_lines(bill["doc_entry"])
+        return bill
+
+    def list_bill_lines(self, doc_entry: int) -> List[Dict[str, Any]]:
+        schema = self.connection.schema
+        line_columns = self._table_columns("INV1")
+        item_columns = self._table_columns("OITM")
+
+        item_code = self._optional_line_string(line_columns, "ItemCode", "item_code")
+        item_name = self._optional_line_string(line_columns, "Dscription", "item_name")
+        quantity = self._optional_line_number(line_columns, "Quantity", "quantity")
+        uom = self._optional_line_uom(line_columns)
+        rate = self._optional_line_number(line_columns, "Price", "rate")
+        line_total = self._optional_line_number(line_columns, "LineTotal", "line_total")
+        gross_total = self._optional_line_number(line_columns, "GTotal", "gross_total")
+        warehouse_code = self._optional_line_string(line_columns, "WhsCode", "warehouse_code")
+        base_ref = self._optional_line_string(line_columns, "BaseRef", "base_ref")
+        base_entry = self._optional_line_raw(line_columns, "BaseEntry", "base_entry")
+        base_type = self._optional_line_raw(line_columns, "BaseType", "base_type")
+        tax_code = self._optional_line_string(line_columns, "TaxCode", "tax_code")
+        weight1_expr = self._line_number_expr(line_columns, "Weight1")
+        weight2_expr = self._line_number_expr(line_columns, "Weight2")
+        litre_expr = self._optional_item_number(item_columns, "U_UNE_TOTL")
+        box_expr = self._optional_item_number(item_columns, "U_UNE_TOTB")
+        gross_weight_expr = self._optional_item_number(item_columns, "U_Gross_Weight")
+
+        query = f"""
+            SELECT
+                L."LineNum" AS line_num,
+                {item_code},
+                {item_name},
+                {quantity},
+                {uom},
+                {rate},
+                {line_total},
+                {gross_total},
+                {warehouse_code},
+                {base_ref},
+                {base_entry},
+                {base_type},
+                {tax_code},
+                CASE
+                    WHEN {litre_expr} > 0 THEN IFNULL(L."Quantity", 0) * {litre_expr}
+                    ELSE 0
+                END AS total_litres,
+                CASE
+                    WHEN {box_expr} > 0 THEN IFNULL(L."Quantity", 0) * {box_expr}
+                    ELSE 0
+                END AS total_boxes,
+                CASE
+                    WHEN {weight1_expr} > 0 THEN {weight1_expr}
+                    WHEN {weight2_expr} > 0 THEN {weight2_expr}
+                    WHEN {gross_weight_expr} > 0 THEN IFNULL(L."Quantity", 0) * {gross_weight_expr}
+                    ELSE 0
+                END AS total_weight
+            FROM "{schema}"."INV1" L
+            LEFT JOIN "{schema}"."OITM" I
+                ON I."ItemCode" = L."ItemCode"
+            WHERE L."DocEntry" = ?
+            ORDER BY L."LineNum"
+        """
+        rows = self._execute(query, [doc_entry])
+        return [self._map_bill_line_row(row) for row in rows]
+
     def _build_bills_query(self, filters: Dict[str, Any]):
         schema = self.connection.schema
         header_columns = self._table_columns("OINV")
@@ -55,10 +125,15 @@ class HanaDispatchBillReader:
         where_clauses = ['H."CANCELED" = \'N\'']
         params: List[Any] = []
 
-        where_clauses.append('H."CreateDate" >= ?')
-        params.append(filters["date_from"])
-        where_clauses.append('H."CreateDate" <= ?')
-        params.append(filters["date_to"])
+        invoice_doc_num = (filters.get("invoice_doc_num") or "").strip()
+        if invoice_doc_num:
+            where_clauses.append('TO_NVARCHAR(H."DocNum") = ?')
+            params.append(invoice_doc_num)
+        else:
+            where_clauses.append('H."CreateDate" >= ?')
+            params.append(filters["date_from"])
+            where_clauses.append('H."CreateDate" <= ?')
+            params.append(filters["date_to"])
 
         branch = (filters.get("branch") or "").strip()
         if branch:
@@ -193,6 +268,38 @@ class HanaDispatchBillReader:
             return "0"
         return f'IFNULL(I."{column}", 0)'
 
+    @staticmethod
+    def _optional_line_string(columns: Set[str], column: str, alias: str) -> str:
+        if column not in columns:
+            return f"'' AS {alias}"
+        return f'IFNULL(TO_NVARCHAR(L."{column}"), \'\') AS {alias}'
+
+    @staticmethod
+    def _optional_line_number(columns: Set[str], column: str, alias: str) -> str:
+        if column not in columns:
+            return f"0 AS {alias}"
+        return f'IFNULL(L."{column}", 0) AS {alias}'
+
+    @staticmethod
+    def _optional_line_raw(columns: Set[str], column: str, alias: str) -> str:
+        if column not in columns:
+            return f"NULL AS {alias}"
+        return f'L."{column}" AS {alias}'
+
+    @staticmethod
+    def _line_number_expr(columns: Set[str], column: str) -> str:
+        if column not in columns:
+            return "0"
+        return f'IFNULL(L."{column}", 0)'
+
+    @staticmethod
+    def _optional_line_uom(columns: Set[str]) -> str:
+        if "unitMsr" in columns:
+            return 'IFNULL(TO_NVARCHAR(L."unitMsr"), \'\') AS uom'
+        if "UomCode" in columns:
+            return 'IFNULL(TO_NVARCHAR(L."UomCode"), \'\') AS uom'
+        return "'' AS uom"
+
     def _map_bill_row(self, row: Sequence[Any]) -> Dict[str, Any]:
         return {
             "doc_entry": int(row[0]),
@@ -230,6 +337,27 @@ class HanaDispatchBillReader:
             "warehouses": row[32] or "",
             "item_summary": row[33] or "",
             "base_refs": row[34] or "",
+        }
+
+    @staticmethod
+    def _map_bill_line_row(row: Sequence[Any]) -> Dict[str, Any]:
+        return {
+            "line_num": int(row[0] or 0),
+            "item_code": row[1] or "",
+            "item_name": row[2] or "",
+            "quantity": float(row[3] or 0),
+            "uom": row[4] or "",
+            "rate": float(row[5] or 0),
+            "line_total": float(row[6] or 0),
+            "gross_total": float(row[7] or 0),
+            "warehouse_code": row[8] or "",
+            "base_ref": row[9] or "",
+            "base_entry": int(row[10]) if row[10] is not None else None,
+            "base_type": int(row[11]) if row[11] is not None else None,
+            "tax_code": row[12] or "",
+            "total_litres": float(row[13] or 0),
+            "total_boxes": float(row[14] or 0),
+            "total_weight": float(row[15] or 0),
         }
 
     def _execute(self, query: str, params: List[Any]) -> List:
