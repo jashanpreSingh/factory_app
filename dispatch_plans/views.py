@@ -9,7 +9,11 @@ from rest_framework.views import APIView
 from company.permissions import HasCompanyContext
 from sap_client.exceptions import SAPConnectionError, SAPDataError
 
-from .permissions import CanEditDispatchPlans, CanLookupDispatchBill, CanViewDispatchPlans
+from .permissions import (
+    CanEditDispatchPlansOrLinkDispatchVehicle,
+    CanLookupDispatchBill,
+    CanViewDispatchPlansOrLinkDispatchVehicle,
+)
 from .serializers import (
     DispatchBillDetailSerializer,
     DispatchBillFilterSerializer,
@@ -23,7 +27,11 @@ logger = logging.getLogger(__name__)
 
 
 class DispatchBillListAPI(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewDispatchPlans]
+    permission_classes = [
+        IsAuthenticated,
+        HasCompanyContext,
+        CanViewDispatchPlansOrLinkDispatchVehicle,
+    ]
 
     def get(self, request):
         filter_serializer = DispatchBillFilterSerializer(data=request.query_params)
@@ -94,8 +102,7 @@ class DispatchPlanUpdateAPI(APIView):
     permission_classes = [
         IsAuthenticated,
         HasCompanyContext,
-        CanViewDispatchPlans,
-        CanEditDispatchPlans,
+        CanEditDispatchPlansOrLinkDispatchVehicle,
     ]
 
     def patch(self, request, sap_invoice_doc_entry: int):

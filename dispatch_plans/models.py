@@ -106,6 +106,7 @@ class DispatchPlan(BaseModel):
         permissions = [
             ("can_view_dispatch_plans", "Can view Dispatch Plans dashboard"),
             ("can_edit_dispatch_plans", "Can edit Dispatch Plans bookings"),
+            ("can_link_dispatch_vehicle", "Can link dispatch vehicles"),
         ]
 
     def __str__(self):
