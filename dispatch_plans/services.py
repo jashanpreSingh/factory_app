@@ -81,6 +81,7 @@ class DispatchPlansService:
         user,
     ) -> DispatchPlan:
         doc_num = data.pop("sap_invoice_doc_num", "")
+        bilty_attachment = data.get("bilty_attachment")
         self._validate_links(data)
         self._apply_master_data(data)
         plan, created = DispatchPlan.objects.get_or_create(
@@ -101,6 +102,16 @@ class DispatchPlansService:
 
         if created and not plan.booking_status:
             plan.booking_status = DispatchPlanStatus.PENDING
+
+        if bilty_attachment:
+            plan.bilty_attachment_name = getattr(
+                bilty_attachment,
+                "name",
+                plan.bilty_attachment_name,
+            )
+
+        if plan.booking_status == DispatchPlanStatus.BOOKED and not plan.bilty_no.strip():
+            raise ValueError("Bilty number is required before booking the dispatch vehicle.")
 
         plan.updated_by = user
         plan.save()

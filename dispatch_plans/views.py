@@ -1,6 +1,7 @@
 import logging
 
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -89,6 +90,7 @@ class DispatchBillByNumberAPI(APIView):
 
 
 class DispatchPlanUpdateAPI(APIView):
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     permission_classes = [
         IsAuthenticated,
         HasCompanyContext,

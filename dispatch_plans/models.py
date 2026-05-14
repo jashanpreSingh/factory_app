@@ -71,6 +71,12 @@ class DispatchPlan(BaseModel):
 
     bilty_no = models.CharField(max_length=50, blank=True, default="")
     bilty_date = models.DateField(null=True, blank=True)
+    bilty_attachment = models.FileField(
+        upload_to="dispatch_plan_bilty/",
+        null=True,
+        blank=True,
+    )
+    bilty_attachment_name = models.CharField(max_length=255, blank=True, default="")
 
     freight = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     total_freight = models.DecimalField(

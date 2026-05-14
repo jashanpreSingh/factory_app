@@ -54,6 +54,8 @@ class DispatchPlanSerializer(serializers.ModelSerializer):
             "driver_id_proof_number",
             "bilty_no",
             "bilty_date",
+            "bilty_attachment",
+            "bilty_attachment_name",
             "freight",
             "total_freight",
             "kanta_weight",
@@ -106,6 +108,7 @@ class DispatchPlanUpdateSerializer(serializers.Serializer):
     bilty_date = serializers.DateField(
         required=False, allow_null=True, input_formats=["%Y-%m-%d"]
     )
+    bilty_attachment = serializers.FileField(required=False, allow_null=True)
     freight = serializers.DecimalField(
         required=False, allow_null=True, max_digits=18, decimal_places=2
     )
