@@ -27,6 +27,9 @@ class POSerializer(serializers.Serializer):
     supplier_code = serializers.CharField()
     supplier_name = serializers.CharField()
     doc_entry = serializers.IntegerField()
+    branch_id = serializers.IntegerField(required=False, allow_null=True)
+    vendor_ref = serializers.CharField(required=False, allow_blank=True)
+    doc_date = serializers.DateField(required=False, allow_null=True)
     items = POItemSerializer(many=True)
 
 

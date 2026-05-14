@@ -116,6 +116,77 @@ class HanaPOReader:
                 except Exception:
                     pass
 
+    def get_open_po_by_number(self, po_number: str) -> Optional[PODTO]:
+        conn = None
+        cursor = None
+
+        try:
+            conn = self.connection.connect()
+        except dbapi.Error as e:
+            logger.error(f"SAP HANA connection failed: {e}")
+            raise SAPConnectionError(
+                "Unable to connect to SAP HANA. Please try again later."
+            ) from e
+
+        try:
+            cursor = conn.cursor()
+            schema = self.connection.schema
+
+            base_columns = f"""
+                    T0."DocNum"        AS po_number,
+                    T0."CardCode"      AS supplier_code,
+                    T0."CardName"      AS supplier_name,
+                    T1."ItemCode"      AS po_item_code,
+                    T1."Dscription"    AS item_name,
+                    T1."Quantity"      AS ordered_qty,
+                    (T1."Quantity" - T1."OpenQty") AS received_qty,
+                    T1."OpenQty"       AS remaining_qty,
+                    T1."unitMsr"       AS uom,
+                    T1."Price"         AS rate,
+                    T0."DocEntry"      AS doc_entry,
+                    T1."LineNum"       AS line_num,
+                    IFNULL(T1."TaxCode", '')   AS tax_code,
+                    IFNULL(T1."WhsCode", '')   AS warehouse_code,
+                    IFNULL(T1."AcctCode", '')  AS account_code,
+                    T0."BPLId"         AS branch_id,
+                    IFNULL(T0."NumAtCard", '') AS vendor_ref,
+                    T0."DocDate"       AS po_date"""
+
+            query = f"""
+                SELECT {base_columns}, IFNULL(T1."OcrCode", '') AS variety
+                FROM "{schema}"."OPOR" T0
+                JOIN "{schema}"."POR1" T1 ON T0."DocEntry" = T1."DocEntry"
+                WHERE TO_NVARCHAR(T0."DocNum") = ?
+                  AND T1."OpenQty" > 0
+            """
+            cursor.execute(query, po_number)
+
+            rows = cursor.fetchall()
+            po_list = self._transform_to_dtos(rows)
+            return po_list[0] if po_list else None
+
+        except dbapi.ProgrammingError as e:
+            logger.error(f"SAP HANA query error for PO {po_number}: {e}")
+            raise SAPDataError(
+                "Failed to retrieve PO data from SAP. Invalid query or parameters."
+            ) from e
+        except dbapi.Error as e:
+            logger.error(f"SAP HANA data error for PO {po_number}: {e}")
+            raise SAPDataError(
+                "Failed to retrieve PO data from SAP. Please try again later."
+            ) from e
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
     def _transform_to_dtos(self, rows) -> List[PODTO]:
         """Group rows by PO and create PODTO objects with nested POItemDTO objects"""
         po_dict = {}
@@ -131,7 +202,7 @@ class HanaPOReader:
             account_code = row[14] or ""
             branch_id = int(row[15]) if row[15] is not None else None
             vendor_ref = row[16] or ""
-            doc_date = row[17]
+            doc_date = row[17].date() if hasattr(row[17], "date") else row[17]
             variety = row[18] or ""
 
             item = POItemDTO(
