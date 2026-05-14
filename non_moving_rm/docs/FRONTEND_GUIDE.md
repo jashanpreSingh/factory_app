@@ -66,7 +66,9 @@ Company-Code: JIVO_OIL
 | Parameter    | Type | Required | Description                                      | Example |
 |-------------|------|----------|--------------------------------------------------|---------|
 | `age`       | int  | Yes      | Minimum days since last movement                 | 45      |
-| `item_group`| int  | Yes      | Item group code (from item-groups dropdown)       | 105     |
+| `item_group`| int  | No       | Item group code; omit or pass `0` for all groups  | 105     |
+
+The age filter is inclusive: `age=365` means return items whose `days_since_last_movement` is 365 or higher. A 365-day result should therefore be a subset of a 45-day result for the same item group.
 
 **Headers:**
 ```
@@ -84,7 +86,6 @@ Company-Code: JIVO_OIL
       "item_name": "LABEL 1 KG GOLD FULL",
       "item_group_name": "PACKAGING MATERIAL",
       "quantity": 26116.0,
-      "litres": 22186.0,
       "sub_group": "LABEL",
       "value": 24203.0,
       "last_movement_date": "2020-03-19 12:00:00",
@@ -136,8 +137,7 @@ Company-Code: JIVO_OIL
 {
   "detail": "Invalid query parameters.",
   "errors": {
-    "age": ["This field is required."],
-    "item_group": ["This field is required."]
+    "age": ["This field is required."]
   }
 }
 ```
@@ -175,7 +175,6 @@ Display `data` array in a sortable, filterable table with columns:
 | Item Name            | `item_name`              |                          |
 | Group                | `item_group_name`        |                          |
 | Quantity             | `quantity`               | Format with commas       |
-| Litres               | `litres`                 | Format with commas       |
 | Sub Group            | `sub_group`              |                          |
 | Value (₹)            | `value`                  | Currency format          |
 | Last Movement        | `last_movement_date`     | Format as DD/MM/YYYY     |
@@ -315,7 +314,9 @@ function NonMovingRMDashboard() {
 ## Notes
 
 - The `age` parameter is the minimum number of days since the item's last stock movement.
+- The HANA query is scoped to the selected `Company-Code`, then the service re-applies `days_since_last_movement >= age`; a 365-day result should be a subset of a 45-day result for the same material group.
+- Items with no movement history are aged from the SAP item `CreateDate`.
 - The `item_group` parameter corresponds to `ItmsGrpCod` in SAP B1's OITB table.
-- `consumption_ratio` is calculated by the stored procedure — it indicates the consumption pattern of the item.
+- `consumption_ratio` is calculated from recent `OINM` consumption in the selected company schema.
 - `value` is the total inventory value of the non-moving item.
 - All dates are returned in `YYYY-MM-DD HH:MM:SS` format from the report.

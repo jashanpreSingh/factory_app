@@ -1,11 +1,13 @@
 from unittest.mock import patch, MagicMock
+from datetime import date
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
 from company.models import Company, UserCompany, UserRole
-from .serializers import GRPORequestSerializer, GRPOLineRequestSerializer
+from .dtos import PODTO, POItemDTO
+from .serializers import GRPORequestSerializer, GRPOLineRequestSerializer, POSerializer
 from .service_layer.grpo_writer import GRPOWriter
 from .exceptions import SAPConnectionError, SAPValidationError, SAPDataError
 
@@ -83,6 +85,42 @@ class GRPOSerializerTests(TestCase):
         serializer = GRPORequestSerializer(data=data)
         self.assertTrue(serializer.is_valid())
         self.assertEqual(len(serializer.validated_data["DocumentLines"]), 2)
+
+
+class POSerializerTests(TestCase):
+    """Tests for PO serializers"""
+
+    def test_po_serializer_includes_lookup_summary_fields(self):
+        po = PODTO(
+            po_number="4500001234",
+            supplier_code="SUP001",
+            supplier_name="Test Supplier",
+            doc_entry=1001,
+            branch_id=1,
+            vendor_ref="INV-001",
+            doc_date=date(2026, 5, 14),
+            items=[
+                POItemDTO(
+                    po_item_code="ITEM001",
+                    item_name="Groundnut Oil",
+                    ordered_qty=100,
+                    received_qty=25,
+                    remaining_qty=75,
+                    uom="KG",
+                    rate=10,
+                    line_num=0,
+                )
+            ],
+        )
+
+        data = POSerializer(po).data
+
+        self.assertEqual(data["po_number"], "4500001234")
+        self.assertEqual(data["supplier_code"], "SUP001")
+        self.assertEqual(data["doc_entry"], 1001)
+        self.assertEqual(data["vendor_ref"], "INV-001")
+        self.assertEqual(data["doc_date"], "2026-05-14")
+        self.assertEqual(len(data["items"]), 1)
 
 
 class GRPOWriterTests(TestCase):
@@ -317,3 +355,56 @@ class GRPOAPITests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("sap_client.views.SAPClient")
+    def test_open_po_lookup_by_number_success(self, mock_client_class):
+        """Test exact PO lookup endpoint"""
+        mock_client = MagicMock()
+        mock_client.get_open_po_by_number.return_value = PODTO(
+            po_number="4500001234",
+            supplier_code="SUP001",
+            supplier_name="Test Supplier",
+            doc_entry=1001,
+            branch_id=1,
+            vendor_ref="INV-001",
+            doc_date=date(2026, 5, 14),
+            items=[
+                POItemDTO(
+                    po_item_code="ITEM001",
+                    item_name="Groundnut Oil",
+                    ordered_qty=100,
+                    received_qty=25,
+                    remaining_qty=75,
+                    uom="KG",
+                    rate=10,
+                    line_num=0,
+                )
+            ],
+        )
+        mock_client_class.return_value = mock_client
+
+        response = self.client.get(
+            "/api/v1/po/open-pos/4500001234/items/",
+            HTTP_COMPANY_CODE="JIVO_OIL"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["po_number"], "4500001234")
+        self.assertEqual(response.data["supplier_name"], "Test Supplier")
+        self.assertEqual(str(response.data["items"][0]["remaining_qty"]), "75.000")
+        mock_client.get_open_po_by_number.assert_called_once_with("4500001234")
+
+    @patch("sap_client.views.SAPClient")
+    def test_open_po_lookup_by_number_not_found(self, mock_client_class):
+        """Test exact PO lookup endpoint when no open PO exists"""
+        mock_client = MagicMock()
+        mock_client.get_open_po_by_number.return_value = None
+        mock_client_class.return_value = mock_client
+
+        response = self.client.get(
+            "/api/v1/po/open-pos/4500009999/items/",
+            HTTP_COMPANY_CODE="JIVO_OIL"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["detail"], "Open PO not found")

@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    AllGRPOEntriesListAPI,
     PendingGRPOListAPI,
     GRPOPreviewAPI,
     PostGRPOAPI,
@@ -8,9 +9,18 @@ from .views import (
     GRPOAttachmentListCreateAPI,
     GRPOAttachmentDeleteAPI,
     GRPOAttachmentRetryAPI,
+    PendingServiceGRPOListAPI,
+    ServiceGRPOOptionsAPI,
+    ServiceGRPOPreviewAPI,
+    PostServiceGRPOAPI,
+    ServiceGRPOPostingHistoryAPI,
+    ServiceGRPOPostingDetailAPI,
 )
 
 urlpatterns = [
+    # List all RAW_MATERIAL gate entries (including in-flight ones)
+    path("all-entries/", AllGRPOEntriesListAPI.as_view(), name="grpo-all-entries"),
+
     # List pending GRPO entries
     path("pending/", PendingGRPOListAPI.as_view(), name="grpo-pending"),
 
@@ -22,6 +32,38 @@ urlpatterns = [
 
     # GRPO posting history
     path("history/", GRPOPostingHistoryAPI.as_view(), name="grpo-history"),
+
+    # Service GRPO endpoints for transport bookings
+    path(
+        "service/pending/",
+        PendingServiceGRPOListAPI.as_view(),
+        name="service-grpo-pending",
+    ),
+    path(
+        "service/options/",
+        ServiceGRPOOptionsAPI.as_view(),
+        name="service-grpo-options",
+    ),
+    path(
+        "service/preview/<int:dispatch_plan_id>/",
+        ServiceGRPOPreviewAPI.as_view(),
+        name="service-grpo-preview",
+    ),
+    path(
+        "service/post/",
+        PostServiceGRPOAPI.as_view(),
+        name="service-grpo-post",
+    ),
+    path(
+        "service/history/",
+        ServiceGRPOPostingHistoryAPI.as_view(),
+        name="service-grpo-history",
+    ),
+    path(
+        "service/<int:posting_id>/",
+        ServiceGRPOPostingDetailAPI.as_view(),
+        name="service-grpo-detail",
+    ),
 
     # GRPO attachment endpoints
     path(

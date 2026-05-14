@@ -257,6 +257,8 @@ class ProductionExecutionService:
             rated_speed=data.get('rated_speed'),
             labour_count=data.get('labour_count', 0),
             other_manpower_count=data.get('other_manpower_count', 0),
+            electricity_cost_per_unit=data.get('electricity_cost_per_unit'),
+            labour_cost_per_hour=data.get('labour_cost_per_hour'),
             supervisor=data.get('supervisor', ''),
             operators=data.get('operators', ''),
             status=RunStatus.DRAFT,
@@ -279,8 +281,48 @@ class ProductionExecutionService:
             except Exception as e:
                 logger.warning(f"Could not auto-fetch BOM for run {run.id}: {e}")
 
+        self._sync_run_labour_entry(run, user=user)
+        from .cost_calculator import recalculate_run_cost
+        recalculate_run_cost(run)
+
         logger.info(f"Production run created: ID={run.id}, Run#{run_number}")
         return run
+
+    def _sync_run_labour_entry(self, run: ProductionRun, user=None):
+        from decimal import Decimal
+        from ..models import ResourceLabour
+
+        default_description = 'Production labour'
+        worker_count = int(run.labour_count or 0)
+        entry = run.labour_entries.filter(description=default_description).first()
+
+        if worker_count <= 0:
+            if entry:
+                entry.delete()
+            return None
+
+        rate_per_hour = run.labour_cost_per_hour
+        if rate_per_hour is None:
+            rate_per_hour = Decimal('0.0000')
+
+        defaults = {
+            'worker_count': worker_count,
+            'hours_worked': Decimal('1.00'),
+            'rate_per_hour': rate_per_hour,
+        }
+
+        if entry:
+            for field, value in defaults.items():
+                setattr(entry, field, value)
+            entry.save()
+            return entry
+
+        return ResourceLabour.objects.create(
+            production_run=run,
+            description=default_description,
+            created_by=user,
+            **defaults,
+        )
 
     def auto_populate_materials_from_bom(self, run: ProductionRun) -> list:
         """
@@ -322,12 +364,13 @@ class ProductionExecutionService:
     def get_run(self, run_id: int) -> ProductionRun:
         return self._get_run_or_raise(run_id)
 
-    def update_run(self, run_id: int, data: dict) -> ProductionRun:
+    def update_run(self, run_id: int, data: dict, user=None) -> ProductionRun:
         run = self._get_run_or_raise(run_id)
         if run.status == RunStatus.COMPLETED:
             raise ValueError("Cannot edit a COMPLETED run.")
 
         for field in ['product', 'rated_speed', 'labour_count', 'other_manpower_count',
+                      'electricity_cost_per_unit', 'labour_cost_per_hour',
                       'supervisor', 'operators']:
             if field in data:
                 setattr(run, field, data[field])
@@ -337,6 +380,10 @@ class ProductionExecutionService:
             run.machines.set(machines)
 
         run.save()
+        if 'labour_count' in data or 'labour_cost_per_hour' in data:
+            self._sync_run_labour_entry(run, user=user)
+            from .cost_calculator import recalculate_run_cost
+            recalculate_run_cost(run)
         return run
 
     def delete_run(self, run_id: int):
@@ -356,11 +403,18 @@ class ProductionExecutionService:
         if run.status == RunStatus.COMPLETED:
             raise ValueError("Cannot start a COMPLETED run.")
 
-        # Warehouse approval gate — only allow start if approved
+        # Warehouse approval gate — only allow start after warehouse has approved BOM materials.
+        if run.warehouse_approval_status == 'NOT_REQUESTED':
+            raise ValueError("Cannot start production — submit the BOM request to warehouse first.")
         if run.warehouse_approval_status == 'PENDING':
             raise ValueError("Cannot start production — BOM request is pending warehouse approval.")
         if run.warehouse_approval_status == 'REJECTED':
             raise ValueError("Cannot start production — BOM request was rejected by warehouse.")
+
+        # Line clearance gate — only allow start if QA has cleared
+        has_cleared = run.line_clearances.filter(status=ClearanceStatus.CLEARED).exists()
+        if not has_cleared:
+            raise ValueError("Cannot start production — line clearance has not been approved by QA.")
 
         if run.segments.filter(is_active=True).exists():
             raise ValueError("Production is already running.")
@@ -423,8 +477,10 @@ class ProductionExecutionService:
             active_segment.is_active = False
             active_segment.save()
 
-        # Validate machine and category
-        machine = self._get_machine_or_raise(data['machine_id'])
+        # Machine tracking is optional; breakdowns can be logged by category alone.
+        machine = None
+        if data.get('machine_id'):
+            machine = self._get_machine_or_raise(data['machine_id'])
         category = self._get_breakdown_category_or_raise(data['breakdown_category_id'])
 
         breakdown = MachineBreakdown.objects.create(
@@ -669,7 +725,10 @@ class ProductionExecutionService:
             raise ValueError(f"Breakdown {breakdown_id} not found.")
 
         if 'machine_id' in data:
-            breakdown.machine = self._get_machine_or_raise(data['machine_id'])
+            breakdown.machine = (
+                self._get_machine_or_raise(data['machine_id'])
+                if data['machine_id'] else None
+            )
         if 'breakdown_category_id' in data:
             breakdown.breakdown_category = self._get_breakdown_category_or_raise(
                 data['breakdown_category_id']
@@ -923,41 +982,26 @@ class ProductionExecutionService:
         if clearance.status != ClearanceStatus.DRAFT:
             raise ValueError("Only DRAFT clearances can be edited.")
 
-        if 'items' in data:
-            for item_data in data['items']:
-                try:
-                    item = LineClearanceItem.objects.get(
-                        id=item_data['id'], clearance=clearance
-                    )
-                    item.result = item_data['result']
-                    item.remarks = item_data.get('remarks', '')
-                    item.save()
-                except LineClearanceItem.DoesNotExist:
-                    pass
-
+        if 'all_checks_passed' in data:
+            clearance.all_checks_passed = data['all_checks_passed']
         if 'production_supervisor_sign' in data:
             clearance.production_supervisor_sign = data['production_supervisor_sign']
-        if 'production_incharge_sign' in data:
-            clearance.production_incharge_sign = data['production_incharge_sign']
 
         clearance.save()
         return clearance
 
+    @transaction.atomic
     def submit_clearance(self, clearance_id: int) -> LineClearance:
         clearance = self.get_clearance(clearance_id)
         if clearance.status != ClearanceStatus.DRAFT:
             raise ValueError("Only DRAFT clearances can be submitted.")
 
-        items = clearance.items.all()
-        for item in items:
-            if item.result == ClearanceResult.NA:
-                raise ValueError(
-                    f"All checklist items must have a result. "
-                    f"Item '{item.checkpoint}' is still N/A."
-                )
+        if not clearance.production_supervisor_sign:
+            raise ValueError("Supervisor name is required before submitting.")
 
-        if not clearance.production_supervisor_sign and not clearance.production_incharge_sign:
-            raise ValueError("At least one signature (supervisor or incharge) is required.")
+        # Bulk-set all checklist items based on the single toggle
+        result = ClearanceResult.YES if clearance.all_checks_passed else ClearanceResult.NO
+        clearance.items.update(result=result)
 
         clearance.status = ClearanceStatus.SUBMITTED
         clearance.save(update_fields=['status', 'updated_at'])
@@ -1076,15 +1120,24 @@ class ProductionExecutionService:
         return qs
 
     def create_waste_log(self, data: dict) -> WasteLog:
+        return self.create_waste_logs(data)[0]
+
+    @transaction.atomic
+    def create_waste_logs(self, data: dict) -> list[WasteLog]:
         run = self._get_run_or_raise(data['production_run_id'])
-        return WasteLog.objects.create(
-            production_run=run,
-            material_code=data.get('material_code', ''),
-            material_name=data['material_name'],
-            wastage_qty=data['wastage_qty'],
-            uom=data.get('uom', ''),
-            reason=data.get('reason', ''),
-        )
+        items = data.get('items') or [data]
+
+        saved = []
+        for item in items:
+            saved.append(WasteLog.objects.create(
+                production_run=run,
+                material_code=item.get('material_code', ''),
+                material_name=item['material_name'],
+                wastage_qty=item['wastage_qty'],
+                uom=item.get('uom', ''),
+                reason=item.get('reason') or data.get('reason', ''),
+            ))
+        return saved
 
     def get_waste_log(self, waste_id: int) -> WasteLog:
         try:
@@ -1096,36 +1149,17 @@ class ProductionExecutionService:
         except WasteLog.DoesNotExist:
             raise ValueError(f"Waste log {waste_id} not found.")
 
-    def approve_waste(self, waste_id: int, level: str, user, sign: str) -> WasteLog:
+    def approve_waste(self, waste_id: int, user, sign: str) -> WasteLog:
         waste = self.get_waste_log(waste_id)
         now = timezone.now()
 
-        if level == 'engineer':
-            waste.engineer_sign = sign
-            waste.engineer_signed_by = user
-            waste.engineer_signed_at = now
-            waste.wastage_approval_status = WasteApprovalStatus.PARTIALLY_APPROVED
-        elif level == 'am':
-            if not waste.engineer_signed_at:
-                raise ValueError("Engineer must sign before AM.")
-            waste.am_sign = sign
-            waste.am_signed_by = user
-            waste.am_signed_at = now
-        elif level == 'store':
-            if not waste.am_signed_at:
-                raise ValueError("AM must sign before Store.")
-            waste.store_sign = sign
-            waste.store_signed_by = user
-            waste.store_signed_at = now
-        elif level == 'hod':
-            if not waste.store_signed_at:
-                raise ValueError("Store must sign before HOD.")
-            waste.hod_sign = sign
-            waste.hod_signed_by = user
-            waste.hod_signed_at = now
-            waste.wastage_approval_status = WasteApprovalStatus.FULLY_APPROVED
-        else:
-            raise ValueError(f"Invalid approval level: {level}")
+        if waste.wastage_approval_status == WasteApprovalStatus.FULLY_APPROVED:
+            raise ValueError("Waste log is already approved.")
+
+        waste.hod_sign = sign
+        waste.hod_signed_by = user
+        waste.hod_signed_at = now
+        waste.wastage_approval_status = WasteApprovalStatus.FULLY_APPROVED
 
         waste.save()
         return waste

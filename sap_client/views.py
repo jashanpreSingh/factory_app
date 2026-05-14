@@ -49,14 +49,20 @@ class OpenPOListAPI(APIView):
 
 class POItemListAPI(APIView):
     """
-    Returns items for a specific PO
+    Returns an open PO with items for an exact PO number
     """
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def get(self, request, po_number):
+        if not po_number.strip():
+            return Response(
+                {"detail": "PO number is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             client = SAPClient(company_code=request.company.company.code)
-            pos = client.get_open_pos(supplier_code=None)
+            po = client.get_open_po_by_number(po_number.strip())
         except SAPConnectionError as e:
             logger.error(f"SAP connection error in POItemListAPI: {e}")
             return Response(
@@ -70,14 +76,11 @@ class POItemListAPI(APIView):
                 status=status.HTTP_502_BAD_GATEWAY
             )
 
-        for po in pos:
-            if po.po_number == po_number:
-                return Response(
-                    POSerializer(po).data
-                )
+        if po:
+            return Response(POSerializer(po).data)
 
         return Response(
-            {"detail": "PO not found"},
+            {"detail": "Open PO not found"},
             status=status.HTTP_404_NOT_FOUND
         )
 

@@ -27,6 +27,7 @@ class TransporterAdmin(admin.ModelAdmin):
         "name",
         "contact_person",
         "mobile_no",
+        "gstin",
         "vehicle_count",
         "is_active_display",
         "created_at",
@@ -40,6 +41,7 @@ class TransporterAdmin(admin.ModelAdmin):
         "name",
         "contact_person",
         "mobile_no",
+        "gstin",
     )
     ordering = ("name",)
     date_hierarchy = "created_at"
@@ -49,7 +51,7 @@ class TransporterAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Transporter Information", {
-            "fields": ("name",),
+            "fields": ("name", "gstin"),
             "description": "Transporter/Logistics company details"
         }),
         ("Contact Information", {

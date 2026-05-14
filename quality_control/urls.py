@@ -33,12 +33,18 @@ from .views import (
     InspectionAwaitingQAMAPI,
     InspectionCompletedAPI,
     InspectionRejectedAPI,
+    InspectionReturnToVendorAPI,
+    InspectionFactoryHeadDecisionAPI,
 )
 from .views_production_qc import (
     ProductionQCSessionListCreateAPI,
+    ProductionQCFinalRequestAPI,
     ProductionQCSessionDetailAPI,
     ProductionQCResultsAPI,
     ProductionQCSubmitAPI,
+    ProductionQCPendingAPI,
+    ProductionQCApproveAPI,
+    ProductionQCRejectAPI,
     ProductionQCAllListAPI,
     ProductionQCCountsAPI,
 )
@@ -143,6 +149,11 @@ urlpatterns = [
         InspectionRejectedAPI.as_view(),
         name="inspection-rejected"
     ),
+    path(
+        "inspections/return-to-vendor/",
+        InspectionReturnToVendorAPI.as_view(),
+        name="inspection-return-to-vendor"
+    ),
     # Create/update inspection for an arrival slip
     path(
         "arrival-slips/<int:slip_id>/inspection/",
@@ -184,6 +195,11 @@ urlpatterns = [
         InspectionRejectAPI.as_view(),
         name="inspection-reject"
     ),
+    path(
+        "inspections/<int:inspection_id>/factory-head-decision/",
+        InspectionFactoryHeadDecisionAPI.as_view(),
+        name="inspection-factory-head-decision"
+    ),
 
     # ==================== Production QC APIs ====================
     path(
@@ -197,9 +213,19 @@ urlpatterns = [
         name="production-qc-counts"
     ),
     path(
+        "production-qc/pending/",
+        ProductionQCPendingAPI.as_view(),
+        name="production-qc-pending"
+    ),
+    path(
         "production-qc/runs/<int:run_id>/sessions/",
         ProductionQCSessionListCreateAPI.as_view(),
         name="production-qc-session-list-create"
+    ),
+    path(
+        "production-qc/runs/<int:run_id>/request-final/",
+        ProductionQCFinalRequestAPI.as_view(),
+        name="production-qc-final-request"
     ),
     path(
         "production-qc/sessions/<int:session_id>/",
@@ -215,5 +241,15 @@ urlpatterns = [
         "production-qc/sessions/<int:session_id>/submit/",
         ProductionQCSubmitAPI.as_view(),
         name="production-qc-submit"
+    ),
+    path(
+        "production-qc/sessions/<int:session_id>/approve/",
+        ProductionQCApproveAPI.as_view(),
+        name="production-qc-approve"
+    ),
+    path(
+        "production-qc/sessions/<int:session_id>/reject/",
+        ProductionQCRejectAPI.as_view(),
+        name="production-qc-reject"
     ),
 ]

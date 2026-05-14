@@ -7,6 +7,14 @@ class CanManageProductionLines(BasePermission):
         return request.user.has_perm('production_execution.can_manage_production_lines')
 
 
+class CanViewProductionRunOrManageLines(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.has_perm('production_execution.can_view_production_run') or
+            request.user.has_perm('production_execution.can_manage_production_lines')
+        )
+
+
 class CanManageMachines(BasePermission):
     def has_permission(self, request, view):
         return request.user.has_perm('production_execution.can_manage_machines')
@@ -139,6 +147,16 @@ class CanViewWasteLog(BasePermission):
 class CanCreateWasteLog(BasePermission):
     def has_permission(self, request, view):
         return request.user.has_perm('production_execution.can_create_waste_log')
+
+
+class CanApproveWaste(BasePermission):
+    def has_permission(self, request, view):
+        return any([
+            request.user.has_perm('production_execution.can_approve_waste_engineer'),
+            request.user.has_perm('production_execution.can_approve_waste_am'),
+            request.user.has_perm('production_execution.can_approve_waste_store'),
+            request.user.has_perm('production_execution.can_approve_waste_hod'),
+        ])
 
 
 class CanApproveWasteEngineer(BasePermission):

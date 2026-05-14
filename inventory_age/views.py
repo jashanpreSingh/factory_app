@@ -4,7 +4,7 @@ inventory_age/views.py
 API views for the Inventory Age & Value dashboard.
 
 GET /api/v1/dashboards/inventory-age/filter-options/  — dropdown values
-GET /api/v1/dashboards/inventory-age/report/          — filtered report (requires item_group)
+GET /api/v1/dashboards/inventory-age/report/          - filtered report
 """
 
 import logging
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class InventoryAgeFilterOptionsAPI(APIView):
     """
     Returns distinct values for item groups, sub-groups, warehouses,
-    and varieties.  Fast SQL query — no stored procedure call.
+    and varieties. Fast company-scoped SQL query.
 
     GET /api/v1/dashboards/inventory-age/filter-options/
     """
@@ -61,18 +61,17 @@ class InventoryAgeDashboardAPI(APIView):
     """
     Inventory age & value report.
 
-    Requires ``item_group`` so the 73k-row SP result is filtered to a
-    manageable size before being sent to the browser.
+    Reads current stock and movement data from the selected company schema.
 
     GET /api/v1/dashboards/inventory-age/report/
 
     Query parameters:
-        item_group  — (required) item group name
-        search      — item code or name (optional)
-        warehouse   — warehouse code (optional)
-        sub_group   — sub-group name (optional)
-        variety     — variety (optional)
-        min_age     — minimum age in days (optional)
+        item_group  - item group name (optional)
+        search      - item code or name (optional)
+        warehouse   - warehouse code (optional)
+        sub_group   - sub-group name (optional)
+        variety     - variety (optional)
+        min_age     - minimum age in days (optional)
     """
 
     permission_classes = [IsAuthenticated, HasCompanyContext, CanViewInventoryAge]
@@ -86,12 +85,6 @@ class InventoryAgeDashboardAPI(APIView):
             )
 
         filters = filter_serializer.validated_data
-
-        if not filters.get("item_group"):
-            return Response(
-                {"detail": "item_group is required. Please select an item group."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         service = InventoryAgeService(company_code=request.company.company.code)
 

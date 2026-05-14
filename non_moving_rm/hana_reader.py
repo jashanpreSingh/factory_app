@@ -2,11 +2,11 @@
 non_moving_rm/hana_reader.py
 
 Executes SAP HANA queries for the Non-Moving Raw Material Dashboard.
-Calls the stored procedure REPORT_BP_NON_MOVING_RM and reads item groups from OITB.
+Reads company-scoped stock movement data directly from SAP B1 tables.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from hdbcli import dbapi
 
@@ -16,17 +16,26 @@ from sap_client.exceptions import SAPConnectionError, SAPDataError
 logger = logging.getLogger(__name__)
 
 
+COMPANY_BRANCH_LABELS = {
+    "JIVO_OIL": "OIL",
+    "JIVO_MART": "MART",
+    "JIVO_BEVERAGES": "BEV",
+}
+
+
 class HanaNonMovingRMReader:
     """
     Reads non-moving raw material data from SAP HANA.
 
     Provides two queries:
-      1. get_non_moving_report() — calls REPORT_BP_NON_MOVING_RM procedure
-      2. get_item_groups()       — reads item groups from OITB for dropdown
+      1. get_non_moving_report() - reads stock, item, warehouse, and movement tables
+      2. get_item_groups()       - reads item groups from OITB for dropdown
     """
 
     def __init__(self, context):
         self.connection = HanaConnection(context.hana)
+        company_code = getattr(context, "company_code", "")
+        self.company_code = company_code if isinstance(company_code, str) else ""
 
     # ------------------------------------------------------------------
     # Public Methods
@@ -34,21 +43,157 @@ class HanaNonMovingRMReader:
 
     def get_non_moving_report(self, age: int, item_group: int) -> List[Dict]:
         """
-        Calls the REPORT_BP_NON_MOVING_RM stored procedure.
+        Builds the non-moving report from the selected company's SAP schema.
 
         Args:
             age: Number of days since last movement (e.g. 45)
-            item_group: Item group code from OITB (e.g. 105)
+            item_group: Item group code from OITB (e.g. 105), or 0 for all
 
         Returns:
             List of dicts with non-moving item details.
         """
-        schema = self.connection.schema
-        query = f'CALL "{schema}"."REPORT_BP_NON_MOVING_RM1"(?, ?)'
-        params = [age, item_group]
-
+        query, params = self._build_report_query(age=age, item_group=item_group)
         rows = self._execute(query, params)
         return [self._map_report_row(r) for r in rows]
+
+    def _build_report_query(self, age: int, item_group: int):
+        schema = self.connection.schema
+        item_group_filter = ""
+        params = []
+
+        if item_group:
+            item_group_filter = 'AND T0."ItmsGrpCod" = ?'
+            params.append(item_group)
+
+        params.extend([-age, self._branch_label(), age, age])
+
+        query = f"""
+WITH StockItems AS (
+    SELECT
+        T0."ItemCode",
+        T0."ItemName",
+        T0."CreateDate",
+        T0."AvgPrice" AS "ItemAvgPrice",
+        T0."LastPurPrc",
+        COALESCE(T0."U_Sub_Group", '') AS "U_Sub_Group",
+        T1."WhsCode",
+        T1."OnHand",
+        T1."AvgPrice" AS "WarehouseAvgPrice",
+        T6."ItmsGrpNam"
+    FROM "{schema}"."OITW" T1
+    INNER JOIN "{schema}"."OITM" T0 ON T0."ItemCode" = T1."ItemCode"
+    INNER JOIN "{schema}"."OITB" T6 ON T6."ItmsGrpCod" = T0."ItmsGrpCod"
+    INNER JOIN "{schema}"."OWHS" T5 ON T5."WhsCode" = T1."WhsCode"
+    WHERE T1."OnHand" > 0
+      AND COALESCE(T5."Inactive", 'N') <> 'Y'
+      {item_group_filter}
+),
+LastMovement AS (
+    SELECT
+        O."ItemCode",
+        O."Warehouse",
+        MAX(O."DocDate") AS "LastMovementDate"
+    FROM "{schema}"."OINM" O
+    INNER JOIN StockItems S
+        ON S."ItemCode" = O."ItemCode"
+       AND S."WhsCode" = O."Warehouse"
+    WHERE O."TransType" <> 67
+      AND (COALESCE(O."InQty", 0) <> 0 OR COALESCE(O."OutQty", 0) <> 0)
+    GROUP BY O."ItemCode", O."Warehouse"
+),
+CalcPrice AS (
+    SELECT
+        O."ItemCode",
+        O."Warehouse",
+        CASE
+            WHEN SUM(COALESCE(O."InQty", 0)) - SUM(COALESCE(O."OutQty", 0)) <> 0
+            THEN SUM(COALESCE(O."TransValue", 0)) /
+                 (SUM(COALESCE(O."InQty", 0)) - SUM(COALESCE(O."OutQty", 0)))
+            ELSE 0
+        END AS "CalcPrice"
+    FROM "{schema}"."OINM" O
+    INNER JOIN StockItems S
+        ON S."ItemCode" = O."ItemCode"
+       AND S."WhsCode" = O."Warehouse"
+    GROUP BY O."ItemCode", O."Warehouse"
+),
+RecentConsumption AS (
+    SELECT
+        O."ItemCode",
+        O."Warehouse",
+        SUM(ABS(COALESCE(O."TransValue", 0))) AS "TotalConsumption"
+    FROM "{schema}"."OINM" O
+    INNER JOIN StockItems S
+        ON S."ItemCode" = O."ItemCode"
+       AND S."WhsCode" = O."Warehouse"
+    WHERE O."DocDate" >= ADD_DAYS(CURRENT_DATE, ?)
+      AND O."TransValue" < 0
+      AND O."TransType" <> 67
+    GROUP BY O."ItemCode", O."Warehouse"
+)
+SELECT
+    ? AS "Branch",
+    S."ItemCode",
+    S."ItemName",
+    S."ItmsGrpNam",
+    S."U_Sub_Group",
+    S."WhsCode" AS "Warehouse",
+    S."OnHand" AS "Quantity",
+    ROUND(
+        S."OnHand" *
+        CASE
+            WHEN COALESCE(T3."CalcPrice", 0) <> 0 THEN T3."CalcPrice"
+            WHEN COALESCE(S."WarehouseAvgPrice", 0) <> 0 THEN S."WarehouseAvgPrice"
+            WHEN COALESCE(S."ItemAvgPrice", 0) <> 0 THEN S."ItemAvgPrice"
+            ELSE COALESCE(S."LastPurPrc", 0)
+        END,
+        4
+    ) AS "Value",
+    T2."LastMovementDate",
+    CASE
+        WHEN T2."LastMovementDate" IS NULL AND S."CreateDate" IS NOT NULL
+        THEN DAYS_BETWEEN(S."CreateDate", CURRENT_DATE)
+        WHEN T2."LastMovementDate" IS NULL THEN 999999
+        ELSE DAYS_BETWEEN(T2."LastMovementDate", CURRENT_DATE)
+    END AS "DaysSinceLastMovement",
+    ROUND(
+        CASE
+            WHEN COALESCE(T4."TotalConsumption", 0) > 0
+            THEN (COALESCE(T4."TotalConsumption", 0) /
+                  (COALESCE(S."OnHand", 0) + COALESCE(T4."TotalConsumption", 0))) * 100
+            ELSE 0
+        END,
+        2
+    ) AS "ConsumptionRatio"
+FROM StockItems S
+LEFT JOIN LastMovement T2
+    ON T2."ItemCode" = S."ItemCode"
+   AND T2."Warehouse" = S."WhsCode"
+LEFT JOIN CalcPrice T3
+    ON T3."ItemCode" = S."ItemCode"
+   AND T3."Warehouse" = S."WhsCode"
+LEFT JOIN RecentConsumption T4
+    ON T4."ItemCode" = S."ItemCode"
+   AND T4."Warehouse" = S."WhsCode"
+WHERE (
+      (
+          T2."LastMovementDate" IS NULL
+          AND (
+              S."CreateDate" IS NULL
+              OR DAYS_BETWEEN(S."CreateDate", CURRENT_DATE) >= ?
+          )
+      )
+      OR DAYS_BETWEEN(T2."LastMovementDate", CURRENT_DATE) >= ?
+  )
+ORDER BY "DaysSinceLastMovement" DESC, S."ItemCode", S."WhsCode"
+"""
+        return query, params
+
+    def _branch_label(self) -> str:
+        return COMPANY_BRANCH_LABELS.get(
+            self.company_code,
+            self.company_code or self.connection.schema,
+        )
 
     def get_item_groups(self) -> List[Dict]:
         """

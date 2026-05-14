@@ -15,6 +15,9 @@ from .hana_reader import HanaStockDashboardReader
 
 logger = logging.getLogger(__name__)
 
+_STATUS_SEVERITY = {"none": 0, "healthy": 0, "unset": 1, "low": 2, "critical": 3}
+SLOW_MOVING_DAYS = 30
+
 
 class StockDashboardService:
     """
@@ -32,50 +35,133 @@ class StockDashboardService:
 
     def get_stock_levels(self, filters: Dict[str, Any]) -> Dict:
         """
-        Returns stock level data with health status for each item-warehouse.
+        Returns paginated stock level data with health status.
 
-        Health logic:
-          - on_hand >= min_stock        → 'healthy'
-          - on_hand < min_stock          → 'low'       (below minimum)
-          - on_hand < min_stock * 0.6    → 'critical'  (below 60% of minimum)
+        When multiple warehouses are selected, items are grouped by item_code
+        with aggregated quantities. Otherwise returns individual warehouse rows.
         """
-        rows = self.reader.get_stock_levels(filters)
+        page = int(filters.get("page", 1))
+        page_size = int(filters.get("page_size", 50))
+        warehouse_list = filters.get("warehouse", [])
+        is_grouped = len(warehouse_list) >= 2
 
-        for row in rows:
-            row["stock_status"] = self._stock_status(row["on_hand"], row["min_stock"])
-            row["health_ratio"] = round(
-                row["on_hand"] / row["min_stock"], 2
-            ) if row["min_stock"] > 0 else 0.0
+        warehouses = self.reader.get_warehouses()
 
-        # Apply status filter (post-calculation since status is computed)
-        status_filter = filters.get("status", "all")
-        if status_filter and status_filter != "all":
-            rows = [r for r in rows if r["stock_status"] == status_filter]
+        # Stats and pagination must come from the same filtered row shape as the table.
+        if is_grouped:
+            filtered_stats = self.reader.get_grouped_stock_stats(filters)
+        else:
+            filtered_stats = self.reader.get_stock_stats(filters)
 
-        total_items = len(rows)
-        low_count = sum(1 for r in rows if r["stock_status"] == "low")
-        critical_count = sum(1 for r in rows if r["stock_status"] == "critical")
+        filtered_total = filtered_stats["total_items"]
+        total_pages = max(1, (filtered_total + page_size - 1) // page_size)
+
+        if is_grouped:
+            rows = self.reader.get_grouped_stock_levels(filters, page=page, page_size=page_size)
+            self._enrich_grouped_rows(rows)
+        else:
+            rows = self.reader.get_stock_levels(filters, page=page, page_size=page_size)
+            self._enrich_rows(rows)
 
         return {
             "data": rows,
             "meta": {
-                "total_items": total_items,
-                "low_stock_count": low_count,
-                "critical_stock_count": critical_count,
+                "total_items": filtered_total,
+                "healthy_count": filtered_stats["healthy_count"],
+                "low_stock_count": filtered_stats["low_count"],
+                "critical_stock_count": filtered_stats["critical_count"],
+                "warehouses": warehouses,
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
             },
         }
 
+    def get_item_detail(self, item_code: str, warehouses: List[str]) -> Dict:
+        """Returns per-warehouse breakdown for a single item (expand detail)."""
+        rows = self.reader.get_item_warehouses(item_code, warehouses)
+        self._enrich_rows(rows)
+        return {"data": rows}
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _enrich_rows(self, rows: List[Dict]) -> None:
+        """Adds stock and movement status to individual rows."""
+        for row in rows:
+            row["movement_status"] = self._movement_status(row)
+            row["stock_status"] = self._stock_status(
+                row["on_hand"],
+                row["min_stock"],
+                has_open_plan=row.get("has_open_plan", False),
+                movement_status=row["movement_status"],
+            )
+            row["health_ratio"] = (
+                round(row["on_hand"] / row["min_stock"], 2)
+                if row["min_stock"] > 0 else 0.0
+            )
+
+    def _enrich_grouped_rows(self, rows: List[Dict]) -> None:
+        """Adds computed stock and movement fields to grouped rows."""
+        for row in rows:
+            row["movement_status"] = self._movement_status(row)
+            row["stock_status"] = self._stock_status(
+                row["on_hand"],
+                row["min_stock"],
+                has_open_plan=row.get("has_open_plan", False),
+                planned_without_benchmark=row.get("planned_without_benchmark", 0) > 0,
+                movement_status=row["movement_status"],
+            )
+            row["health_ratio"] = (
+                round(row["on_hand"] / row["min_stock"], 2)
+                if row["min_stock"] > 0 else 0.0
+            )
+            row["warehouse"] = f"{row['warehouse_count']} warehouses"
+
+            # Determine worst individual warehouse status
+            if row.pop("critical_warehouses", 0) > 0:
+                worst = "critical"
+            elif row.pop("low_warehouses", 0) > 0:
+                worst = "low"
+            else:
+                worst = row["stock_status"]
+
+            row["has_warning"] = (
+                _STATUS_SEVERITY.get(worst, 0) > _STATUS_SEVERITY.get(row["stock_status"], 0)
+            )
+
     @staticmethod
-    def _stock_status(on_hand: float, min_stock: float) -> str:
-        """
-        Returns a stock health label:
-          'healthy'  — on_hand >= min_stock
-          'low'      — on_hand < min_stock but >= 60% of min_stock
-          'critical' — on_hand < 60% of min_stock
-        """
+    def _stock_status(
+        on_hand: float,
+        min_stock: float,
+        has_open_plan: bool = False,
+        planned_without_benchmark: bool = False,
+        movement_status: str | None = None,
+    ) -> str:
+        if movement_status == "slow":
+            return "none"
+        if planned_without_benchmark:
+            return "critical"
+        if min_stock <= 0:
+            return "critical" if has_open_plan else "unset"
         if on_hand >= min_stock:
             return "healthy"
         if on_hand >= min_stock * 0.6:
             return "low"
         return "critical"
+
+    @staticmethod
+    def _movement_status(row: Dict) -> str:
+        if row.get("has_open_plan"):
+            return "planned"
+
+        days_since_consumption = row.get("days_since_last_consumption")
+        if (
+            days_since_consumption is not None
+            and days_since_consumption <= SLOW_MOVING_DAYS
+        ):
+            return "recent"
+
+        return "slow"
