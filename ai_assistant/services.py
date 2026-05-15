@@ -5,7 +5,10 @@ from pathlib import Path
 from typing import Any
 
 import requests
+import sqlparse
+from django.apps import apps
 from django.conf import settings
+from django.db import DatabaseError, connection, transaction
 from django.db.models import Count, Q
 
 from barcode.models import Box, LabelPrintLog, Pallet
@@ -40,9 +43,44 @@ class AssistantProviderError(RuntimeError):
 
 
 class FactoryAssistantService:
-    """Read-only AI assistant with a small Factory data context."""
+    """Read-only AI assistant with Factory data context and guarded SQL analysis."""
 
     GEMINI_GENERATE_CONTENT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
+    SQL_RESULT_ROW_LIMIT = 50
+    SQL_SCHEMA_COLUMN_LIMIT = 35
+    SQL_EXCLUDED_APP_LABELS = {
+        'admin',
+        'auth',
+        'contenttypes',
+        'sessions',
+        'token_blacklist',
+    }
+    SQL_EXCLUDED_TABLE_PATTERN = re.compile(
+        r'(?:^auth_|^django_|^token_blacklist_|_groups|_permission|_permissions|_group_permissions|_user_permissions)',
+        re.IGNORECASE,
+    )
+    SQL_SENSITIVE_COLUMN_PATTERN = re.compile(
+        r'(?:password|token|secret|session|api_key|private_key|credential|firebase_private_key|otp)',
+        re.IGNORECASE,
+    )
+    SQL_FORBIDDEN_PATTERN = re.compile(
+        r'\b('
+        r'alter|analyze|benchmark|call|comment|copy|create|delete|dblink|do|drop|'
+        r'execute|explain|grant|insert|into|listen|lo_export|lo_import|lock|merge|'
+        r'notify|pg_sleep|refresh|replace|reset|revoke|set|truncate|unlisten|update|'
+        r'vacuum'
+        r')\b',
+        re.IGNORECASE,
+    )
+    SQL_SENSITIVE_PATTERN = re.compile(
+        r'\b(password|token|secret|session|api_key|private_key|credential|firebase_private_key|otp)\b',
+        re.IGNORECASE,
+    )
+    SQL_TABLE_REF_PATTERN = re.compile(
+        r'\b(?:from|join)\s+([("]?[A-Za-z_][A-Za-z0-9_."()]*)',
+        re.IGNORECASE,
+    )
+    SQL_CTE_PATTERN = re.compile(r'(?:with|,)\s+"?([A-Za-z_][A-Za-z0-9_]*)"?\s+as\s*\(', re.IGNORECASE)
 
     def __init__(self, *, company, company_code: str, user):
         self.company = company
@@ -61,6 +99,21 @@ class FactoryAssistantService:
                 'model': 'factory-context',
                 'provider': 'local',
                 'mode': 'read_only',
+            }
+
+        database_result = self._answer_from_database(question=question, page=page, context=context)
+        if database_result:
+            context_summary = {
+                **context['summary'],
+                'database_query': database_result['summary'],
+            }
+            return {
+                'answer': database_result['answer'],
+                'sources': [*context['sources'], database_result['source']],
+                'context_summary': context_summary,
+                'model': database_result['model'],
+                'provider': 'gemini',
+                'mode': 'read_only_sql',
             }
 
         provider_result = self._call_gemini(question=question, page=page, context=context)
@@ -696,11 +749,434 @@ class FactoryAssistantService:
             'print_log_count': LabelPrintLog.objects.filter(company=self.company).count(),
         }
 
-    def _call_gemini(self, *, question: str, page: str, context: dict[str, Any]) -> dict[str, str]:
-        api_key = settings.GEMINI_API_KEY.strip()
-        if not api_key:
-            raise AssistantConfigError('Gemini API key is missing. Add GEMINI_API_KEY to backend .env.')
+    def _answer_from_database(
+        self,
+        *,
+        question: str,
+        page: str,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not self._should_use_database_query(question):
+            return {}
 
+        schema = self._database_schema_context()
+        if not schema['tables']:
+            return {}
+
+        plan = self._generate_database_sql(question=question, page=page, schema=schema)
+        sql = str(plan.get('sql') or '').strip()
+        if not sql:
+            return {}
+
+        try:
+            safe_sql = self._validate_read_only_sql(sql, schema=schema)
+            query_result = self._execute_read_only_sql(safe_sql)
+        except (DatabaseError, ValueError) as exc:
+            logger.info('AI assistant SQL path skipped: %s', exc)
+            return {}
+
+        summary_result = self._summarize_database_answer(
+            question=question,
+            page=page,
+            context=context,
+            sql=safe_sql,
+            query_result=query_result,
+        )
+        return {
+            'answer': summary_result['text'],
+            'model': summary_result['model'],
+            'source': {
+                'type': 'factory_database_sql',
+                'label': f"Full read-only database query ({query_result['row_count']} rows)",
+            },
+            'summary': {
+                'sql': self._compact_sql(safe_sql),
+                'columns': query_result['columns'],
+                'row_count': query_result['row_count'],
+                'row_limit': self.SQL_RESULT_ROW_LIMIT,
+            },
+        }
+
+    @staticmethod
+    def _should_use_database_query(question: str) -> bool:
+        lower_question = question.lower()
+        documentation_terms = ['how to', 'guide', 'documentation', 'docs', 'manual', 'steps']
+        data_terms = [
+            'ageing',
+            'aging',
+            'analysis',
+            'analyze',
+            'average',
+            'avg',
+            'bottleneck',
+            'compare',
+            'comparison',
+            'dashboard',
+            'date wise',
+            'day wise',
+            'deep',
+            'delay',
+            'find out',
+            'highest',
+            'insight',
+            'inventory',
+            'issue',
+            'last month',
+            'last week',
+            'lowest',
+            'material',
+            'monthly',
+            'person',
+            'performance',
+            'quality',
+            'reason',
+            'reject',
+            'report',
+            'records',
+            'risk',
+            'root cause',
+            'show',
+            'stock',
+            'supplier',
+            'summary',
+            'trend',
+            'top',
+            'total',
+            'warehouse',
+            'wastage',
+            'weekly',
+            'what',
+            'when',
+            'where',
+            'which',
+            'who',
+            'why',
+        ]
+        if any(term in lower_question for term in documentation_terms):
+            return any(term in lower_question for term in data_terms)
+        return any(term in lower_question for term in data_terms)
+
+    def _database_schema_context(self) -> dict[str, Any]:
+        models = [
+            model
+            for model in apps.get_models(include_auto_created=True)
+            if self._is_sql_model_allowed(model)
+        ]
+        scoped_tables = self._company_scoped_table_names(models)
+        incoming_foreign_keys = self._incoming_foreign_keys(models)
+
+        tables: list[dict[str, Any]] = []
+        for model in sorted(models, key=lambda item: (item._meta.app_label, item._meta.model_name)):
+            fields: list[str] = []
+            foreign_keys: list[str] = []
+            for field in model._meta.fields[: self.SQL_SCHEMA_COLUMN_LIMIT]:
+                column_name = getattr(field, 'column', field.name)
+                if self.SQL_SENSITIVE_COLUMN_PATTERN.search(column_name):
+                    continue
+
+                remote_model = getattr(getattr(field, 'remote_field', None), 'model', None)
+                if remote_model and hasattr(remote_model, '_meta'):
+                    target_table = remote_model._meta.db_table
+                    fields.append(f'{column_name}:FK->{target_table}')
+                    foreign_keys.append(f'{column_name}->{target_table}.id')
+                else:
+                    fields.append(f'{column_name}:{field.get_internal_type()}')
+
+            if not fields:
+                continue
+
+            tables.append({
+                'table': model._meta.db_table,
+                'model': f'{model._meta.app_label}.{model.__name__}',
+                'company_scoped': model._meta.db_table in scoped_tables,
+                'columns': fields,
+                'foreign_keys': foreign_keys[:12],
+                'referenced_by': incoming_foreign_keys.get(model._meta.db_table, [])[:12],
+            })
+
+        return {
+            'current_company': {
+                'id': self.company.id,
+                'code': self.company_code,
+                'name': getattr(self.company, 'name', ''),
+            },
+            'tables': tables,
+            'allowed_table_names': {table['table'] for table in tables},
+            'company_scoped_table_names': scoped_tables,
+        }
+
+    @classmethod
+    def _is_sql_model_allowed(cls, model) -> bool:
+        opts = model._meta
+        if opts.app_label in cls.SQL_EXCLUDED_APP_LABELS:
+            return False
+        if opts.proxy or not opts.managed:
+            return False
+        identifier = f'{opts.app_label}.{opts.model_name}.{opts.db_table}'
+        if cls.SQL_EXCLUDED_TABLE_PATTERN.search(identifier):
+            return False
+        return True
+
+    @staticmethod
+    def _company_scoped_table_names(models: list[Any]) -> set[str]:
+        company_model = apps.get_model('company', 'Company')
+        candidate_models = set(models)
+        candidate_models.add(company_model)
+        scoped_models = {company_model}
+
+        relations: list[tuple[Any, Any]] = []
+        for model in candidate_models:
+            for field in model._meta.fields:
+                remote_model = getattr(getattr(field, 'remote_field', None), 'model', None)
+                if remote_model in candidate_models:
+                    relations.append((model, remote_model))
+
+        changed = True
+        while changed:
+            changed = False
+            for left_model, right_model in relations:
+                if left_model in scoped_models and right_model not in scoped_models:
+                    scoped_models.add(right_model)
+                    changed = True
+                if right_model in scoped_models and left_model not in scoped_models:
+                    scoped_models.add(left_model)
+                    changed = True
+
+        return {
+            model._meta.db_table
+            for model in scoped_models
+            if model in models or model is company_model
+        }
+
+    @staticmethod
+    def _incoming_foreign_keys(models: list[Any]) -> dict[str, list[str]]:
+        incoming: dict[str, list[str]] = {}
+        model_set = set(models)
+        for model in models:
+            source_table = model._meta.db_table
+            for field in model._meta.fields:
+                remote_model = getattr(getattr(field, 'remote_field', None), 'model', None)
+                if remote_model not in model_set:
+                    continue
+                target_table = remote_model._meta.db_table
+                incoming.setdefault(target_table, []).append(
+                    f'{source_table}.{field.column}->{target_table}.id'
+                )
+        return incoming
+
+    def _generate_database_sql(
+        self,
+        *,
+        question: str,
+        page: str,
+        schema: dict[str, Any],
+    ) -> dict[str, str]:
+        schema_prompt = {
+            'dialect': connection.vendor,
+            'current_company': schema['current_company'],
+            'tables': schema['tables'],
+        }
+        system_prompt = (
+            'You write safe read-only SQL for the full Factory business database schema provided. '
+            'Return only JSON with keys "sql" and "reason". Use SELECT or WITH only. '
+            'Use only the provided tables and columns. Never select password, token, '
+            'secret, credential, session, or private key data. Never write data. '
+            'Always filter company-scoped data to the current company. Prefer direct '
+            'company_id filters when available. When a table is company-scoped but has '
+            'no company_id column, use the foreign_keys and referenced_by hints to join '
+            'through related tables until a company_id or company code filter is possible. '
+            'For list queries, limit the result.'
+        )
+        user_prompt = (
+            f'Current page: {page or "unknown"}\n'
+            f'Question: {question}\n\n'
+            'Schema JSON:\n'
+            f'{json.dumps(schema_prompt, default=str, ensure_ascii=False)}\n\n'
+            'Return example: {"sql": "SELECT ...", "reason": "why this query answers it"}\n'
+            'If the database cannot answer the question, return {"sql": null, "reason": "..."}'
+        )
+        result = self._call_gemini_text(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_output_tokens=1200,
+            temperature=0.0,
+        )
+        return self._parse_database_sql_plan(result['text'])
+
+    @staticmethod
+    def _parse_database_sql_plan(text: str) -> dict[str, str]:
+        cleaned = text.strip()
+        if cleaned.startswith('```'):
+            cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r'\s*```$', '', cleaned)
+
+        match = re.search(r'\{.*\}', cleaned, flags=re.DOTALL)
+        payload_text = match.group(0) if match else cleaned
+        try:
+            payload = json.loads(payload_text)
+        except json.JSONDecodeError:
+            logger.info('AI assistant SQL planner returned non-JSON text: %s', text[:300])
+            return {}
+
+        sql = payload.get('sql') if isinstance(payload, dict) else ''
+        reason = payload.get('reason') if isinstance(payload, dict) else ''
+        return {
+            'sql': sql if isinstance(sql, str) else '',
+            'reason': reason if isinstance(reason, str) else '',
+        }
+
+    def _validate_read_only_sql(self, sql: str, *, schema: dict[str, Any]) -> str:
+        cleaned = sql.strip().rstrip(';').strip()
+        if not cleaned:
+            raise ValueError('SQL query is empty.')
+        if ';' in cleaned:
+            raise ValueError('Only one SQL statement is allowed.')
+        if '--' in cleaned or '/*' in cleaned or '*/' in cleaned:
+            raise ValueError('SQL comments are not allowed.')
+        if self.SQL_FORBIDDEN_PATTERN.search(cleaned):
+            raise ValueError('Only read-only SELECT queries are allowed.')
+        if self.SQL_SENSITIVE_PATTERN.search(cleaned):
+            raise ValueError('Sensitive columns are not allowed.')
+
+        statements = sqlparse.parse(cleaned)
+        if len(statements) != 1:
+            raise ValueError('Only one SQL statement is allowed.')
+
+        first_token = statements[0].token_first(skip_cm=True)
+        first_value = first_token.normalized.upper() if first_token else ''
+        if first_value not in {'SELECT', 'WITH'}:
+            raise ValueError('Only SELECT or WITH queries are allowed.')
+
+        table_refs = self._extract_sql_table_refs(cleaned)
+        cte_names = self._extract_sql_cte_names(cleaned)
+        unknown_tables = sorted(
+            table
+            for table in table_refs
+            if table not in schema['allowed_table_names'] and table not in cte_names
+        )
+        if unknown_tables:
+            raise ValueError(f'Query referenced unsupported tables: {", ".join(unknown_tables)}')
+
+        scoped_refs = {
+            table
+            for table in table_refs
+            if table in schema['company_scoped_table_names']
+        }
+        if scoped_refs and not self._sql_has_company_scope(cleaned):
+            raise ValueError('Company-scoped queries must filter the current company.')
+
+        return cleaned
+
+    def _execute_read_only_sql(self, sql: str) -> dict[str, Any]:
+        limited_sql = self._wrap_sql_with_limit(sql)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                if connection.vendor == 'postgresql':
+                    cursor.execute('SET TRANSACTION READ ONLY')
+                    cursor.execute('SET LOCAL statement_timeout = 10000')
+                cursor.execute(limited_sql)
+                if cursor.description is None:
+                    raise ValueError('Query did not return rows.')
+                columns = [column[0] for column in cursor.description]
+                rows = [
+                    {
+                        column: self._json_safe_value(value)
+                        for column, value in zip(columns, row)
+                    }
+                    for row in cursor.fetchall()
+                ]
+
+        return {
+            'sql': limited_sql,
+            'columns': columns,
+            'rows': rows,
+            'row_count': len(rows),
+        }
+
+    def _summarize_database_answer(
+        self,
+        *,
+        question: str,
+        page: str,
+        context: dict[str, Any],
+        sql: str,
+        query_result: dict[str, Any],
+    ) -> dict[str, str]:
+        system_prompt = (
+            'You are a Factory data analyst. Answer using only the read-only SQL result '
+            'and the small context summary provided. Be direct and practical. For deep '
+            'questions, give useful insights, risks, comparisons, or next checks when '
+            'the data supports them. If rows are capped, say so for list-style answers. '
+            'Do not claim you changed or posted any data.'
+        )
+        user_prompt = (
+            f'Current page: {page or "unknown"}\n'
+            f'Question: {question}\n\n'
+            f'SQL used:\n{sql}\n\n'
+            f'Rows are capped at {self.SQL_RESULT_ROW_LIMIT}.\n'
+            'SQL result JSON:\n'
+            f'{json.dumps(query_result, default=str, ensure_ascii=False)}\n\n'
+            'Existing context summary JSON:\n'
+            f'{json.dumps(context.get("summary", {}), default=str, ensure_ascii=False)}'
+        )
+        return self._call_gemini_text(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_output_tokens=900,
+            temperature=0.15,
+        )
+
+    @classmethod
+    def _extract_sql_table_refs(cls, sql: str) -> set[str]:
+        refs: set[str] = set()
+        for match in cls.SQL_TABLE_REF_PATTERN.finditer(sql):
+            raw_name = match.group(1).strip().strip(',')
+            if raw_name.startswith('('):
+                continue
+            normalized = raw_name.split()[0].strip('"')
+            if '.' in normalized:
+                normalized = normalized.split('.')[-1].strip('"')
+            normalized = normalized.strip('"').lower()
+            if normalized and normalized not in {'select', 'lateral'}:
+                refs.add(normalized)
+        return refs
+
+    @classmethod
+    def _extract_sql_cte_names(cls, sql: str) -> set[str]:
+        return {match.group(1).lower() for match in cls.SQL_CTE_PATTERN.finditer(sql)}
+
+    def _sql_has_company_scope(self, sql: str) -> bool:
+        normalized = re.sub(r'\s+', ' ', sql.lower())
+        company_id = re.escape(str(self.company.id))
+        company_code = re.escape(str(self.company_code).lower())
+        return (
+            re.search(rf'\bcompany_id\s*=\s*{company_id}\b', normalized) is not None
+            or re.search(rf'\bcompany_id\s+in\s*\(\s*{company_id}\s*\)', normalized) is not None
+            or re.search(
+                rf'\b(?:code|company_code)\s*=\s*[\'"]{company_code}[\'"]',
+                normalized,
+            ) is not None
+        )
+
+    def _wrap_sql_with_limit(self, sql: str) -> str:
+        return f'SELECT * FROM ({sql}) AS ai_readonly_query LIMIT {self.SQL_RESULT_ROW_LIMIT}'
+
+    @staticmethod
+    def _json_safe_value(value):
+        if hasattr(value, 'isoformat'):
+            return value.isoformat()
+        try:
+            json.dumps(value)
+            return value
+        except TypeError:
+            return str(value)
+
+    @staticmethod
+    def _compact_sql(sql: str) -> str:
+        compact = re.sub(r'\s+', ' ', sql).strip()
+        return compact[:1000]
+
+    def _call_gemini(self, *, question: str, page: str, context: dict[str, Any]) -> dict[str, str]:
         system_prompt = (
             'You are the Factory site AI assistant. Answer using only the provided '
             'Factory context and general troubleshooting knowledge. This is read-only: '
@@ -714,6 +1190,25 @@ class FactoryAssistantService:
             'Factory context JSON:\n'
             f'{json.dumps(context, default=str, ensure_ascii=False)}'
         )
+        return self._call_gemini_text(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_output_tokens=700,
+            temperature=0.2,
+        )
+
+    def _call_gemini_text(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_output_tokens: int,
+        temperature: float,
+    ) -> dict[str, str]:
+        api_key = settings.GEMINI_API_KEY.strip()
+        if not api_key:
+            raise AssistantConfigError('Gemini API key is missing. Add GEMINI_API_KEY to backend .env.')
+
         payload = {
             'systemInstruction': {
                 'parts': [{'text': system_prompt}],
@@ -725,8 +1220,8 @@ class FactoryAssistantService:
                 },
             ],
             'generationConfig': {
-                'maxOutputTokens': 700,
-                'temperature': 0.2,
+                'maxOutputTokens': max_output_tokens,
+                'temperature': temperature,
             },
         }
 
@@ -766,6 +1261,22 @@ class FactoryAssistantService:
                 json=payload,
                 timeout=settings.AI_ASSISTANT_TIMEOUT_SECONDS,
             )
+        except requests.exceptions.Timeout as exc:
+            logger.exception('AI assistant provider request timed out')
+            raise AssistantProviderError(
+                'Gemini did not respond before the timeout. Please check internet connectivity and try again.'
+            ) from exc
+        except requests.exceptions.ConnectionError as exc:
+            logger.exception('AI assistant provider connection failed')
+            message = str(exc).lower()
+            if any(term in message for term in ['getaddrinfo', 'name resolution', 'failed to resolve']):
+                raise AssistantProviderError(
+                    'Cannot reach Gemini because DNS/network resolution is failing for googleapis.com. '
+                    'Please check internet, DNS, or proxy settings and try again.'
+                ) from exc
+            raise AssistantProviderError(
+                'Cannot reach Gemini. Please check internet, firewall, or proxy settings and try again.'
+            ) from exc
         except requests.RequestException as exc:
             logger.exception('AI assistant provider request failed')
             raise AssistantProviderError('AI provider request failed. Please try again.') from exc

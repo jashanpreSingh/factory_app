@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+import requests
 from django.contrib.auth.models import Permission
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
@@ -16,6 +17,7 @@ from production_execution.models import ProductionLine, ProductionRun
 from raw_material_gatein.models import POReceipt
 from vehicle_management.models import Vehicle
 from warehouse.models import FGReceiptStatus, FinishedGoodsReceipt
+from .services import FactoryAssistantService
 
 
 class AssistantChatAPITests(TestCase):
@@ -215,3 +217,156 @@ class AssistantChatAPITests(TestCase):
         self.assertIn('warehouse', response.data['context_summary']['operations_sections'])
         self.assertNotIn('grpo_postings', response.data['context_summary']['operations_sections'])
         mock_post.assert_not_called()
+
+    @override_settings(GEMINI_API_KEY='test-key', GEMINI_MODEL='test-model')
+    @patch('ai_assistant.services.requests.post')
+    def test_chat_can_answer_deep_question_with_read_only_sql(self, mock_post):
+        planner_response = Mock()
+        planner_response.status_code = 200
+        planner_response.json.return_value = {
+            'candidates': [
+                {
+                    'content': {
+                        'parts': [
+                            {
+                                'text': (
+                                    '{"sql": "SELECT status, COUNT(*) AS total '
+                                    'FROM barcode_box '
+                                    f'WHERE company_id = {self.company.id} '
+                                    'GROUP BY status", '
+                                    '"reason": "Counts boxes by status for the current company."}'
+                                ),
+                            }
+                        ],
+                    },
+                },
+            ],
+        }
+        summary_response = Mock()
+        summary_response.status_code = 200
+        summary_response.json.return_value = {
+            'candidates': [
+                {
+                    'content': {
+                        'parts': [{'text': 'Inventory insight: there is 1 active box.'}],
+                    },
+                },
+            ],
+        }
+        mock_post.side_effect = [planner_response, summary_response]
+
+        response = self.client.post(
+            '/api/v1/ai/assistant/chat/',
+            {'question': 'Give deep inventory insight by box status', 'page': '/barcode/boxes'},
+            format='json',
+            HTTP_COMPANY_CODE=self.company.code,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['provider'], 'gemini')
+        self.assertEqual(response.data['mode'], 'read_only_sql')
+        self.assertEqual(response.data['answer'], 'Inventory insight: there is 1 active box.')
+        self.assertEqual(response.data['context_summary']['database_query']['row_count'], 1)
+        self.assertTrue(
+            any(source['type'] == 'factory_database_sql' for source in response.data['sources'])
+        )
+        self.assertEqual(mock_post.call_count, 2)
+
+    def test_read_only_sql_rejects_write_queries(self):
+        service = FactoryAssistantService(
+            company=self.company,
+            company_code=self.company.code,
+            user=self.user,
+        )
+        schema = service._database_schema_context()
+
+        with self.assertRaises(ValueError):
+            service._validate_read_only_sql(
+                f"UPDATE barcode_box SET status = 'BROKEN' WHERE company_id = {self.company.id}",
+                schema=schema,
+            )
+
+    def test_database_schema_includes_full_business_tables_but_not_sensitive_fields(self):
+        service = FactoryAssistantService(
+            company=self.company,
+            company_code=self.company.code,
+            user=self.user,
+        )
+
+        schema = service._database_schema_context()
+        table_names = schema['allowed_table_names']
+
+        self.assertIn('accounts_user', table_names)
+        self.assertIn('company_usercompany', table_names)
+        self.assertIn('notifications_notification', table_names)
+        self.assertNotIn('auth_permission', table_names)
+        self.assertNotIn('django_session', table_names)
+        self.assertNotIn('token_blacklist_outstandingtoken', table_names)
+
+        user_table = next(table for table in schema['tables'] if table['table'] == 'accounts_user')
+        user_columns = ' '.join(user_table['columns']).lower()
+        self.assertIn('email', user_columns)
+        self.assertIn('full_name', user_columns)
+        self.assertNotIn('password', user_columns)
+        self.assertTrue(user_table['company_scoped'])
+        self.assertTrue(
+            any('company_usercompany.user_id' in reference for reference in user_table['referenced_by'])
+        )
+
+    def test_read_only_sql_allows_broad_company_scoped_account_query(self):
+        service = FactoryAssistantService(
+            company=self.company,
+            company_code=self.company.code,
+            user=self.user,
+        )
+        schema = service._database_schema_context()
+        sql = (
+            'SELECT u.email, u.full_name '
+            'FROM accounts_user u '
+            'JOIN company_usercompany uc ON uc.user_id = u.id '
+            f'WHERE uc.company_id = {self.company.id}'
+        )
+
+        safe_sql = service._validate_read_only_sql(sql, schema=schema)
+        result = service._execute_read_only_sql(safe_sql)
+
+        self.assertEqual(result['row_count'], 1)
+        self.assertEqual(result['rows'][0]['email'], self.user.email)
+        self.assertEqual(result['rows'][0]['full_name'], self.user.full_name)
+
+    def test_read_only_sql_rejects_sensitive_columns_even_in_allowed_tables(self):
+        service = FactoryAssistantService(
+            company=self.company,
+            company_code=self.company.code,
+            user=self.user,
+        )
+        schema = service._database_schema_context()
+
+        with self.assertRaises(ValueError):
+            service._validate_read_only_sql(
+                (
+                    'SELECT u.password '
+                    'FROM accounts_user u '
+                    'JOIN company_usercompany uc ON uc.user_id = u.id '
+                    f'WHERE uc.company_id = {self.company.id}'
+                ),
+                schema=schema,
+            )
+
+    @override_settings(GEMINI_API_KEY='test-key', GEMINI_MODEL='test-model')
+    @patch('ai_assistant.services.requests.post')
+    def test_chat_returns_clear_dns_error_when_gemini_host_cannot_resolve(self, mock_post):
+        mock_post.side_effect = requests.exceptions.ConnectionError(
+            "Failed to resolve 'generativelanguage.googleapis.com' ([Errno 11001] getaddrinfo failed)"
+        )
+
+        response = self.client.post(
+            '/api/v1/ai/assistant/chat/',
+            {'question': 'Explain this app data', 'page': '/dashboard'},
+            format='json',
+            HTTP_COMPANY_CODE=self.company.code,
+        )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.data['code'], 'ai_provider_error')
+        self.assertIn('DNS/network resolution is failing', response.data['error'])
