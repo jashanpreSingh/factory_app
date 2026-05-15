@@ -4,6 +4,9 @@ from .models import (
 )
 
 
+MAX_BOX_LABELS_PER_REQUEST = 5000
+
+
 # ---------------------------------------------------------------------------
 # Box Movement
 # ---------------------------------------------------------------------------
@@ -212,7 +215,7 @@ class BoxGenerateSerializer(serializers.Serializer):
     item_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default='')
     batch_number = serializers.CharField(max_length=100)
     qty = serializers.DecimalField(max_digits=12, decimal_places=2)
-    box_count = serializers.IntegerField(min_value=1, max_value=500)
+    box_count = serializers.IntegerField(min_value=1, max_value=MAX_BOX_LABELS_PER_REQUEST)
     uom = serializers.CharField(max_length=20, required=False, allow_blank=True, default='PCS')
     g_weight = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, default=None)
     n_weight = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, default=None)
@@ -417,7 +420,7 @@ class LooseStockDetailSerializer(LooseStockListSerializer):
 
 class ProductionLabelsSerializer(serializers.Serializer):
     qty_per_box = serializers.DecimalField(max_digits=12, decimal_places=2)
-    box_count = serializers.IntegerField(min_value=1, max_value=500)
+    box_count = serializers.IntegerField(min_value=1, max_value=MAX_BOX_LABELS_PER_REQUEST)
     batch_number = serializers.CharField(max_length=100)
     warehouse = serializers.CharField(max_length=20)
 

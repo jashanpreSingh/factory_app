@@ -20,7 +20,11 @@ from .models import (
     ScanLog,
     ScanResult,
 )
-from .serializers import PalletCreateSerializer
+from .serializers import (
+    BoxGenerateSerializer,
+    MAX_BOX_LABELS_PER_REQUEST,
+    PalletCreateSerializer,
+)
 from .services.barcode_service import BarcodeService
 from .services.label_service import LabelService
 from .services.production_release_service import ProductionReleaseOilService
@@ -128,6 +132,41 @@ class BarcodeWorkflowTests(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data['production_line'], '')
+
+    def test_box_generate_serializer_allows_large_label_batches(self):
+        serializer = BoxGenerateSerializer(
+            data={
+                'item_code': 'FG001',
+                'item_name': 'Test Finished Good',
+                'batch_number': 'BATCH-001',
+                'qty': '1.00',
+                'box_count': MAX_BOX_LABELS_PER_REQUEST,
+                'uom': 'PCS',
+                'mfg_date': '2026-05-07',
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_box_generate_serializer_rejects_extreme_label_batches(self):
+        serializer = BoxGenerateSerializer(
+            data={
+                'item_code': 'FG001',
+                'item_name': 'Test Finished Good',
+                'batch_number': 'BATCH-001',
+                'qty': '1.00',
+                'box_count': MAX_BOX_LABELS_PER_REQUEST + 1,
+                'uom': 'PCS',
+                'mfg_date': '2026-05-07',
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('box_count', serializer.errors)
 
     def test_scan_service_handles_exact_qr_one_d_and_missing_barcodes(self):
         boxes = self._generate_boxes(count=3)
