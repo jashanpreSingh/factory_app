@@ -517,14 +517,12 @@ class InspectionCreateUpdateAPI(APIView):
                 company=request.company.company
             )
 
-        internal_lot_no = data.pop("internal_lot_no", None) or RawMaterialInspection.generate_lot_no()
-
         try:
             inspection, created = RawMaterialInspection.objects.get_or_create(
                 arrival_slip=slip,
                 defaults={
                     "report_no": RawMaterialInspection.generate_report_no(),
-                    "internal_lot_no": internal_lot_no,
+                    "internal_lot_no": RawMaterialInspection.generate_lot_no(),
                     "material_type": material_type,
                     "created_by": request.user,
                     **data
@@ -542,14 +540,11 @@ class InspectionCreateUpdateAPI(APIView):
                     setattr(inspection, key, value)
                 if material_type:
                     inspection.material_type = material_type
-                # Update internal_lot_no if provided in request
-                if internal_lot_no and internal_lot_no != inspection.internal_lot_no:
-                    inspection.internal_lot_no = internal_lot_no
                 inspection.updated_by = request.user
                 inspection.save()
         except IntegrityError:
             return Response(
-                {"internal_lot_no": [f"Internal lot number '{internal_lot_no}' already exists."]},
+                {"detail": "Could not save inspection because a generated identifier already exists. Please retry."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

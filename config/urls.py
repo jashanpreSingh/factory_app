@@ -52,6 +52,8 @@ urlpatterns = [
     path("api/v1/dispatch-plans/", include("dispatch_plans.urls")),
     path("api/v1/non-moving-rm/", include("non_moving_rm.urls")),
     path("api/v1/warehouse/", include("warehouse.urls")),
+    path("api/v1/barcode/", include("barcode.urls")),
+    path("api/v1/ai/", include("ai_assistant.urls")),
 
 ]
 
