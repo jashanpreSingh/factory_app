@@ -6,6 +6,7 @@ from .hana.service_grpo_options_reader import HanaServiceGRPOOptionsReader
 from .hana.stock_transfer_reader import HanaStockTransferReader
 from .hana.warehouse_reader import HanaWarehouseReader
 from .hana.vendor_reader import HanaVendorReader
+from .service_layer.ap_invoice_writer import APInvoiceWriter
 from .service_layer.grpo_writer import GRPOWriter
 from .service_layer.attachment_writer import AttachmentWriter
 from .service_layer.production_order_writer import ProductionOrderWriter
@@ -93,6 +94,10 @@ class SAPClient:
     def create_grpo(self, payload: dict):
         self.grpo_writer = GRPOWriter(self.context)
         return self.grpo_writer.create(payload)
+
+    def create_ap_invoice(self, payload: dict):
+        writer = APInvoiceWriter(self.context)
+        return writer.create(payload)
 
     def upload_attachment(self, file_path: str, filename: str) -> dict:
         """Upload a file to SAP Attachments2"""

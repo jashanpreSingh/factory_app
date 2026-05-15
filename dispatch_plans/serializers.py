@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from .models import DispatchPlan, DispatchPlanStatus
+from .models import (
+    DispatchPlan,
+    DispatchPlanStatus,
+    TransporterAPInvoiceAttachment,
+    TransporterAPInvoiceLine,
+    TransporterAPInvoicePosting,
+)
 
 
 class DispatchBillFilterSerializer(serializers.Serializer):
@@ -35,6 +41,11 @@ class DispatchPlanSerializer(serializers.ModelSerializer):
             "id",
             "sap_invoice_doc_entry",
             "sap_invoice_doc_num",
+            "invoice_number",
+            "eway_bill",
+            "invoice_weight",
+            "invoice_amount",
+            "place_of_supply",
             "vehicle_id",
             "transporter_id",
             "driver_id",
@@ -69,6 +80,25 @@ class DispatchPlanSerializer(serializers.ModelSerializer):
 class DispatchPlanUpdateSerializer(serializers.Serializer):
     sap_invoice_doc_num = serializers.CharField(
         required=False, max_length=30, allow_blank=True
+    )
+    invoice_number = serializers.CharField(required=False, max_length=50, allow_blank=True)
+    eway_bill = serializers.CharField(required=False, max_length=80, allow_blank=True)
+    invoice_weight = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=18,
+        decimal_places=3,
+    )
+    invoice_amount = serializers.DecimalField(
+        required=False,
+        allow_null=True,
+        max_digits=18,
+        decimal_places=2,
+    )
+    place_of_supply = serializers.CharField(
+        required=False,
+        max_length=150,
+        allow_blank=True,
     )
     vehicle_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     transporter_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
@@ -144,6 +174,7 @@ class DispatchBillSerializer(serializers.Serializer):
     sap_vehicle_no = serializers.CharField()
     sap_transporter_invoice = serializers.CharField()
     sap_lr_number = serializers.CharField()
+    sap_eway_bill = serializers.CharField()
     gst_vehicle_no = serializers.CharField()
     gst_transport_date = serializers.CharField(allow_null=True)
     gst_transport_reason = serializers.CharField()
@@ -198,3 +229,176 @@ class DispatchPlansMetaSerializer(serializers.Serializer):
 class DispatchBillListResponseSerializer(serializers.Serializer):
     data = DispatchBillSerializer(many=True)
     meta = DispatchPlansMetaSerializer()
+
+
+class OpenBiltySerializer(serializers.Serializer):
+    service_grpo_posting_id = serializers.IntegerField()
+    dispatch_plan_id = serializers.IntegerField()
+    sap_invoice_doc_entry = serializers.IntegerField()
+    sap_invoice_doc_num = serializers.CharField(allow_blank=True)
+    dispatch_date = serializers.DateField(allow_null=True)
+    vehicle_no = serializers.CharField(allow_blank=True)
+    driver_name = serializers.CharField(allow_blank=True)
+    transporter_id = serializers.IntegerField(allow_null=True)
+    transporter_name = serializers.CharField(allow_blank=True)
+    vendor_code = serializers.CharField()
+    vendor_name = serializers.CharField(allow_blank=True)
+    branch_id = serializers.IntegerField(allow_null=True)
+    bilty_no = serializers.CharField(allow_blank=True)
+    bilty_date = serializers.DateField(allow_null=True)
+    grpo_doc_entry = serializers.IntegerField()
+    grpo_doc_num = serializers.IntegerField(allow_null=True)
+    grpo_doc_total = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        allow_null=True,
+    )
+    posted_at = serializers.DateTimeField(allow_null=True)
+    line_count = serializers.IntegerField()
+
+
+class TransporterAPInvoicePreviewRequestSerializer(serializers.Serializer):
+    service_grpo_posting_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1,
+    )
+    vendor_code = serializers.CharField(required=False, max_length=50, allow_blank=True)
+    branch_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_service_grpo_posting_ids(self, value):
+        deduped = list(dict.fromkeys(value))
+        if len(deduped) != len(value):
+            raise serializers.ValidationError("Duplicate bilty GRPO selections are not allowed.")
+        return value
+
+
+class TransporterAPInvoicePostRequestSerializer(
+    TransporterAPInvoicePreviewRequestSerializer
+):
+    invoice_number = serializers.CharField(max_length=100)
+    invoice_date = serializers.DateField(required=False, allow_null=True)
+    invoice_amount = serializers.DecimalField(max_digits=18, decimal_places=2)
+    doc_date = serializers.DateField(required=False, allow_null=True)
+    doc_due_date = serializers.DateField(required=False, allow_null=True)
+    tax_date = serializers.DateField(required=False, allow_null=True)
+    comments = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_invoice_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Invoice amount must be greater than zero.")
+        return value
+
+
+class TransporterAPInvoicePreviewLineSerializer(serializers.Serializer):
+    service_grpo_posting_id = serializers.IntegerField()
+    service_grpo_line_id = serializers.IntegerField(allow_null=True)
+    dispatch_plan_id = serializers.IntegerField()
+    bilty_no = serializers.CharField(allow_blank=True)
+    grpo_doc_entry = serializers.IntegerField()
+    grpo_doc_num = serializers.IntegerField(allow_null=True)
+    grpo_line_num = serializers.IntegerField()
+    service_description = serializers.CharField(allow_blank=True)
+    line_total = serializers.DecimalField(max_digits=18, decimal_places=2)
+    tax_code = serializers.CharField(allow_blank=True)
+    gl_account = serializers.CharField(allow_blank=True)
+
+
+class TransporterAPInvoicePreviewSerializer(serializers.Serializer):
+    vendor_code = serializers.CharField()
+    vendor_name = serializers.CharField(allow_blank=True)
+    branch_id = serializers.IntegerField()
+    selected_grpo_total = serializers.DecimalField(max_digits=18, decimal_places=2)
+    tolerance = serializers.DecimalField(max_digits=18, decimal_places=2)
+    lines = TransporterAPInvoicePreviewLineSerializer(many=True)
+
+
+class TransporterAPInvoiceLineSerializer(serializers.ModelSerializer):
+    service_grpo_posting_id = serializers.IntegerField(read_only=True)
+    dispatch_plan_id = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = TransporterAPInvoiceLine
+        fields = [
+            "id",
+            "service_grpo_posting_id",
+            "dispatch_plan_id",
+            "base_entry",
+            "base_line",
+            "base_doc_num",
+            "bilty_no",
+            "service_description",
+            "line_total",
+            "tax_code",
+            "gl_account",
+        ]
+
+
+class TransporterAPInvoiceAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TransporterAPInvoiceAttachment
+        fields = [
+            "id",
+            "file",
+            "original_filename",
+            "sap_attachment_status",
+            "sap_absolute_entry",
+            "sap_error_message",
+            "uploaded_at",
+            "uploaded_by",
+        ]
+        read_only_fields = [
+            "id",
+            "original_filename",
+            "sap_attachment_status",
+            "sap_absolute_entry",
+            "sap_error_message",
+            "uploaded_at",
+            "uploaded_by",
+        ]
+
+
+class TransporterAPInvoicePostingSerializer(serializers.ModelSerializer):
+    lines = TransporterAPInvoiceLineSerializer(many=True, read_only=True)
+    attachments = TransporterAPInvoiceAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = TransporterAPInvoicePosting
+        fields = [
+            "id",
+            "company",
+            "vendor_code",
+            "vendor_name",
+            "invoice_number",
+            "invoice_date",
+            "invoice_amount",
+            "selected_grpo_total",
+            "amount_difference",
+            "branch_id",
+            "sap_doc_entry",
+            "sap_doc_num",
+            "sap_doc_total",
+            "status",
+            "error_message",
+            "posted_at",
+            "posted_by",
+            "created_at",
+            "updated_at",
+            "comments",
+            "lines",
+            "attachments",
+        ]
+        read_only_fields = fields
+
+
+class TransporterAPInvoicePostResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    transporter_ap_invoice_posting_id = serializers.IntegerField()
+    sap_doc_entry = serializers.IntegerField(allow_null=True)
+    sap_doc_num = serializers.IntegerField(allow_null=True)
+    sap_doc_total = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        allow_null=True,
+    )
+    message = serializers.CharField()
+    posting = TransporterAPInvoicePostingSerializer()

@@ -13,7 +13,7 @@ def create_dispatch_vehicle_linking_permission(apps, schema_editor):
     Permission = apps.get_model("auth", "Permission")
     Group = apps.get_model("auth", "Group")
 
-    content_type = ContentType.objects.get(
+    content_type, _ = ContentType.objects.get_or_create(
         app_label="dispatch_plans",
         model="dispatchplan",
     )

@@ -112,6 +112,8 @@ class DispatchPlansService:
 
         if plan.booking_status == DispatchPlanStatus.BOOKED and not plan.bilty_no.strip():
             raise ValueError("Bilty number is required before booking the dispatch vehicle.")
+        if plan.booking_status == DispatchPlanStatus.BOOKED and not plan.bilty_attachment:
+            raise ValueError("Bilty attachment is required before booking the dispatch vehicle.")
 
         plan.updated_by = user
         plan.save()
@@ -122,6 +124,11 @@ class DispatchPlansService:
             "id": None,
             "sap_invoice_doc_entry": doc_entry,
             "sap_invoice_doc_num": doc_num,
+            "invoice_number": "",
+            "eway_bill": "",
+            "invoice_weight": None,
+            "invoice_amount": None,
+            "place_of_supply": "",
             "vehicle_id": None,
             "transporter_id": None,
             "driver_id": None,
@@ -141,6 +148,8 @@ class DispatchPlansService:
             "driver_id_proof_number": "",
             "bilty_no": "",
             "bilty_date": None,
+            "bilty_attachment": None,
+            "bilty_attachment_name": "",
             "freight": None,
             "total_freight": None,
             "kanta_weight": None,
@@ -166,6 +175,7 @@ class DispatchPlansService:
             row.get("sap_vehicle_no"),
             row.get("sap_transporter_invoice"),
             row.get("sap_lr_number"),
+            row.get("sap_eway_bill"),
             row.get("gst_vehicle_no"),
             row.get("warehouses"),
             row.get("item_summary"),
@@ -178,6 +188,9 @@ class DispatchPlansService:
             plan.get("driver_name"),
             plan.get("driver_mobile_no"),
             plan.get("driver_license_no"),
+            plan.get("invoice_number"),
+            plan.get("eway_bill"),
+            plan.get("place_of_supply"),
             plan.get("bilty_no"),
             plan.get("remarks"),
         ]

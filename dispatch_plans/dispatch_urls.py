@@ -1,0 +1,69 @@
+from django.urls import path
+
+from .views import (
+    DispatchBiltyGRPOOptionsAPI,
+    DispatchBiltyGRPOPostingDetailAPI,
+    DispatchBiltyGRPOPostingHistoryAPI,
+    DispatchBiltyGRPOPreviewAPI,
+    DispatchBiltyServiceGRPOPostAPI,
+    DispatchPendingBiltyGRPOListAPI,
+    OpenBiltyListAPI,
+    TransporterAPInvoiceDetailAPI,
+    TransporterAPInvoiceHistoryAPI,
+    TransporterAPInvoicePostAPI,
+    TransporterAPInvoicePreviewAPI,
+)
+
+urlpatterns = [
+    path("open-bilties/", OpenBiltyListAPI.as_view(), name="dispatch-open-bilties"),
+    path(
+        "bilty-grpo/pending/",
+        DispatchPendingBiltyGRPOListAPI.as_view(),
+        name="dispatch-bilty-grpo-pending",
+    ),
+    path(
+        "bilty-grpo/options/",
+        DispatchBiltyGRPOOptionsAPI.as_view(),
+        name="dispatch-bilty-grpo-options",
+    ),
+    path(
+        "bilty-grpo/preview/<int:dispatch_plan_id>/",
+        DispatchBiltyGRPOPreviewAPI.as_view(),
+        name="dispatch-bilty-grpo-preview",
+    ),
+    path(
+        "bilty-grpo/post/",
+        DispatchBiltyServiceGRPOPostAPI.as_view(),
+        name="dispatch-bilty-grpo-post",
+    ),
+    path(
+        "bilty-grpo/history/",
+        DispatchBiltyGRPOPostingHistoryAPI.as_view(),
+        name="dispatch-bilty-grpo-history",
+    ),
+    path(
+        "bilty-grpo/<int:posting_id>/",
+        DispatchBiltyGRPOPostingDetailAPI.as_view(),
+        name="dispatch-bilty-grpo-detail",
+    ),
+    path(
+        "transporter-invoices/preview/",
+        TransporterAPInvoicePreviewAPI.as_view(),
+        name="dispatch-transporter-invoice-preview",
+    ),
+    path(
+        "transporter-invoices/post-ap-invoice/",
+        TransporterAPInvoicePostAPI.as_view(),
+        name="dispatch-transporter-invoice-post",
+    ),
+    path(
+        "transporter-invoices/history/",
+        TransporterAPInvoiceHistoryAPI.as_view(),
+        name="dispatch-transporter-invoice-history",
+    ),
+    path(
+        "transporter-invoices/<int:posting_id>/",
+        TransporterAPInvoiceDetailAPI.as_view(),
+        name="dispatch-transporter-invoice-detail",
+    ),
+]
