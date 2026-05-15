@@ -424,6 +424,7 @@ class BulkPrintAPI(APIView):
                     print_type=item.get('print_type', 'ORIGINAL'),
                     user=request.user,
                     reprint_reason=item.get('reprint_reason', ''),
+                    printer_name=item.get('printer_name', ''),
                 )
 
         return Response(results)

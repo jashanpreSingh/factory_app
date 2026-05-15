@@ -228,7 +228,9 @@ class PalletCreateSerializer(serializers.Serializer):
         child=serializers.IntegerField(), min_length=1
     )
     warehouse = serializers.CharField(max_length=20)
-    production_line = serializers.CharField(max_length=50, required=False, default='')
+    production_line = serializers.CharField(
+        max_length=50, required=False, allow_blank=True, default=''
+    )
     production_run_id = serializers.IntegerField(required=False)
 
 
@@ -273,13 +275,31 @@ class PrintRequestSerializer(serializers.Serializer):
         choices=['ORIGINAL', 'REPRINT'], default='ORIGINAL'
     )
     reprint_reason = serializers.CharField(required=False, allow_blank=True, default='')
-    printer_name = serializers.CharField(required=False, allow_blank=True, default='')
+    printer_name = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, default=''
+    )
+
+
+class BulkPrintItemSerializer(serializers.Serializer):
+    label_type = serializers.ChoiceField(choices=['BOX', 'PALLET'])
+    id = serializers.IntegerField(min_value=1)
+    print_type = serializers.ChoiceField(
+        choices=['ORIGINAL', 'REPRINT'], required=False, default='ORIGINAL'
+    )
+    reprint_reason = serializers.CharField(required=False, allow_blank=True, default='')
+    printer_name = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, default=''
+    )
 
 
 class BulkPrintRequestSerializer(serializers.Serializer):
     items = serializers.ListField(
-        child=serializers.DictField(), min_length=1,
-        help_text="[{label_type: 'BOX'|'PALLET', id: int, print_type: 'ORIGINAL'|'REPRINT', reprint_reason: ''}]"
+        child=BulkPrintItemSerializer(),
+        min_length=1,
+        help_text=(
+            "[{label_type: 'BOX'|'PALLET', id: int, print_type: "
+            "'ORIGINAL'|'REPRINT', reprint_reason: '', printer_name: ''}]"
+        ),
     )
 
 

@@ -14,12 +14,15 @@ from .models import (
     BoxMovementType,
     BoxStatus,
     EntityType,
+    LabelPrintLog,
     LooseStockStatus,
     PalletMovement,
     ScanLog,
     ScanResult,
 )
+from .serializers import PalletCreateSerializer
 from .services.barcode_service import BarcodeService
+from .services.label_service import LabelService
 from .services.production_release_service import ProductionReleaseOilService
 from .services.scan_service import ScanService
 
@@ -37,6 +40,7 @@ class BarcodeWorkflowTests(TestCase):
             employee_code='EMP-BC-001',
         )
         self.service = BarcodeService(company_code=self.company.code)
+        self.label_service = LabelService(company_code=self.company.code)
         self.scan_service = ScanService(company_code=self.company.code)
 
     def _generate_boxes(self, count=3, qty='12.50', line='Line 1', batch='BATCH-001'):
@@ -112,6 +116,18 @@ class BarcodeWorkflowTests(TestCase):
             3,
         )
         self.assertEqual(pallet.barcode_data['type'], 'PALLET')
+
+    def test_pallet_create_serializer_allows_blank_production_line(self):
+        serializer = PalletCreateSerializer(
+            data={
+                'box_ids': [1, 2, 3],
+                'warehouse': 'FG01',
+                'production_line': '',
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['production_line'], '')
 
     def test_scan_service_handles_exact_qr_one_d_and_missing_barcodes(self):
         boxes = self._generate_boxes(count=3)
@@ -212,6 +228,22 @@ class BarcodeWorkflowTests(TestCase):
 
         self.assertLessEqual(len(boxes[0].box_barcode), 50)
         self.assertNotIn('/', boxes[0].box_barcode)
+
+    def test_label_print_log_stores_tsc_printer_name(self):
+        box = self._generate_boxes(count=1)[0]
+        label_data = self.label_service.get_box_label_data(box.id)
+
+        self.label_service.log_print(
+            label_type='BOX',
+            reference_id=box.id,
+            reference_code=label_data['barcode'],
+            print_type='ORIGINAL',
+            user=self.user,
+            printer_name='TSC DA310 - 100 x 40 mm',
+        )
+
+        log = LabelPrintLog.objects.get(reference_code=box.box_barcode)
+        self.assertEqual(log.printer_name, 'TSC DA310 - 100 x 40 mm')
 
     def test_production_release_oil_row_normalizes_for_label_dropdown(self):
         row = ProductionReleaseOilService._normalize_row({
