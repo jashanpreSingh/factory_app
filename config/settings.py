@@ -127,9 +127,9 @@ USE_I18N = True
 USE_TZ = True
 
 # Admin Panel Customization
-ADMIN_SITE_HEADER = 'Sampooran Admin'
-ADMIN_SITE_TITLE = "Sampooran"
-ADMIN_INDEX_TITLE = "Sampooran Factory Jivo Wellness Admin"
+ADMIN_SITE_HEADER = 'JI Admin'
+ADMIN_SITE_TITLE = "JI"
+ADMIN_INDEX_TITLE = "JI Factory Jivo Wellness Admin"
 
 # Static files
 STATIC_URL = 'static/'
