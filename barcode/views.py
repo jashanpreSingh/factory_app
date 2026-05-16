@@ -17,7 +17,7 @@ from .services.production_release_service import (
 from .serializers import (
     BoxGenerateSerializer, BoxListSerializer, BoxDetailSerializer,
     PalletCreateSerializer, PalletListSerializer, PalletDetailSerializer,
-    VoidSerializer, PrintRequestSerializer, BulkPrintRequestSerializer,
+    VoidSerializer, PrintRequestSerializer, PalletPrintWorkflowSerializer, BulkPrintRequestSerializer,
     LabelPrintLogSerializer,
     PalletMoveSerializer, PalletClearSerializer, PalletSplitSerializer,
     PalletAddBoxesSerializer, PalletRemoveBoxesSerializer, BoxTransferSerializer,
@@ -134,7 +134,7 @@ class BoxVoidAPI(APIView):
 # ===========================================================================
 
 class PalletCreateAPI(APIView):
-    """Create a pallet by linking existing boxes."""
+    """Create a generic empty pallet."""
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def post(self, request):
@@ -149,6 +149,12 @@ class PalletCreateAPI(APIView):
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError as e:
+            logger.error(f"Pallet creation integrity error: {e}")
+            return Response(
+                {'error': 'Duplicate pallet ID detected. Please try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 # ===========================================================================
@@ -257,7 +263,7 @@ class PalletClearAPI(APIView):
 # ===========================================================================
 
 class PalletSplitAPI(APIView):
-    """Split selected boxes into a new pallet."""
+    """Split selected boxes into an existing empty pallet."""
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def post(self, request, pallet_id):
@@ -265,13 +271,13 @@ class PalletSplitAPI(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             svc = _get_service(request)
-            new_pallet = svc.split_pallet(
+            target_pallet = svc.split_pallet(
                 pallet_id,
                 box_ids=serializer.validated_data['box_ids'],
-                warehouse=serializer.validated_data['warehouse'],
+                target_pallet_id=serializer.validated_data['target_pallet_id'],
                 user=request.user,
             )
-            return Response(PalletDetailSerializer(new_pallet).data, status=status.HTTP_201_CREATED)
+            return Response(PalletDetailSerializer(target_pallet).data, status=status.HTTP_200_OK)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -401,6 +407,21 @@ class PalletPrintAPI(APIView):
 # ===========================================================================
 # Print — Bulk
 # ===========================================================================
+
+class PalletPrintWorkflowAPI(APIView):
+    """Deprecated old pallet print workflow."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, pallet_id):
+        return Response(
+            {
+                'error': (
+                    'This print workflow is disabled. Use Pallet QR Print so '
+                    'the SAP item is selected before box labels are attached.'
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 class BulkPrintAPI(APIView):
     """Return label data for multiple items at once."""

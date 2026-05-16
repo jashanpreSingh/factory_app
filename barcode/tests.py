@@ -99,29 +99,79 @@ class BarcodeWorkflowTests(TestCase):
             ],
         )
 
-    def test_create_pallet_links_boxes_and_tracks_totals(self):
+    def test_create_pallet_creates_empty_pallet_then_adds_boxes(self):
         boxes = self._generate_boxes(count=3)
 
         pallet = self.service.create_pallet(
             {
-                'box_ids': [box.id for box in boxes],
+                'box_ids': [],
                 'warehouse': 'FG01',
                 'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
             },
             user=self.user,
         )
 
         self.assertEqual(pallet.pallet_id, 'PLT-20260507-Line_1-001')
+        self.assertEqual(pallet.box_count, 0)
+        self.assertEqual(pallet.total_qty, Decimal('0'))
+        self.assertEqual(PalletMovement.objects.count(), 1)
+
+        pallet = self.service.add_boxes_to_pallet(
+            pallet.id,
+            [box.id for box in boxes],
+            user=self.user,
+        )
         self.assertEqual(pallet.box_count, 3)
         self.assertEqual(pallet.total_qty, Decimal('37.50'))
-        self.assertEqual(PalletMovement.objects.count(), 1)
         self.assertEqual(
             Box.objects.filter(pallet=pallet, current_warehouse='FG01').count(),
             3,
         )
         self.assertEqual(pallet.barcode_data['type'], 'PALLET')
 
+    def test_pallet_sequence_uses_global_unique_namespace(self):
+        first = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': '',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        other_company = Company.objects.create(
+            name='Other Barcode Company',
+            code='OTHERCO',
+        )
+        other_service = BarcodeService(company_code=other_company.code)
+
+        second = other_service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': '',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+
+        self.assertEqual(first.pallet_id, 'PLT-20260507-XX-001')
+        self.assertEqual(second.pallet_id, 'PLT-20260507-XX-002')
+
     def test_pallet_create_serializer_allows_blank_production_line(self):
+        serializer = PalletCreateSerializer(
+            data={
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': '',
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['production_line'], '')
+
+    def test_pallet_create_serializer_rejects_linked_boxes(self):
         serializer = PalletCreateSerializer(
             data={
                 'box_ids': [1, 2, 3],
@@ -130,8 +180,8 @@ class BarcodeWorkflowTests(TestCase):
             }
         )
 
-        self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data['production_line'], '')
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('box_ids', serializer.errors)
 
     def test_box_generate_serializer_allows_large_label_batches(self):
         serializer = BoxGenerateSerializer(
@@ -172,10 +222,15 @@ class BarcodeWorkflowTests(TestCase):
         boxes = self._generate_boxes(count=3)
         pallet = self.service.create_pallet(
             {
-                'box_ids': [box.id for box in boxes],
+                'box_ids': [],
                 'warehouse': 'FG01',
                 'production_line': 'Line 1',
             },
+            user=self.user,
+        )
+        pallet = self.service.add_boxes_to_pallet(
+            pallet.id,
+            [box.id for box in boxes],
             user=self.user,
         )
 
@@ -214,10 +269,15 @@ class BarcodeWorkflowTests(TestCase):
         boxes = self._generate_boxes(count=2, qty='10.00')
         pallet = self.service.create_pallet(
             {
-                'box_ids': [box.id for box in boxes],
+                'box_ids': [],
                 'warehouse': 'FG01',
                 'production_line': 'Line 1',
             },
+            user=self.user,
+        )
+        pallet = self.service.add_boxes_to_pallet(
+            pallet.id,
+            [box.id for box in boxes],
             user=self.user,
         )
 
