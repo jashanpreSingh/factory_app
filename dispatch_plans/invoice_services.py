@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from hdbcli import dbapi
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -50,9 +51,11 @@ class DispatchInvoiceService:
                 sap_doc_entry__isnull=False,
             )
             .exclude(
-                transporter_ap_invoice_lines__transporter_ap_invoice__status=(
-                    TransporterAPInvoiceStatus.POSTED
-                )
+                transporter_ap_invoice_lines__transporter_ap_invoice__status__in=[
+                    TransporterAPInvoiceStatus.PENDING,
+                    TransporterAPInvoiceStatus.POSTED,
+                    TransporterAPInvoiceStatus.FAILED,
+                ]
             )
             .distinct()
             .order_by("-posted_at", "-created_at")
@@ -135,6 +138,38 @@ class DispatchInvoiceService:
         branch_id: Optional[int] = None,
         comments: str = "",
     ) -> TransporterAPInvoicePosting:
+        posting = self.submit_ap_invoice(
+            service_grpo_posting_ids=service_grpo_posting_ids,
+            user=user,
+            invoice_number=invoice_number,
+            invoice_amount=invoice_amount,
+            attachments=attachments,
+            invoice_date=invoice_date,
+            vendor_code=vendor_code,
+            branch_id=branch_id,
+            comments=comments,
+        )
+        return self.post_submitted_ap_invoice(
+            posting_id=posting.id,
+            user=user,
+            doc_date=doc_date,
+            doc_due_date=doc_due_date,
+            tax_date=tax_date,
+            comments=comments,
+        )
+
+    def submit_ap_invoice(
+        self,
+        service_grpo_posting_ids: List[int],
+        user,
+        invoice_number: str,
+        invoice_amount: Decimal,
+        attachments: Optional[list] = None,
+        invoice_date=None,
+        vendor_code: Optional[str] = None,
+        branch_id: Optional[int] = None,
+        comments: str = "",
+    ) -> TransporterAPInvoicePosting:
         invoice_number = (invoice_number or "").strip()
         if not invoice_number:
             raise ValueError("Transporter invoice number is required.")
@@ -175,17 +210,115 @@ class DispatchInvoiceService:
                 amount_difference=amount_difference,
                 branch_id=preview["branch_id"],
                 status=TransporterAPInvoiceStatus.PENDING,
-                posted_by=user,
                 comments=comments or "",
                 created_by=user,
                 updated_by=user,
             )
             self._create_local_lines(posting, preview["lines"])
-            attachment_records = self._create_attachment_records(
+            self._create_attachment_records(
                 posting=posting,
                 attachments=attachments,
                 user=user,
             )
+
+        return posting
+
+    def post_submitted_ap_invoice(
+        self,
+        posting_id: int,
+        user,
+        doc_date=None,
+        doc_due_date=None,
+        tax_date=None,
+        comments: str = "",
+    ) -> TransporterAPInvoicePosting:
+        posting = self.get_ap_invoice(posting_id)
+        if posting.status not in (
+            TransporterAPInvoiceStatus.PENDING,
+            TransporterAPInvoiceStatus.FAILED,
+        ):
+            raise ValueError("Only pending or failed A/P invoices can be posted to SAP.")
+
+        attachment_records = posting.attachments.all().order_by("id")
+        if not attachment_records.exists():
+            raise ValueError("At least one transporter invoice attachment is required.")
+
+        service_grpo_posting_ids = list(
+            dict.fromkeys(
+                posting.lines.values_list("service_grpo_posting_id", flat=True)
+            )
+        )
+        preview = self._build_preview(
+            service_grpo_posting_ids=service_grpo_posting_ids,
+            vendor_code=posting.vendor_code,
+            branch_id=posting.branch_id,
+            exclude_invoice_posting_id=posting.id,
+        )
+
+        amount_difference = self._decimal(posting.invoice_amount) - self._decimal(
+            preview["selected_grpo_total"]
+        )
+        if abs(amount_difference) > self.AMOUNT_TOLERANCE:
+            raise ValueError(
+                "Transporter invoice amount does not match selected GRPO total "
+                f"within INR {self.AMOUNT_TOLERANCE}. Difference: {amount_difference}."
+            )
+
+        self._guard_duplicate_invoice(
+            vendor_code=posting.vendor_code,
+            invoice_number=posting.invoice_number,
+            exclude_posting_id=posting.id,
+        )
+
+        if amount_difference != posting.amount_difference:
+            posting.selected_grpo_total = preview["selected_grpo_total"]
+            posting.amount_difference = amount_difference
+            posting.updated_by = user
+            posting.save(
+                update_fields=[
+                    "selected_grpo_total",
+                    "amount_difference",
+                    "updated_by",
+                    "updated_at",
+                ]
+            )
+
+        sap_comments = posting.comments or ""
+        if comments:
+            sap_comments = " | ".join(part for part in [sap_comments, comments] if part)
+
+        if getattr(settings, "DISPATCH_SIMULATE_AP_INVOICE_POSTING", False):
+            logger.info(
+                "Simulating transporter A/P invoice SAP post for %s in local test mode.",
+                posting.invoice_number,
+            )
+            posting.sap_doc_entry = 990000000 + posting.id
+            posting.sap_doc_num = 980000000 + posting.id
+            posting.sap_doc_total = self._decimal(posting.invoice_amount)
+            posting.status = TransporterAPInvoiceStatus.POSTED
+            posting.posted_at = timezone.now()
+            posting.posted_by = user
+            posting.updated_by = user
+            posting.error_message = None
+            posting.save(
+                update_fields=[
+                    "sap_doc_entry",
+                    "sap_doc_num",
+                    "sap_doc_total",
+                    "status",
+                    "posted_at",
+                    "posted_by",
+                    "updated_by",
+                    "error_message",
+                    "updated_at",
+                ]
+            )
+            attachment_records.update(
+                sap_attachment_status=SAPAttachmentStatus.LINKED,
+                sap_absolute_entry=posting.sap_doc_entry,
+                sap_error_message=None,
+            )
+            return posting
 
         sap_client = SAPClient(company_code=self.company_code)
         try:
@@ -195,18 +328,18 @@ class DispatchInvoiceService:
             )
             payload = self._build_sap_payload(
                 preview=preview,
-                invoice_number=invoice_number,
-                invoice_date=invoice_date,
+                invoice_number=posting.invoice_number,
+                invoice_date=posting.invoice_date,
                 doc_date=doc_date,
                 doc_due_date=doc_due_date,
                 tax_date=tax_date,
-                comments=comments,
+                comments=sap_comments,
                 user=user,
                 attachment_entry=attachment_entry,
             )
             logger.info(
                 "Transporter A/P invoice payload for %s: %s",
-                invoice_number,
+                posting.invoice_number,
                 payload,
             )
             result = sap_client.create_ap_invoice(payload)
@@ -222,6 +355,7 @@ class DispatchInvoiceService:
         posting.sap_doc_total = self._decimal(result.get("DocTotal", 0))
         posting.status = TransporterAPInvoiceStatus.POSTED
         posting.posted_at = timezone.now()
+        posting.posted_by = user
         posting.updated_by = user
         posting.error_message = None
         posting.save(
@@ -231,6 +365,7 @@ class DispatchInvoiceService:
                 "sap_doc_total",
                 "status",
                 "posted_at",
+                "posted_by",
                 "updated_by",
                 "error_message",
                 "updated_at",
@@ -263,6 +398,7 @@ class DispatchInvoiceService:
         service_grpo_posting_ids: List[int],
         vendor_code: Optional[str] = None,
         branch_id: Optional[int] = None,
+        exclude_invoice_posting_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         posting_ids = list(dict.fromkeys(service_grpo_posting_ids or []))
         if not posting_ids:
@@ -297,11 +433,22 @@ class DispatchInvoiceService:
 
         local_invoiced = TransporterAPInvoiceLine.objects.filter(
             service_grpo_posting_id__in=posting_ids,
-            transporter_ap_invoice__status=TransporterAPInvoiceStatus.POSTED,
-        ).values_list("service_grpo_posting_id", flat=True)
+            transporter_ap_invoice__status__in=[
+                TransporterAPInvoiceStatus.PENDING,
+                TransporterAPInvoiceStatus.POSTED,
+                TransporterAPInvoiceStatus.FAILED,
+            ],
+        )
+        if exclude_invoice_posting_id:
+            local_invoiced = local_invoiced.exclude(
+                transporter_ap_invoice_id=exclude_invoice_posting_id
+            )
+        local_invoiced = local_invoiced.values_list(
+            "service_grpo_posting_id", flat=True
+        )
         if local_invoiced:
             raise ValueError(
-                "One or more selected bilty GRPOs are already invoiced locally."
+                "One or more selected bilty GRPOs are already submitted for invoicing."
             )
 
         vendor_codes = {posting.vendor_code for posting in postings}
@@ -401,16 +548,28 @@ class DispatchInvoiceService:
             "lines": preview_lines,
         }
 
-    def _guard_duplicate_invoice(self, vendor_code: str, invoice_number: str) -> None:
+    def _guard_duplicate_invoice(
+        self,
+        vendor_code: str,
+        invoice_number: str,
+        exclude_posting_id: Optional[int] = None,
+    ) -> None:
         local_duplicate = TransporterAPInvoicePosting.objects.filter(
             company=self.company,
             vendor_code=vendor_code,
             invoice_number=invoice_number,
-            status=TransporterAPInvoiceStatus.POSTED,
-        ).exists()
+            status__in=[
+                TransporterAPInvoiceStatus.PENDING,
+                TransporterAPInvoiceStatus.POSTED,
+                TransporterAPInvoiceStatus.FAILED,
+            ],
+        )
+        if exclude_posting_id:
+            local_duplicate = local_duplicate.exclude(id=exclude_posting_id)
+        local_duplicate = local_duplicate.exists()
         if local_duplicate:
             raise ValueError(
-                "This transporter invoice number has already been posted locally."
+                "This transporter invoice number has already been submitted locally."
             )
 
         if self._sap_invoice_exists(vendor_code, invoice_number):
@@ -577,6 +736,13 @@ class DispatchInvoiceService:
         posting.save(update_fields=["status", "error_message", "updated_by", "updated_at"])
 
     def _sap_invoice_exists(self, vendor_code: str, invoice_number: str) -> bool:
+        if getattr(settings, "DISPATCH_USE_LOCAL_GRPO_LINES_FOR_TESTING", False):
+            logger.info(
+                "Skipping SAP OPCH duplicate lookup for transporter invoice %s in local GRPO test mode.",
+                invoice_number,
+            )
+            return False
+
         schema = self.connection.schema
         query = f"""
             SELECT H."DocEntry"
@@ -596,6 +762,8 @@ class DispatchInvoiceService:
         doc_entries = [entry for entry in dict.fromkeys(doc_entries) if entry]
         if not doc_entries:
             return {}
+        if getattr(settings, "DISPATCH_USE_LOCAL_GRPO_LINES_FOR_TESTING", False):
+            return self._fetch_local_grpo_test_lines(doc_entries)
 
         schema = self.connection.schema
         opdn_columns = self._table_columns("OPDN")
@@ -675,6 +843,52 @@ class DispatchInvoiceService:
         for row in rows:
             mapped = self._map_sap_grpo_line(row)
             grouped.setdefault(mapped["doc_entry"], []).append(mapped)
+        return grouped
+
+    def _fetch_local_grpo_test_lines(
+        self,
+        doc_entries: Iterable[int],
+    ) -> Dict[int, List[Dict[str, Any]]]:
+        """Build SAP-like GRPO rows from local service GRPO records for dev UI testing."""
+        postings = (
+            ServiceGRPOPosting.objects.filter(
+                dispatch_plan__company=self.company,
+                sap_doc_entry__in=list(doc_entries),
+                status=GRPOStatus.POSTED,
+            )
+            .select_related("dispatch_plan")
+            .prefetch_related("lines")
+        )
+        default_branch_id = getattr(settings, "DISPATCH_LOCAL_GRPO_TEST_BRANCH_ID", 2)
+        grouped: Dict[int, List[Dict[str, Any]]] = {}
+        for posting in postings:
+            local_lines = list(posting.lines.all().order_by("id"))
+            if not local_lines:
+                local_lines = [None]
+            rows = []
+            for index, line in enumerate(local_lines):
+                line_total = self._decimal(
+                    getattr(line, "amount", None) or posting.sap_doc_total or Decimal("0.00")
+                )
+                rows.append(
+                    {
+                        "doc_entry": int(posting.sap_doc_entry),
+                        "doc_num": posting.sap_doc_num,
+                        "doc_type": "S",
+                        "canceled": "N",
+                        "branch_id": int(default_branch_id) if default_branch_id else None,
+                        "card_code": posting.vendor_code,
+                        "card_name": posting.vendor_name,
+                        "doc_total": self._decimal(posting.sap_doc_total or line_total),
+                        "line_num": index,
+                        "description": getattr(line, "service_description", "") or "Transport freight",
+                        "line_total": line_total,
+                        "gl_account": getattr(line, "gl_account", "") or "",
+                        "tax_code": getattr(line, "tax_code", "") or "",
+                        "already_invoiced": False,
+                    }
+                )
+            grouped[int(posting.sap_doc_entry)] = rows
         return grouped
 
     def _table_columns(self, table_name: str) -> set:

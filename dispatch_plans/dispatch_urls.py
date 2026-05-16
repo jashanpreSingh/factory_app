@@ -12,6 +12,7 @@ from .views import (
     TransporterAPInvoiceHistoryAPI,
     TransporterAPInvoicePostAPI,
     TransporterAPInvoicePreviewAPI,
+    TransporterAPInvoiceSubmitAPI,
 )
 
 urlpatterns = [
@@ -52,9 +53,19 @@ urlpatterns = [
         name="dispatch-transporter-invoice-preview",
     ),
     path(
+        "transporter-invoices/submit/",
+        TransporterAPInvoiceSubmitAPI.as_view(),
+        name="dispatch-transporter-invoice-submit",
+    ),
+    path(
         "transporter-invoices/post-ap-invoice/",
         TransporterAPInvoicePostAPI.as_view(),
         name="dispatch-transporter-invoice-post",
+    ),
+    path(
+        "transporter-invoices/<int:posting_id>/post-ap-invoice/",
+        TransporterAPInvoicePostAPI.as_view(),
+        name="dispatch-transporter-invoice-post-submitted",
     ),
     path(
         "transporter-invoices/history/",

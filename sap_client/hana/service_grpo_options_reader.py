@@ -35,6 +35,9 @@ class HanaServiceGRPOOptionsReader:
                 "branches": self._get_branches(cursor, schema),
                 "tax_codes": self._get_tax_codes(cursor, schema),
                 "gl_accounts": self._get_gl_accounts(cursor, schema),
+                "sac_codes": self._get_sac_codes(cursor, schema),
+                "locations": self._get_locations(cursor, schema),
+                "projects": self._get_projects(cursor, schema),
             }
 
         except dbapi.ProgrammingError as e:
@@ -116,6 +119,68 @@ class HanaServiceGRPOOptionsReader:
             {
                 "account_code": row[0],
                 "account_name": row[1] or row[0],
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_sac_codes(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "AbsEntry" AS sac_entry,
+                    IFNULL("ServCode", '') AS sac_code,
+                    IFNULL("ServName", '') AS sac_name
+                FROM "{schema}"."OSAC"
+                ORDER BY "ServCode"
+            """
+        )
+        return [
+            {
+                "sac_entry": int(row[0]),
+                "sac_code": row[1] or str(row[0]),
+                "sac_name": row[2] or row[1] or str(row[0]),
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_locations(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "Code" AS location_code,
+                    IFNULL("Location", '') AS location_name,
+                    IFNULL("State", '') AS state
+                FROM "{schema}"."OLCT"
+                ORDER BY "Location"
+            """
+        )
+        return [
+            {
+                "location_code": int(row[0]),
+                "location_name": row[1] or str(row[0]),
+                "state": row[2] or "",
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_projects(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "PrjCode" AS project_code,
+                    IFNULL("PrjName", '') AS project_name
+                FROM "{schema}"."OPRJ"
+                WHERE IFNULL("Active", 'Y') <> 'N'
+                ORDER BY "PrjCode"
+            """
+        )
+        return [
+            {
+                "project_code": row[0],
+                "project_name": row[1] or row[0],
             }
             for row in cursor.fetchall()
         ]

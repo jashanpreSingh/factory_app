@@ -190,6 +190,17 @@ class ServiceGRPOPosting(models.Model):
     sap_doc_total = models.DecimalField(
         max_digits=18, decimal_places=2, null=True, blank=True
     )
+    place_of_supply = models.CharField(max_length=100, blank=True, default="")
+    effective_month = models.DateField(null=True, blank=True)
+    budget_delivery_point = models.CharField(max_length=100, blank=True, default="")
+    location_code = models.IntegerField(null=True, blank=True)
+    location_name = models.CharField(max_length=100, blank=True, default="")
+    sac_entry = models.IntegerField(null=True, blank=True)
+    sac_code = models.CharField(max_length=30, blank=True, default="")
+    product_variety = models.CharField(max_length=50, blank=True, default="")
+    total_litres = models.DecimalField(
+        max_digits=18, decimal_places=3, null=True, blank=True
+    )
 
     status = models.CharField(
         max_length=20,
@@ -232,8 +243,20 @@ class ServiceGRPOLinePosting(models.Model):
     )
     service_description = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=18, decimal_places=2)
+    unit_price = models.DecimalField(
+        max_digits=18, decimal_places=2, null=True, blank=True
+    )
     tax_code = models.CharField(max_length=50, blank=True, default="")
     gl_account = models.CharField(max_length=50, blank=True, default="")
+    sac_entry = models.IntegerField(null=True, blank=True)
+    sac_code = models.CharField(max_length=30, blank=True, default="")
+    location_code = models.IntegerField(null=True, blank=True)
+    location_name = models.CharField(max_length=100, blank=True, default="")
+    project_code = models.CharField(max_length=100, blank=True, default="")
+    product_variety = models.CharField(max_length=50, blank=True, default="")
+    total_litres = models.DecimalField(
+        max_digits=18, decimal_places=3, null=True, blank=True
+    )
 
     def __str__(self):
         return f"{self.service_description} - {self.amount}"

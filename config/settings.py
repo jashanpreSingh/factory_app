@@ -25,6 +25,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Core Settings
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=cast_debug)
+DISPATCH_USE_LOCAL_GRPO_LINES_FOR_TESTING = config(
+    'DISPATCH_USE_LOCAL_GRPO_LINES_FOR_TESTING',
+    default=DEBUG,
+    cast=cast_debug,
+)
+DISPATCH_LOCAL_GRPO_TEST_BRANCH_ID = config(
+    'DISPATCH_LOCAL_GRPO_TEST_BRANCH_ID',
+    default=2,
+    cast=int,
+)
+DISPATCH_SIMULATE_AP_INVOICE_POSTING = config(
+    'DISPATCH_SIMULATE_AP_INVOICE_POSTING',
+    default=False,
+    cast=cast_debug,
+)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
 # Application definition

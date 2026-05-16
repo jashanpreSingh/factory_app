@@ -3,15 +3,18 @@ import os
 import tempfile
 from typing import List, Dict, Any, Optional
 from decimal import Decimal
+from datetime import date
 from django.utils import timezone
 from django.db import transaction
 
 from gate_core.enums import GateEntryStatus
+from dispatch_plans.hana_reader import HanaDispatchBillReader
 from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import VehicleEntry
 from raw_material_gatein.models import POReceipt, POItemReceipt
 from quality_control.enums import InspectionStatus
 from sap_client.client import SAPClient
+from sap_client.context import CompanyContext
 from sap_client.exceptions import SAPConnectionError, SAPDataError, SAPValidationError
 
 from .models import (
@@ -32,9 +35,64 @@ class GRPOService:
     """
     Service for handling GRPO operations.
     """
+    SAP_DOCUMENT_COMMENTS_MAX_LENGTH = 254
 
     def __init__(self, company_code: str):
         self.company_code = company_code
+
+    @classmethod
+    def _truncate_sap_document_comments(cls, comments: str) -> str:
+        """Keep SAP document comments within the Service Layer field limit."""
+        comments = (comments or "").strip()
+        if len(comments) <= cls.SAP_DOCUMENT_COMMENTS_MAX_LENGTH:
+            return comments
+        suffix = "..."
+        max_body_length = cls.SAP_DOCUMENT_COMMENTS_MAX_LENGTH - len(suffix)
+        return comments[:max_body_length].rstrip(" |,") + suffix
+
+    @staticmethod
+    def _decimal_or_none(value, decimal_places: str = "0.001") -> Optional[Decimal]:
+        if value in (None, ""):
+            return None
+        decimal_value = Decimal(str(value))
+        return decimal_value.quantize(Decimal(decimal_places))
+
+    @staticmethod
+    def _first_day_of_month(value) -> Optional[date]:
+        if not value:
+            return None
+        if isinstance(value, str):
+            try:
+                value = date.fromisoformat(value)
+            except ValueError:
+                return None
+        if not hasattr(value, "year") or not hasattr(value, "month"):
+            return None
+        return date(value.year, value.month, 1)
+
+    @staticmethod
+    def _infer_product_variety(item_summary: str) -> str:
+        summary = (item_summary or "").lower()
+        if any(token in summary for token in ("water", "drink", "beverage", "juice")):
+            return "Beverage"
+        if summary:
+            return "Oil"
+        return ""
+
+    def _get_dispatch_bill_snapshot(self, dispatch_plan: DispatchPlan) -> Dict[str, Any]:
+        doc_num = (dispatch_plan.sap_invoice_doc_num or "").strip()
+        if not doc_num:
+            return {}
+        try:
+            reader = HanaDispatchBillReader(CompanyContext(self.company_code))
+            return reader.get_bill_by_number(doc_num) or {}
+        except Exception as exc:
+            logger.warning(
+                "Could not fetch dispatch SAP bill snapshot for service GRPO plan %s: %s",
+                dispatch_plan.id,
+                exc,
+            )
+            return {}
 
     def get_pending_grpo_entries(self) -> List[VehicleEntry]:
         """
@@ -196,7 +254,7 @@ class GRPOService:
         if user_comments:
             parts.append(user_comments)
 
-        return " | ".join(parts)
+        return self._truncate_sap_document_comments(" | ".join(parts))
 
     @transaction.atomic
     def post_grpo(
@@ -607,6 +665,26 @@ class GRPOService:
             service_description = f"{service_description} - {vehicle_no}"
 
         latest_grpo = dispatch_plan.service_grpo_postings.order_by("-created_at").first()
+        bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
+        item_summary = bill_snapshot.get("item_summary", "")
+        product_variety = (
+            dispatch_plan.product_variety
+            or self._infer_product_variety(item_summary)
+        )
+        total_litres = dispatch_plan.total_litres
+        if total_litres is None and bill_snapshot:
+            total_litres = self._decimal_or_none(
+                bill_snapshot.get("total_litres"), "0.001"
+            )
+        invoice_weight = dispatch_plan.invoice_weight
+        invoice_amount = dispatch_plan.invoice_amount
+        if invoice_amount is None and bill_snapshot:
+            invoice_amount = self._decimal_or_none(
+                bill_snapshot.get("doc_total"), "0.01"
+            )
+        effective_month = dispatch_plan.effective_month or self._first_day_of_month(
+            dispatch_plan.dispatch_date or bill_snapshot.get("doc_date")
+        )
 
         return {
             "dispatch_plan_id": dispatch_plan.id,
@@ -627,6 +705,23 @@ class GRPOService:
             "updated_at": dispatch_plan.updated_at,
             "default_amount": amount,
             "default_service_description": service_description[:255],
+            "default_place_of_supply": dispatch_plan.place_of_supply or "HR",
+            "default_effective_month": effective_month,
+            "default_budget_delivery_point": dispatch_plan.budget_delivery_point,
+            "default_location_code": dispatch_plan.service_location_code,
+            "default_location_name": dispatch_plan.service_location_name,
+            "default_sac_entry": dispatch_plan.sac_entry,
+            "default_sac_code": dispatch_plan.sac_code,
+            "default_product_variety": product_variety,
+            "default_total_litres": total_litres,
+            "invoice_number": dispatch_plan.invoice_number
+            or str(bill_snapshot.get("doc_num") or ""),
+            "eway_bill": dispatch_plan.eway_bill or bill_snapshot.get("sap_eway_bill", ""),
+            "invoice_weight": invoice_weight,
+            "invoice_amount": invoice_amount,
+            "source_state": bill_snapshot.get("state", ""),
+            "source_city": bill_snapshot.get("city", ""),
+            "item_summary": item_summary,
             "grpo_status": existing_grpo.status if existing_grpo else (
                 latest_grpo.status if latest_grpo else None
             ),
@@ -643,25 +738,16 @@ class GRPOService:
         user,
         dispatch_plan: DispatchPlan,
         user_comments: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build structured comments string for SAP service GRPO."""
         full_name = user.get_full_name() if hasattr(user, "get_full_name") else str(user)
         username = getattr(user, "username", getattr(user, "email", str(user)))
-        bill_no = dispatch_plan.sap_invoice_doc_num or dispatch_plan.sap_invoice_doc_entry
 
         parts = [
-            "App: FactoryApp v2",
+            "App: JI",
             f"User: {full_name} ({username})",
-            f"Service GRPO: Transport",
-            f"Dispatch Bill: {bill_no}",
         ]
-
-        if dispatch_plan.vehicle_no:
-            parts.append(f"Vehicle: {dispatch_plan.vehicle_no}")
-        if dispatch_plan.bilty_no:
-            parts.append(f"Bilty: {dispatch_plan.bilty_no}")
-        if user_comments:
-            parts.append(user_comments)
 
         return " | ".join(parts)
 
@@ -676,6 +762,20 @@ class GRPOService:
         amount: Decimal,
         tax_code: Optional[str] = None,
         gl_account: Optional[str] = None,
+        unit_price: Optional[Decimal] = None,
+        place_of_supply: Optional[str] = None,
+        effective_month: Optional[str] = None,
+        budget_delivery_point: Optional[str] = None,
+        location_code: Optional[int] = None,
+        location_name: Optional[str] = None,
+        sac_entry: Optional[int] = None,
+        sac_code: Optional[str] = None,
+        product_variety: Optional[str] = None,
+        total_litres: Optional[Decimal] = None,
+        invoice_number: Optional[str] = None,
+        eway_bill: Optional[str] = None,
+        invoice_weight: Optional[Decimal] = None,
+        invoice_amount: Optional[Decimal] = None,
         comments: Optional[str] = None,
         vendor_ref: Optional[str] = None,
         extra_charges: Optional[List[Dict[str, Any]]] = None,
@@ -730,10 +830,40 @@ class GRPOService:
         if not service_description:
             raise ValueError("Service description is required.")
 
+        unit_price = Decimal(str(unit_price)) if unit_price is not None else amount
+        place_of_supply = (place_of_supply or "").strip()
+        budget_delivery_point = (budget_delivery_point or "").strip()
+        location_name = (location_name or "").strip()
+        sac_code = (sac_code or "").strip()
+        product_variety = (product_variety or "").strip()
+        invoice_number = (invoice_number or "").strip()
+        eway_bill = (eway_bill or "").strip()
+        total_litres = (
+            Decimal(str(total_litres)) if total_litres not in (None, "") else None
+        )
+        invoice_weight = (
+            Decimal(str(invoice_weight)) if invoice_weight not in (None, "") else None
+        )
+        invoice_amount = (
+            Decimal(str(invoice_amount)) if invoice_amount not in (None, "") else None
+        )
+
+        if effective_month:
+            effective_month = self._first_day_of_month(effective_month)
+
         grpo_posting = ServiceGRPOPosting.objects.create(
             dispatch_plan=dispatch_plan,
             vendor_code=vendor_code,
             vendor_name=dispatch_plan.transporter_name,
+            place_of_supply=place_of_supply,
+            effective_month=effective_month,
+            budget_delivery_point=budget_delivery_point,
+            location_code=location_code,
+            location_name=location_name,
+            sac_entry=sac_entry,
+            sac_code=sac_code,
+            product_variety=product_variety,
+            total_litres=total_litres,
             status=GRPOStatus.PENDING,
             posted_by=user,
         )
@@ -742,14 +872,35 @@ class GRPOService:
             "ItemDescription": service_description,
             "LineTotal": float(amount),
         }
+        if unit_price is not None:
+            document_line["UnitPrice"] = float(unit_price)
         if gl_account:
             document_line["AccountCode"] = gl_account
         if tax_code:
             document_line["TaxCode"] = tax_code
+        if sac_entry:
+            document_line["SACEntry"] = int(sac_entry)
+        if location_code:
+            document_line["LocationCode"] = int(location_code)
+        if budget_delivery_point:
+            document_line["ProjectCode"] = budget_delivery_point
+        if total_litres is not None:
+            document_line["U_UNE_LTS"] = float(total_litres)
+        if dispatch_plan.bilty_no:
+            document_line["U_BilltyNumber"] = dispatch_plan.bilty_no
+        if invoice_number:
+            document_line["U_ARNO"] = invoice_number
+        remarks = []
+        if product_variety:
+            remarks.append(f"Variety: {product_variety}")
+        if eway_bill:
+            remarks.append(f"E-way Bill: {eway_bill}")
+        if invoice_weight is not None:
+            remarks.append(f"Charged Weight: {invoice_weight}")
+        if remarks:
+            document_line["U_Remarks"] = " | ".join(remarks)[:254]
 
-        structured_comments = self._build_service_structured_comments(
-            user, dispatch_plan, comments
-        )
+        structured_comments = self._build_service_structured_comments(user, dispatch_plan)
 
         grpo_payload = {
             "DocType": "dDocument_Service",
@@ -758,6 +909,26 @@ class GRPOService:
             "Comments": structured_comments,
             "DocumentLines": [document_line],
         }
+        if place_of_supply:
+            grpo_payload["ShipPlace"] = place_of_supply
+        if budget_delivery_point:
+            grpo_payload["Project"] = budget_delivery_point
+        if dispatch_plan.bilty_no:
+            grpo_payload["U_BilltyNumber"] = dispatch_plan.bilty_no
+            grpo_payload["U_LRNUmber"] = dispatch_plan.bilty_no
+        if dispatch_plan.bilty_date:
+            grpo_payload["U_BiltyDate"] = dispatch_plan.bilty_date.isoformat()
+        if dispatch_plan.transporter_name:
+            grpo_payload["U_TransporterName"] = dispatch_plan.transporter_name
+        if dispatch_plan.vehicle_no:
+            grpo_payload["U_VehicleNoM"] = dispatch_plan.vehicle_no
+        if invoice_number:
+            grpo_payload["U_ARNO"] = invoice_number
+            grpo_payload["U_TransporterInvoice"] = invoice_number
+        if total_litres is not None:
+            grpo_payload["U_UNE_TOTL"] = float(total_litres)
+        if invoice_amount is not None:
+            grpo_payload["U_TotalAmt"] = float(invoice_amount)
 
         if doc_date:
             grpo_payload["DocDate"] = str(doc_date)
@@ -851,8 +1022,16 @@ class GRPOService:
                 service_grpo_posting=grpo_posting,
                 service_description=service_description,
                 amount=amount,
+                unit_price=unit_price,
                 tax_code=tax_code or "",
                 gl_account=gl_account or "",
+                sac_entry=sac_entry,
+                sac_code=sac_code,
+                location_code=location_code,
+                location_name=location_name,
+                project_code=budget_delivery_point,
+                product_variety=product_variety,
+                total_litres=total_litres,
             )
 
             for att_data in attachment_records:

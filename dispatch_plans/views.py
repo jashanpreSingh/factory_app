@@ -45,6 +45,8 @@ from .serializers import (
     TransporterAPInvoicePostingSerializer,
     TransporterAPInvoicePreviewRequestSerializer,
     TransporterAPInvoicePreviewSerializer,
+    TransporterAPInvoiceSAPPostRequestSerializer,
+    TransporterAPInvoiceSubmitRequestSerializer,
 )
 from .services import DispatchPlansService
 
@@ -251,6 +253,22 @@ class DispatchBiltyServiceGRPOPostAPI(APIView):
                 amount=serializer.validated_data["amount"],
                 tax_code=serializer.validated_data.get("tax_code"),
                 gl_account=serializer.validated_data.get("gl_account"),
+                unit_price=serializer.validated_data.get("unit_price"),
+                place_of_supply=serializer.validated_data.get("place_of_supply"),
+                effective_month=serializer.validated_data.get("effective_month"),
+                budget_delivery_point=serializer.validated_data.get(
+                    "budget_delivery_point"
+                ),
+                location_code=serializer.validated_data.get("location_code"),
+                location_name=serializer.validated_data.get("location_name"),
+                sac_entry=serializer.validated_data.get("sac_entry"),
+                sac_code=serializer.validated_data.get("sac_code"),
+                product_variety=serializer.validated_data.get("product_variety"),
+                total_litres=serializer.validated_data.get("total_litres"),
+                invoice_number=serializer.validated_data.get("invoice_number"),
+                eway_bill=serializer.validated_data.get("eway_bill"),
+                invoice_weight=serializer.validated_data.get("invoice_weight"),
+                invoice_amount=serializer.validated_data.get("invoice_amount"),
                 comments=serializer.validated_data.get("comments"),
                 vendor_ref=serializer.validated_data.get("vendor_ref"),
                 extra_charges=serializer.validated_data.get("extra_charges"),
@@ -436,7 +454,62 @@ class TransporterAPInvoicePostAPI(APIView):
     ]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def post(self, request):
+    def post(self, request, posting_id: int | None = None):
+        if posting_id is not None:
+            serializer = TransporterAPInvoiceSAPPostRequestSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"detail": "Invalid request data", "errors": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            service = DispatchInvoiceService(company_code=request.company.company.code)
+            try:
+                posting = service.post_submitted_ap_invoice(
+                    posting_id=posting_id,
+                    user=request.user,
+                    doc_date=serializer.validated_data.get("doc_date"),
+                    doc_due_date=serializer.validated_data.get("doc_due_date"),
+                    tax_date=serializer.validated_data.get("tax_date"),
+                    comments=serializer.validated_data.get("comments", ""),
+                )
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            except SAPValidationError as e:
+                return Response(
+                    {"detail": f"SAP validation error: {str(e)}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except SAPConnectionError:
+                return Response(
+                    {"detail": "SAP system is currently unavailable. Please try again later."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            except SAPDataError as e:
+                return Response(
+                    {"detail": f"SAP error: {str(e)}"},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            posting = service.get_ap_invoice(posting.id)
+            response_data = {
+                "success": True,
+                "transporter_ap_invoice_posting_id": posting.id,
+                "sap_doc_entry": posting.sap_doc_entry,
+                "sap_doc_num": posting.sap_doc_num,
+                "sap_doc_total": posting.sap_doc_total,
+                "message": (
+                    "A/P Invoice posted successfully. "
+                    f"SAP Doc Num: {posting.sap_doc_num}"
+                ),
+                "posting": posting,
+            }
+            return Response(
+                TransporterAPInvoicePostResponseSerializer(
+                    response_data, context={"request": request}
+                ).data
+            )
+
         parsed_data, attachments, error_response = self._parse_payload(request)
         if error_response:
             return error_response
@@ -524,6 +597,74 @@ class TransporterAPInvoicePostAPI(APIView):
             parsed_data = request.data
             attachments = []
         return parsed_data, attachments, None
+
+
+class TransporterAPInvoiceSubmitAPI(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        HasCompanyContext,
+        CanPostTransporterAPInvoice,
+    ]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request):
+        parsed_data, attachments, error_response = TransporterAPInvoicePostAPI._parse_payload(
+            request
+        )
+        if error_response:
+            return error_response
+
+        serializer = TransporterAPInvoiceSubmitRequestSerializer(data=parsed_data)
+        if not serializer.is_valid():
+            return Response(
+                {"detail": "Invalid request data", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = DispatchInvoiceService(company_code=request.company.company.code)
+        try:
+            posting = service.submit_ap_invoice(
+                service_grpo_posting_ids=serializer.validated_data[
+                    "service_grpo_posting_ids"
+                ],
+                user=request.user,
+                invoice_number=serializer.validated_data["invoice_number"],
+                invoice_amount=serializer.validated_data["invoice_amount"],
+                attachments=attachments,
+                invoice_date=serializer.validated_data.get("invoice_date"),
+                vendor_code=serializer.validated_data.get("vendor_code"),
+                branch_id=serializer.validated_data.get("branch_id"),
+                comments=serializer.validated_data.get("comments", ""),
+            )
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError as e:
+            return Response(
+                {"detail": f"SAP data error: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        posting = service.get_ap_invoice(posting.id)
+        response_data = {
+            "success": True,
+            "transporter_ap_invoice_posting_id": posting.id,
+            "sap_doc_entry": posting.sap_doc_entry,
+            "sap_doc_num": posting.sap_doc_num,
+            "sap_doc_total": posting.sap_doc_total,
+            "message": "Transporter invoice submitted for A/P Invoice posting.",
+            "posting": posting,
+        }
+        return Response(
+            TransporterAPInvoicePostResponseSerializer(
+                response_data, context={"request": request}
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class TransporterAPInvoiceHistoryAPI(APIView):

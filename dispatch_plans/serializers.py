@@ -8,6 +8,8 @@ from .models import (
     TransporterAPInvoicePosting,
 )
 
+MONTH_INPUT_FORMATS = ["%Y-%m", "%Y-%m-%d"]
+
 
 class DispatchBillFilterSerializer(serializers.Serializer):
     STATUS_CHOICES = [("all", "All")] + list(DispatchPlanStatus.choices)
@@ -34,6 +36,11 @@ class DispatchPlanSerializer(serializers.ModelSerializer):
     transporter_id = serializers.IntegerField(read_only=True, allow_null=True)
     driver_id = serializers.IntegerField(read_only=True, allow_null=True)
     linked_vehicle_entry_id = serializers.IntegerField(read_only=True, allow_null=True)
+    effective_month = serializers.DateField(
+        allow_null=True,
+        format="%Y-%m",
+        read_only=True,
+    )
 
     class Meta:
         model = DispatchPlan
@@ -46,6 +53,14 @@ class DispatchPlanSerializer(serializers.ModelSerializer):
             "invoice_weight",
             "invoice_amount",
             "place_of_supply",
+            "product_variety",
+            "total_litres",
+            "effective_month",
+            "budget_delivery_point",
+            "service_location_code",
+            "service_location_name",
+            "sac_entry",
+            "sac_code",
             "vehicle_id",
             "transporter_id",
             "driver_id",
@@ -100,6 +115,24 @@ class DispatchPlanUpdateSerializer(serializers.Serializer):
         max_length=150,
         allow_blank=True,
     )
+    product_variety = serializers.CharField(required=False, max_length=50, allow_blank=True)
+    total_litres = serializers.DecimalField(
+        required=False, allow_null=True, max_digits=18, decimal_places=3
+    )
+    effective_month = serializers.DateField(
+        required=False, allow_null=True, input_formats=MONTH_INPUT_FORMATS
+    )
+    budget_delivery_point = serializers.CharField(
+        required=False, max_length=100, allow_blank=True
+    )
+    service_location_code = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1
+    )
+    service_location_name = serializers.CharField(
+        required=False, max_length=100, allow_blank=True
+    )
+    sac_entry = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    sac_code = serializers.CharField(required=False, max_length=30, allow_blank=True)
     vehicle_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     transporter_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     driver_id = serializers.IntegerField(required=False, allow_null=True, min_value=1)
@@ -287,6 +320,17 @@ class TransporterAPInvoicePostRequestSerializer(
         if value <= 0:
             raise serializers.ValidationError("Invoice amount must be greater than zero.")
         return value
+
+
+class TransporterAPInvoiceSubmitRequestSerializer(TransporterAPInvoicePostRequestSerializer):
+    pass
+
+
+class TransporterAPInvoiceSAPPostRequestSerializer(serializers.Serializer):
+    doc_date = serializers.DateField(required=False, allow_null=True)
+    doc_due_date = serializers.DateField(required=False, allow_null=True)
+    tax_date = serializers.DateField(required=False, allow_null=True)
+    comments = serializers.CharField(required=False, allow_blank=True)
 
 
 class TransporterAPInvoicePreviewLineSerializer(serializers.Serializer):

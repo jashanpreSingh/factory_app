@@ -8,6 +8,8 @@ from .models import (
     ServiceGRPOAttachment,
 )
 
+MONTH_INPUT_FORMATS = ["%Y-%m", "%Y-%m-%d"]
+
 
 class AllGRPOEntrySupplierSerializer(serializers.Serializer):
     """Compact supplier summary for the All Entries list."""
@@ -246,6 +248,31 @@ class ServiceGRPOPreviewSerializer(ServiceGRPOPendingEntrySerializer):
     is_ready_for_grpo = serializers.BooleanField()
     default_amount = serializers.DecimalField(max_digits=18, decimal_places=2)
     default_service_description = serializers.CharField()
+    default_place_of_supply = serializers.CharField(allow_blank=True)
+    default_effective_month = serializers.DateField(
+        allow_null=True,
+        format="%Y-%m",
+    )
+    default_budget_delivery_point = serializers.CharField(allow_blank=True)
+    default_location_code = serializers.IntegerField(allow_null=True)
+    default_location_name = serializers.CharField(allow_blank=True)
+    default_sac_entry = serializers.IntegerField(allow_null=True)
+    default_sac_code = serializers.CharField(allow_blank=True)
+    default_product_variety = serializers.CharField(allow_blank=True)
+    default_total_litres = serializers.DecimalField(
+        max_digits=18, decimal_places=3, allow_null=True
+    )
+    invoice_number = serializers.CharField(allow_blank=True)
+    eway_bill = serializers.CharField(allow_blank=True)
+    invoice_weight = serializers.DecimalField(
+        max_digits=18, decimal_places=3, allow_null=True
+    )
+    invoice_amount = serializers.DecimalField(
+        max_digits=18, decimal_places=2, allow_null=True
+    )
+    source_state = serializers.CharField(allow_blank=True)
+    source_city = serializers.CharField(allow_blank=True)
+    item_summary = serializers.CharField(allow_blank=True)
     grpo_status = serializers.CharField(allow_null=True)
     sap_doc_num = serializers.IntegerField(allow_null=True)
     total_amount = serializers.DecimalField(
@@ -275,6 +302,62 @@ class ServiceGRPOPostRequestSerializer(serializers.Serializer):
     )
     tax_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     gl_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    unit_price = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
+    place_of_supply = serializers.CharField(
+        required=False, max_length=100, allow_blank=True, allow_null=True
+    )
+    effective_month = serializers.DateField(
+        required=False,
+        allow_null=True,
+        input_formats=MONTH_INPUT_FORMATS,
+    )
+    budget_delivery_point = serializers.CharField(
+        required=False, max_length=100, allow_blank=True, allow_null=True
+    )
+    location_code = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    location_name = serializers.CharField(
+        required=False, max_length=100, allow_blank=True, allow_null=True
+    )
+    sac_entry = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    sac_code = serializers.CharField(
+        required=False, max_length=30, allow_blank=True, allow_null=True
+    )
+    product_variety = serializers.CharField(
+        required=False, max_length=50, allow_blank=True, allow_null=True
+    )
+    total_litres = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=3,
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
+    invoice_number = serializers.CharField(
+        required=False, max_length=50, allow_blank=True, allow_null=True
+    )
+    eway_bill = serializers.CharField(
+        required=False, max_length=100, allow_blank=True, allow_null=True
+    )
+    invoice_weight = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=3,
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
+    invoice_amount = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
     comments = serializers.CharField(required=False, allow_blank=True)
     vendor_ref = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     extra_charges = ExtraChargeInputSerializer(many=True, required=False)
@@ -305,10 +388,30 @@ class ServiceGRPOGLAccountOptionSerializer(serializers.Serializer):
     account_name = serializers.CharField()
 
 
+class ServiceGRPOSACCodeOptionSerializer(serializers.Serializer):
+    sac_entry = serializers.IntegerField()
+    sac_code = serializers.CharField()
+    sac_name = serializers.CharField()
+
+
+class ServiceGRPOLocationOptionSerializer(serializers.Serializer):
+    location_code = serializers.IntegerField()
+    location_name = serializers.CharField()
+    state = serializers.CharField(allow_blank=True)
+
+
+class ServiceGRPOProjectOptionSerializer(serializers.Serializer):
+    project_code = serializers.CharField()
+    project_name = serializers.CharField()
+
+
 class ServiceGRPOOptionsSerializer(serializers.Serializer):
     branches = ServiceGRPOBranchOptionSerializer(many=True)
     tax_codes = ServiceGRPOTaxCodeOptionSerializer(many=True)
     gl_accounts = ServiceGRPOGLAccountOptionSerializer(many=True)
+    sac_codes = ServiceGRPOSACCodeOptionSerializer(many=True)
+    locations = ServiceGRPOLocationOptionSerializer(many=True)
+    projects = ServiceGRPOProjectOptionSerializer(many=True)
 
 
 class GRPOLinePostingSerializer(serializers.ModelSerializer):
@@ -446,8 +549,16 @@ class ServiceGRPOLinePostingSerializer(serializers.ModelSerializer):
             "id",
             "service_description",
             "amount",
+            "unit_price",
             "tax_code",
             "gl_account",
+            "sac_entry",
+            "sac_code",
+            "location_code",
+            "location_name",
+            "project_code",
+            "product_variety",
+            "total_litres",
         ]
 
 
@@ -479,6 +590,11 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
     lines = ServiceGRPOLinePostingSerializer(many=True, read_only=True)
     attachments = ServiceGRPOAttachmentSerializer(many=True, read_only=True)
     dispatch_bill_no = serializers.SerializerMethodField()
+    effective_month = serializers.DateField(
+        allow_null=True,
+        format="%Y-%m",
+        read_only=True,
+    )
     sap_invoice_doc_entry = serializers.IntegerField(
         source="dispatch_plan.sap_invoice_doc_entry", read_only=True
     )
@@ -511,6 +627,15 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
             "sap_doc_num",
             "sap_doc_total",
             "total_amount",
+            "place_of_supply",
+            "effective_month",
+            "budget_delivery_point",
+            "location_code",
+            "location_name",
+            "sac_entry",
+            "sac_code",
+            "product_variety",
+            "total_litres",
             "status",
             "error_message",
             "posted_at",

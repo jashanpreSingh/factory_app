@@ -43,6 +43,16 @@ class DispatchPlan(BaseModel):
         blank=True,
     )
     place_of_supply = models.CharField(max_length=150, blank=True, default="")
+    product_variety = models.CharField(max_length=50, blank=True, default="")
+    total_litres = models.DecimalField(
+        max_digits=18, decimal_places=3, null=True, blank=True
+    )
+    effective_month = models.DateField(null=True, blank=True)
+    budget_delivery_point = models.CharField(max_length=100, blank=True, default="")
+    service_location_code = models.IntegerField(null=True, blank=True)
+    service_location_name = models.CharField(max_length=100, blank=True, default="")
+    sac_entry = models.IntegerField(null=True, blank=True)
+    sac_code = models.CharField(max_length=30, blank=True, default="")
     vehicle = models.ForeignKey(
         Vehicle,
         on_delete=models.SET_NULL,
