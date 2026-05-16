@@ -1,0 +1,405 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1336" height="1494" viewBox="0 0 1336 1494">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">Factory App ER Overview</text>
+  <text x="60" y="80" class="subtitle">31 apps, 141 tables, 245 relationships. Open an app or table from the sidebar for detail.</text>
+  <path d="M 310.0 485.0 L 1026.0 239.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 310.0 528.0 L 382.0 528.0" stroke="#94a3b8" stroke-width="3.0" fill="none" opacity=".34"/>
+  <text class="edge-label" x="346.0" y="528.0" text-anchor="middle">6</text>
+  <path d="M 229.6 482.0 L 462.4 242.0" stroke="#94a3b8" stroke-width="7.0" fill="none" opacity=".34"/>
+  <text class="edge-label" x="346.0" y="362.0" text-anchor="middle">33</text>
+  <path d="M 274.2 482.0 L 417.8 408.0" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 185.0 482.0 L 185.0 408.0" stroke="#94a3b8" stroke-width="2.0" fill="none" opacity=".34"/>
+  <text class="edge-label" x="185.0" y="445.0" text-anchor="middle">3</text>
+  <path d="M 185.0 574.0 L 185.0 648.0" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 1091.5 242.0 L 566.5 648.0" stroke="#94a3b8" stroke-width="3.7" fill="none" opacity=".34"/>
+  <text class="edge-label" x="829.0" y="445.0" text-anchor="middle">8</text>
+  <path d="M 507.0 648.0 L 507.0 574.0" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 632.0 726.2 L 1026.0 827.8" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 507.0 648.0 L 507.0 242.0" stroke="#94a3b8" stroke-width="4.0" fill="none" opacity=".34"/>
+  <text class="edge-label" x="507.0" y="445.0" text-anchor="middle">9</text>
+  <path d="M 566.5 740.0 L 1091.5 1146.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 551.6 740.0 L 784.4 980.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 596.2 648.0 L 1061.8 408.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 477.3 648.0 L 214.7 242.0" stroke="#94a3b8" stroke-width="3.7" fill="none" opacity=".34"/>
+  <text class="edge-label" x="346.0" y="445.0" text-anchor="middle">8</text>
+  <path d="M 632.0 661.8 L 1026.0 560.2" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 462.4 648.0 L 229.6 408.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 417.8 740.0 L 274.2 814.0" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 507.0 482.0 L 507.0 242.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 507.0 482.0 L 507.0 408.0" stroke="#94a3b8" stroke-width="2.0" fill="none" opacity=".34"/>
+  <text class="edge-label" x="507.0" y="445.0" text-anchor="middle">3</text>
+  <path d="M 310.0 661.8 L 704.0 560.2" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 596.2 574.0 L 1061.8 814.0" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 1106.4 814.0 L 551.6 242.0" stroke="#94a3b8" stroke-width="6.3" fill="none" opacity=".34"/>
+  <text class="edge-label" x="829.0" y="528.0" text-anchor="middle">16</text>
+  <path d="M 632.0 860.0 L 1026.0 860.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 918.2 740.0 L 1061.8 814.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 1091.5 814.0 L 566.5 408.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 1026.0 892.2 L 632.0 993.8" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 1151.0 814.0 L 1151.0 408.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 1151.0 906.0 L 1151.0 980.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 1026.0 903.0 L 310.0 1149.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 1061.8 906.0 L 274.2 1312.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 1121.3 906.0 L 858.7 1312.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 507.0 814.0 L 507.0 242.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 799.3 648.0 L 536.7 242.0" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 507.0 242.0 L 507.0 980.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 1026.0 196.0 L 310.0 196.0" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 185.0 242.0 L 185.0 316.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 185.0 242.0 L 185.0 814.0" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 417.8 242.0 L 274.2 316.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 489.2 408.0 L 202.8 1146.0" stroke="#94a3b8" stroke-width="2.0" fill="none" opacity=".34"/>
+  <text class="edge-label" x="346.0" y="777.0" text-anchor="middle">3</text>
+  <path d="M 185.0 408.0 L 185.0 1146.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 632.0 560.2 L 1026.0 661.8" stroke="#94a3b8" stroke-width="1.7" fill="none" opacity=".34"/>
+  <path d="M 1151.0 814.0 L 1151.0 740.0" stroke="#94a3b8" stroke-width="1.3" fill="none" opacity=".34"/>
+  <path d="M 566.5 242.0 L 1091.5 648.0" stroke="#94a3b8" stroke-width="3.7" fill="none" opacity=".34"/>
+  <text class="edge-label" x="829.0" y="445.0" text-anchor="middle">8</text>
+  <g class="overview-app" data-app="production_execution">
+    <title>Open production_execution ER slice</title>
+    <rect class="overview-outline" x="60" y="150" width="250" height="92" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+    <rect x="60" y="150" width="250" height="34" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="60" y="176" width="250" height="8" fill="#fef3c7"/>
+    <text x="74" y="173" class="card-title" fill="#d97706">production_execution</text>
+    <text x="74" y="208" class="meta">26 tables</text>
+    <text x="74" y="228" class="meta">29 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="gate_core">
+    <title>Open gate_core ER slice</title>
+    <rect class="overview-outline" x="382" y="150" width="250" height="92" rx="10" fill="#ffffff" stroke="#4f46e5" stroke-width="2"/>
+    <rect x="382" y="150" width="250" height="34" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="382" y="176" width="250" height="8" fill="#e0e7ff"/>
+    <text x="396" y="173" class="card-title" fill="#4f46e5">gate_core</text>
+    <text x="396" y="208" class="meta">17 tables</text>
+    <text x="396" y="228" class="meta">10 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="inventory">
+    <title>Open inventory ER slice</title>
+    <rect class="overview-outline" x="704" y="150" width="250" height="92" rx="10" fill="#ffffff" stroke="#0f766e" stroke-width="2"/>
+    <rect x="704" y="150" width="250" height="34" rx="10" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="704" y="176" width="250" height="8" fill="#ccfbf1"/>
+    <text x="718" y="173" class="card-title" fill="#0f766e">inventory</text>
+    <text x="718" y="208" class="meta">10 tables</text>
+    <text x="718" y="228" class="meta">9 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="barcode">
+    <title>Open barcode ER slice</title>
+    <rect class="overview-outline" x="1026" y="150" width="250" height="92" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+    <rect x="1026" y="150" width="250" height="34" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="1026" y="176" width="250" height="8" fill="#fef3c7"/>
+    <text x="1040" y="173" class="card-title" fill="#d97706">barcode</text>
+    <text x="1040" y="208" class="meta">8 tables</text>
+    <text x="1040" y="228" class="meta">8 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="quality_control">
+    <title>Open quality_control ER slice</title>
+    <rect class="overview-outline" x="60" y="316" width="250" height="92" rx="10" fill="#ffffff" stroke="#0f766e" stroke-width="2"/>
+    <rect x="60" y="316" width="250" height="34" rx="10" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="60" y="342" width="250" height="8" fill="#ccfbf1"/>
+    <text x="74" y="339" class="card-title" fill="#0f766e">quality_control</text>
+    <text x="74" y="374" class="meta">8 tables</text>
+    <text x="74" y="394" class="meta">9 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="grpo">
+    <title>Open grpo ER slice</title>
+    <rect class="overview-outline" x="382" y="316" width="250" height="92" rx="10" fill="#ffffff" stroke="#059669" stroke-width="2"/>
+    <rect x="382" y="316" width="250" height="34" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="382" y="342" width="250" height="8" fill="#d1fae5"/>
+    <text x="396" y="339" class="card-title" fill="#059669">grpo</text>
+    <text x="396" y="374" class="meta">7 tables</text>
+    <text x="396" y="394" class="meta">5 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="person_gatein">
+    <title>Open person_gatein ER slice</title>
+    <rect class="overview-outline" x="704" y="316" width="250" height="92" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+    <rect x="704" y="316" width="250" height="34" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+    <rect x="704" y="342" width="250" height="8" fill="#ede9fe"/>
+    <text x="718" y="339" class="card-title" fill="#7c3aed">person_gatein</text>
+    <text x="718" y="374" class="meta">6 tables</text>
+    <text x="718" y="394" class="meta">6 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="outbound_dispatch">
+    <title>Open outbound_dispatch ER slice</title>
+    <rect class="overview-outline" x="1026" y="316" width="250" height="92" rx="10" fill="#ffffff" stroke="#be123c" stroke-width="2"/>
+    <rect x="1026" y="316" width="250" height="34" rx="10" fill="#ffe4e6" stroke="#be123c" stroke-width="1"/>
+    <rect x="1026" y="342" width="250" height="8" fill="#ffe4e6"/>
+    <text x="1040" y="339" class="card-title" fill="#be123c">outbound_dispatch</text>
+    <text x="1040" y="374" class="meta">5 tables</text>
+    <text x="1040" y="394" class="meta">4 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="accounts">
+    <title>Open accounts ER slice</title>
+    <rect class="overview-outline" x="60" y="482" width="250" height="92" rx="10" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+    <rect x="60" y="482" width="250" height="34" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="60" y="508" width="250" height="8" fill="#fee2e2"/>
+    <text x="74" y="505" class="card-title" fill="#dc2626">accounts</text>
+    <text x="74" y="540" class="meta">4 tables</text>
+    <text x="74" y="560" class="meta">2 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="dispatch_plans">
+    <title>Open dispatch_plans ER slice</title>
+    <rect class="overview-outline" x="382" y="482" width="250" height="92" rx="10" fill="#ffffff" stroke="#4f46e5" stroke-width="2"/>
+    <rect x="382" y="482" width="250" height="34" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="382" y="508" width="250" height="8" fill="#e0e7ff"/>
+    <text x="396" y="505" class="card-title" fill="#4f46e5">dispatch_plans</text>
+    <text x="396" y="540" class="meta">4 tables</text>
+    <text x="396" y="560" class="meta">3 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="django">
+    <title>Open django ER slice</title>
+    <rect class="overview-outline" x="704" y="482" width="250" height="92" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+    <rect x="704" y="482" width="250" height="34" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+    <rect x="704" y="508" width="250" height="8" fill="#ede9fe"/>
+    <text x="718" y="505" class="card-title" fill="#7c3aed">django</text>
+    <text x="718" y="540" class="meta">4 tables</text>
+    <text x="718" y="560" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="production_planning">
+    <title>Open production_planning ER slice</title>
+    <rect class="overview-outline" x="1026" y="482" width="250" height="92" rx="10" fill="#ffffff" stroke="#4f46e5" stroke-width="2"/>
+    <rect x="1026" y="482" width="250" height="34" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="1026" y="508" width="250" height="8" fill="#e0e7ff"/>
+    <text x="1040" y="505" class="card-title" fill="#4f46e5">production_planning</text>
+    <text x="1040" y="540" class="meta">4 tables</text>
+    <text x="1040" y="560" class="meta">3 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="auth">
+    <title>Open auth ER slice</title>
+    <rect class="overview-outline" x="60" y="648" width="250" height="92" rx="10" fill="#ffffff" stroke="#0891b2" stroke-width="2"/>
+    <rect x="60" y="648" width="250" height="34" rx="10" fill="#cffafe" stroke="#0891b2" stroke-width="1"/>
+    <rect x="60" y="674" width="250" height="8" fill="#cffafe"/>
+    <text x="74" y="671" class="card-title" fill="#0891b2">auth</text>
+    <text x="74" y="706" class="meta">3 tables</text>
+    <text x="74" y="726" class="meta">2 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="company">
+    <title>Open company ER slice</title>
+    <rect class="overview-outline" x="382" y="648" width="250" height="92" rx="10" fill="#ffffff" stroke="#be123c" stroke-width="2"/>
+    <rect x="382" y="648" width="250" height="34" rx="10" fill="#ffe4e6" stroke="#be123c" stroke-width="1"/>
+    <rect x="382" y="674" width="250" height="8" fill="#ffe4e6"/>
+    <text x="396" y="671" class="card-title" fill="#be123c">company</text>
+    <text x="396" y="706" class="meta">3 tables</text>
+    <text x="396" y="726" class="meta">2 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="daily_needs_gatein">
+    <title>Open daily_needs_gatein ER slice</title>
+    <rect class="overview-outline" x="704" y="648" width="250" height="92" rx="10" fill="#ffffff" stroke="#4f46e5" stroke-width="2"/>
+    <rect x="704" y="648" width="250" height="34" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="704" y="674" width="250" height="8" fill="#e0e7ff"/>
+    <text x="718" y="671" class="card-title" fill="#4f46e5">daily_needs_gatein</text>
+    <text x="718" y="706" class="meta">3 tables</text>
+    <text x="718" y="726" class="meta">2 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="vehicle_management">
+    <title>Open vehicle_management ER slice</title>
+    <rect class="overview-outline" x="1026" y="648" width="250" height="92" rx="10" fill="#ffffff" stroke="#475569" stroke-width="2"/>
+    <rect x="1026" y="648" width="250" height="34" rx="10" fill="#e2e8f0" stroke="#475569" stroke-width="1"/>
+    <rect x="1026" y="674" width="250" height="8" fill="#e2e8f0"/>
+    <text x="1040" y="671" class="card-title" fill="#475569">vehicle_management</text>
+    <text x="1040" y="706" class="meta">3 tables</text>
+    <text x="1040" y="726" class="meta">2 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="warehouse">
+    <title>Open warehouse ER slice</title>
+    <rect class="overview-outline" x="60" y="814" width="250" height="92" rx="10" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+    <rect x="60" y="814" width="250" height="34" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="60" y="840" width="250" height="8" fill="#fee2e2"/>
+    <text x="74" y="837" class="card-title" fill="#dc2626">warehouse</text>
+    <text x="74" y="872" class="meta">3 tables</text>
+    <text x="74" y="892" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="construction_gatein">
+    <title>Open construction_gatein ER slice</title>
+    <rect class="overview-outline" x="382" y="814" width="250" height="92" rx="10" fill="#ffffff" stroke="#4f46e5" stroke-width="2"/>
+    <rect x="382" y="814" width="250" height="34" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="382" y="840" width="250" height="8" fill="#e0e7ff"/>
+    <text x="396" y="837" class="card-title" fill="#4f46e5">construction_gatein</text>
+    <text x="396" y="872" class="meta">2 tables</text>
+    <text x="396" y="892" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="django_apscheduler">
+    <title>Open django_apscheduler ER slice</title>
+    <rect class="overview-outline" x="704" y="814" width="250" height="92" rx="10" fill="#ffffff" stroke="#0891b2" stroke-width="2"/>
+    <rect x="704" y="814" width="250" height="34" rx="10" fill="#cffafe" stroke="#0891b2" stroke-width="1"/>
+    <rect x="704" y="840" width="250" height="8" fill="#cffafe"/>
+    <text x="718" y="837" class="card-title" fill="#0891b2">django_apscheduler</text>
+    <text x="718" y="872" class="meta">2 tables</text>
+    <text x="718" y="892" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="driver_management">
+    <title>Open driver_management ER slice</title>
+    <rect class="overview-outline" x="1026" y="814" width="250" height="92" rx="10" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+    <rect x="1026" y="814" width="250" height="34" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="1026" y="840" width="250" height="8" fill="#fee2e2"/>
+    <text x="1040" y="837" class="card-title" fill="#dc2626">driver_management</text>
+    <text x="1040" y="872" class="meta">2 tables</text>
+    <text x="1040" y="892" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="labour_verification">
+    <title>Open labour_verification ER slice</title>
+    <rect class="overview-outline" x="60" y="980" width="250" height="92" rx="10" fill="#ffffff" stroke="#059669" stroke-width="2"/>
+    <rect x="60" y="980" width="250" height="34" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="60" y="1006" width="250" height="8" fill="#d1fae5"/>
+    <text x="74" y="1003" class="card-title" fill="#059669">labour_verification</text>
+    <text x="74" y="1038" class="meta">2 tables</text>
+    <text x="74" y="1058" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="maintenance_gatein">
+    <title>Open maintenance_gatein ER slice</title>
+    <rect class="overview-outline" x="382" y="980" width="250" height="92" rx="10" fill="#ffffff" stroke="#475569" stroke-width="2"/>
+    <rect x="382" y="980" width="250" height="34" rx="10" fill="#e2e8f0" stroke="#475569" stroke-width="1"/>
+    <rect x="382" y="1006" width="250" height="8" fill="#e2e8f0"/>
+    <text x="396" y="1003" class="card-title" fill="#475569">maintenance_gatein</text>
+    <text x="396" y="1038" class="meta">2 tables</text>
+    <text x="396" y="1058" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="notifications">
+    <title>Open notifications ER slice</title>
+    <rect class="overview-outline" x="704" y="980" width="250" height="92" rx="10" fill="#ffffff" stroke="#475569" stroke-width="2"/>
+    <rect x="704" y="980" width="250" height="34" rx="10" fill="#e2e8f0" stroke="#475569" stroke-width="1"/>
+    <rect x="704" y="1006" width="250" height="8" fill="#e2e8f0"/>
+    <text x="718" y="1003" class="card-title" fill="#475569">notifications</text>
+    <text x="718" y="1038" class="meta">2 tables</text>
+    <text x="718" y="1058" class="meta">0 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="outbound_gatein">
+    <title>Open outbound_gatein ER slice</title>
+    <rect class="overview-outline" x="1026" y="980" width="250" height="92" rx="10" fill="#ffffff" stroke="#475569" stroke-width="2"/>
+    <rect x="1026" y="980" width="250" height="34" rx="10" fill="#e2e8f0" stroke="#475569" stroke-width="1"/>
+    <rect x="1026" y="1006" width="250" height="8" fill="#e2e8f0"/>
+    <text x="1040" y="1003" class="card-title" fill="#475569">outbound_gatein</text>
+    <text x="1040" y="1038" class="meta">2 tables</text>
+    <text x="1040" y="1058" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="raw_material_gatein">
+    <title>Open raw_material_gatein ER slice</title>
+    <rect class="overview-outline" x="60" y="1146" width="250" height="92" rx="10" fill="#ffffff" stroke="#4f46e5" stroke-width="2"/>
+    <rect x="60" y="1146" width="250" height="34" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="60" y="1172" width="250" height="8" fill="#e0e7ff"/>
+    <text x="74" y="1169" class="card-title" fill="#4f46e5">raw_material_gatein</text>
+    <text x="74" y="1204" class="meta">2 tables</text>
+    <text x="74" y="1224" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="token_blacklist">
+    <title>Open token_blacklist ER slice</title>
+    <rect class="overview-outline" x="382" y="1146" width="250" height="92" rx="10" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+    <rect x="382" y="1146" width="250" height="34" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+    <rect x="382" y="1172" width="250" height="8" fill="#ede9fe"/>
+    <text x="396" y="1169" class="card-title" fill="#7c3aed">token_blacklist</text>
+    <text x="396" y="1204" class="meta">2 tables</text>
+    <text x="396" y="1224" class="meta">1 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="database_connections">
+    <title>Open database_connections ER slice</title>
+    <rect class="overview-outline" x="704" y="1146" width="250" height="92" rx="10" fill="#ffffff" stroke="#475569" stroke-width="2"/>
+    <rect x="704" y="1146" width="250" height="34" rx="10" fill="#e2e8f0" stroke="#475569" stroke-width="1"/>
+    <rect x="704" y="1172" width="250" height="8" fill="#e2e8f0"/>
+    <text x="718" y="1169" class="card-title" fill="#475569">database_connections</text>
+    <text x="718" y="1204" class="meta">1 tables</text>
+    <text x="718" y="1224" class="meta">0 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="mail">
+    <title>Open mail ER slice</title>
+    <rect class="overview-outline" x="1026" y="1146" width="250" height="92" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <rect x="1026" y="1146" width="250" height="34" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+    <rect x="1026" y="1172" width="250" height="8" fill="#dbeafe"/>
+    <text x="1040" y="1169" class="card-title" fill="#2563eb">mail</text>
+    <text x="1040" y="1204" class="meta">1 tables</text>
+    <text x="1040" y="1224" class="meta">0 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="security_checks">
+    <title>Open security_checks ER slice</title>
+    <rect class="overview-outline" x="60" y="1312" width="250" height="92" rx="10" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+    <rect x="60" y="1312" width="250" height="34" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="60" y="1338" width="250" height="8" fill="#fee2e2"/>
+    <text x="74" y="1335" class="card-title" fill="#dc2626">security_checks</text>
+    <text x="74" y="1370" class="meta">1 tables</text>
+    <text x="74" y="1390" class="meta">0 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="stock_dashboard">
+    <title>Open stock_dashboard ER slice</title>
+    <rect class="overview-outline" x="382" y="1312" width="250" height="92" rx="10" fill="#ffffff" stroke="#475569" stroke-width="2"/>
+    <rect x="382" y="1312" width="250" height="34" rx="10" fill="#e2e8f0" stroke="#475569" stroke-width="1"/>
+    <rect x="382" y="1338" width="250" height="8" fill="#e2e8f0"/>
+    <text x="396" y="1335" class="card-title" fill="#475569">stock_dashboard</text>
+    <text x="396" y="1370" class="meta">1 tables</text>
+    <text x="396" y="1390" class="meta">0 internal relationships</text>
+  </g>
+  <g class="overview-app" data-app="weighment">
+    <title>Open weighment ER slice</title>
+    <rect class="overview-outline" x="704" y="1312" width="250" height="92" rx="10" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+    <rect x="704" y="1312" width="250" height="34" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="704" y="1338" width="250" height="8" fill="#fee2e2"/>
+    <text x="718" y="1335" class="card-title" fill="#dc2626">weighment</text>
+    <text x="718" y="1370" class="meta">1 tables</text>
+    <text x="718" y="1390" class="meta">0 internal relationships</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

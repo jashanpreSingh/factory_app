@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1104" height="720" viewBox="0 0 1104 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">accounts_user_user_permissions Neighborhood</text>
+  <text x="60" y="80" class="subtitle">2 parent/lookup tables, 0 child tables, 2 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="accounts_user" data-dst="accounts_user_user_permissions" data-label="user_id">
+    <title>accounts_user to accounts_user_user_permissions via user_id</title>
+    <path class="edge-hit" d="M 354 260 L 372 260 L 372 341 L 534 341"/>
+    <path class="edge" d="M 354 260 L 372 260 L 372 341 L 534 341"/>
+    <rect class="edge-label-bg" x="376.5" y="333.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="403.5" y="345.0" text-anchor="middle">user_id</text>
+  </g>
+  <g class="relation" data-src="auth_permission" data-dst="accounts_user_user_permissions" data-label="permission_id">
+    <title>auth_permission to accounts_user_user_permissions via permission_id</title>
+    <path class="edge-hit" d="M 320 465 L 510 465 L 510 379 L 534 379"/>
+    <path class="edge" d="M 320 465 L 510 465 L 510 379 L 534 379"/>
+    <rect class="edge-label-bg" x="425.0" y="457.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="470.0" y="469.0" text-anchor="middle">permission_id</text>
+  </g>
+  <g id="accounts_user" class="card" data-table="accounts_user">
+    <title>accounts_user</title>
+    <rect class="card-outline" x="60" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">accounts_user</text>
+    <text x="340" y="172" class="meta" text-anchor="end">accounts</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      password : varchar</text>
+    <text x="74" y="244" class="field">      last_login : datetime (nullable)</text>
+    <text x="74" y="262" class="field">      is_superuser : boolean</text>
+    <text x="74" y="280" class="field">UK    email : varchar</text>
+    <text x="74" y="298" class="field">      full_name : varchar</text>
+    <text x="74" y="316" class="field">UK    employee_code : varchar</text>
+    <text x="74" y="334" class="field">      is_active : boolean</text>
+    <text x="74" y="352" class="field">... 2 more fields</text>
+  </g>
+  <g id="auth_permission" class="card" data-table="auth_permission">
+    <title>auth_permission</title>
+    <rect class="card-outline" x="60" y="400" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="422" class="card-title" fill="#94a3b8">auth_permission</text>
+    <text x="306" y="422" class="meta" text-anchor="end">auth</text>
+    <text x="74" y="458" class="field">PK    id : int</text>
+    <text x="74" y="476" class="field">      name : varchar</text>
+    <text x="74" y="494" class="field">FK    content_type_id : int</text>
+    <text x="74" y="512" class="field">      codename : varchar</text>
+  </g>
+  <g id="accounts_user_user_permissions" class="card" data-table="accounts_user_user_permissions">
+    <title>accounts_user_user_permissions</title>
+    <rect class="card-outline" x="534" y="304" width="320" height="112" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="534" y="304" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="534" y="330" width="320" height="8" fill="#bfdbfe"/>
+    <text x="548" y="326" class="card-title" fill="#0f172a">accounts_user_user_permissions</text>
+    <text x="548" y="362" class="field">PK    id : bigint</text>
+    <text x="548" y="380" class="field">FK    user_id : bigint</text>
+    <text x="548" y="398" class="field">FK    permission_id : int</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

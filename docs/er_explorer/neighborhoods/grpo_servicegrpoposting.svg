@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1759" height="720" viewBox="0 0 1759 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">grpo_servicegrpoposting Neighborhood</text>
+  <text x="60" y="80" class="subtitle">2 parent/lookup tables, 3 child tables, 5 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <text x="1034" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="accounts_user" data-dst="grpo_servicegrpoposting" data-label="posted_by_id">
+    <title>accounts_user to grpo_servicegrpoposting via posted_by_id</title>
+    <path class="edge-hit" d="M 354 260 L 372 260 L 372 309 L 534 309"/>
+    <path class="edge" d="M 354 260 L 372 260 L 372 309 L 534 309"/>
+    <rect class="edge-label-bg" x="377.5" y="301.0" width="84" height="16" rx="4"/>
+    <text class="edge-label" x="419.5" y="313.0" text-anchor="middle">posted_by_id</text>
+  </g>
+  <g class="relation" data-src="dispatch_plans_dispatchplan" data-dst="grpo_servicegrpoposting" data-label="dispatch_plan_id">
+    <title>dispatch_plans_dispatchplan to grpo_servicegrpoposting via dispatch_plan_id</title>
+    <path class="edge-hit" d="M 347 510 L 365 510 L 365 461 L 534 461"/>
+    <path class="edge" d="M 347 510 L 365 510 L 365 461 L 534 461"/>
+    <rect class="edge-label-bg" x="362.0" y="453.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="416.0" y="465.0" text-anchor="middle">dispatch_plan_id</text>
+  </g>
+  <g class="relation" data-src="grpo_servicegrpoposting" data-dst="dispatch_plans_transporterapinvoiceline" data-label="service_grpo_posting_id">
+    <title>grpo_servicegrpoposting to dispatch_plans_transporterapinvoiceline via service_grpo_posting_id</title>
+    <path class="edge-hit" d="M 854 272 L 1016 272 L 1016 260 L 1034 260"/>
+    <path class="edge" d="M 854 272 L 1016 272 L 1016 260 L 1034 260"/>
+    <rect class="edge-label-bg" x="875.0" y="264.0" width="150" height="16" rx="4"/>
+    <text class="edge-label" x="950.0" y="276.0" text-anchor="middle">service_grpo_posting_id</text>
+  </g>
+  <g class="relation" data-src="grpo_servicegrpoposting" data-dst="grpo_servicegrpoattachment" data-label="service_grpo_posting_id">
+    <title>grpo_servicegrpoposting to grpo_servicegrpoattachment via service_grpo_posting_id</title>
+    <path class="edge-hit" d="M 854 498 L 1016 498 L 1016 510 L 1034 510"/>
+    <path class="edge" d="M 854 498 L 1016 498 L 1016 510 L 1034 510"/>
+    <rect class="edge-label-bg" x="875.0" y="490.0" width="150" height="16" rx="4"/>
+    <text class="edge-label" x="950.0" y="502.0" text-anchor="middle">service_grpo_posting_id</text>
+  </g>
+  <g class="relation" data-src="grpo_servicegrpoposting" data-dst="grpo_servicegrpolineposting" data-label="service_grpo_posting_id">
+    <title>grpo_servicegrpoposting to grpo_servicegrpolineposting via service_grpo_posting_id</title>
+    <path class="edge-hit" d="M 854 385 L 1377 385 L 1377 260 L 1395 260"/>
+    <path class="edge" d="M 854 385 L 1377 385 L 1377 260 L 1395 260"/>
+    <rect class="edge-label-bg" x="1112.0" y="377.0" width="150" height="16" rx="4"/>
+    <text class="edge-label" x="1187.0" y="389.0" text-anchor="middle">service_grpo_posting_id</text>
+  </g>
+  <g id="accounts_user" class="card" data-table="accounts_user">
+    <title>accounts_user</title>
+    <rect class="card-outline" x="60" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">accounts_user</text>
+    <text x="340" y="172" class="meta" text-anchor="end">accounts</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      password : varchar</text>
+    <text x="74" y="244" class="field">      last_login : datetime (nullable)</text>
+    <text x="74" y="262" class="field">      is_superuser : boolean</text>
+    <text x="74" y="280" class="field">UK    email : varchar</text>
+    <text x="74" y="298" class="field">      full_name : varchar</text>
+    <text x="74" y="316" class="field">UK    employee_code : varchar</text>
+    <text x="74" y="334" class="field">      is_active : boolean</text>
+    <text x="74" y="352" class="field">... 2 more fields</text>
+  </g>
+  <g id="dispatch_plans_dispatchplan" class="card" data-table="dispatch_plans_dispatchplan">
+    <title>dispatch_plans_dispatchplan</title>
+    <rect class="card-outline" x="60" y="400" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="400" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="426" width="287" height="8" fill="#e2e8f0"/>
+    <text x="74" y="422" class="card-title" fill="#94a3b8">dispatch_plans_dispatchplan</text>
+    <text x="333" y="422" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="74" y="458" class="field">PK    id : bigint</text>
+    <text x="74" y="476" class="field">      created_at : datetime</text>
+    <text x="74" y="494" class="field">      updated_at : datetime</text>
+    <text x="74" y="512" class="field">      is_active : boolean</text>
+    <text x="74" y="530" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="74" y="548" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="74" y="566" class="field">      booking_status : varchar</text>
+    <text x="74" y="584" class="field">      dispatch_date : date (nullable)</text>
+    <text x="74" y="602" class="field">... 39 more fields</text>
+  </g>
+  <g id="grpo_servicegrpoposting" class="card" data-table="grpo_servicegrpoposting">
+    <title>grpo_servicegrpoposting</title>
+    <rect class="card-outline" x="534" y="158" width="320" height="454" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="534" y="158" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="534" y="184" width="320" height="8" fill="#bfdbfe"/>
+    <text x="548" y="180" class="card-title" fill="#0f172a">grpo_servicegrpoposting</text>
+    <text x="548" y="216" class="field">PK    id : bigint</text>
+    <text x="548" y="234" class="field">      vendor_code : varchar</text>
+    <text x="548" y="252" class="field">      vendor_name : varchar</text>
+    <text x="548" y="270" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="548" y="288" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="548" y="306" class="field">      sap_doc_total : decimal (nullable)</text>
+    <text x="548" y="324" class="field">      status : varchar</text>
+    <text x="548" y="342" class="field">      error_message : text (nullable)</text>
+    <text x="548" y="360" class="field">      posted_at : datetime (nullable)</text>
+    <text x="548" y="378" class="field">      created_at : datetime</text>
+    <text x="548" y="396" class="field">      updated_at : datetime</text>
+    <text x="548" y="414" class="field">FK    dispatch_plan_id : bigint</text>
+    <text x="548" y="432" class="field">FK    posted_by_id : bigint (nullable)</text>
+    <text x="548" y="450" class="field">      budget_delivery_point : varchar</text>
+    <text x="548" y="468" class="field">      effective_month : date (nullable)</text>
+    <text x="548" y="486" class="field">      location_code : int (nullable)</text>
+    <text x="548" y="504" class="field">      location_name : varchar</text>
+    <text x="548" y="522" class="field">      place_of_supply : varchar</text>
+    <text x="548" y="540" class="field">      product_variety : varchar</text>
+    <text x="548" y="558" class="field">      sac_code : varchar</text>
+    <text x="548" y="576" class="field">      sac_entry : int (nullable)</text>
+    <text x="548" y="594" class="field">      total_litres : decimal (nullable)</text>
+  </g>
+  <g id="dispatch_plans_transporterapinvoiceline" class="card" data-table="dispatch_plans_transporterapinvoiceline">
+    <title>dispatch_plans_transporterapinvoiceline</title>
+    <rect class="card-outline" x="1034" y="150" width="301" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1034" y="150" width="301" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1034" y="176" width="301" height="8" fill="#e2e8f0"/>
+    <text x="1048" y="172" class="card-title" fill="#94a3b8">dispatch_plans_transporterapinvoiceline</text>
+    <text x="1321" y="172" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="1048" y="208" class="field">PK    id : bigint</text>
+    <text x="1048" y="226" class="field">      base_entry : int</text>
+    <text x="1048" y="244" class="field">      base_line : int</text>
+    <text x="1048" y="262" class="field">      base_doc_num : int (nullable)</text>
+    <text x="1048" y="280" class="field">      bilty_no : varchar</text>
+    <text x="1048" y="298" class="field">      service_description : varchar</text>
+    <text x="1048" y="316" class="field">      line_total : decimal</text>
+    <text x="1048" y="334" class="field">      tax_code : varchar</text>
+    <text x="1048" y="352" class="field">... 5 more fields</text>
+  </g>
+  <g id="grpo_servicegrpoattachment" class="card" data-table="grpo_servicegrpoattachment">
+    <title>grpo_servicegrpoattachment</title>
+    <rect class="card-outline" x="1034" y="400" width="315" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1034" y="400" width="315" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1034" y="426" width="315" height="8" fill="#e2e8f0"/>
+    <text x="1048" y="422" class="card-title" fill="#94a3b8">grpo_servicegrpoattachment</text>
+    <text x="1335" y="422" class="meta" text-anchor="end">grpo</text>
+    <text x="1048" y="458" class="field">PK    id : bigint</text>
+    <text x="1048" y="476" class="field">      file : varchar</text>
+    <text x="1048" y="494" class="field">      original_filename : varchar</text>
+    <text x="1048" y="512" class="field">      sap_attachment_status : varchar</text>
+    <text x="1048" y="530" class="field">      sap_absolute_entry : int (nullable)</text>
+    <text x="1048" y="548" class="field">      sap_error_message : text (nullable)</text>
+    <text x="1048" y="566" class="field">      uploaded_at : datetime</text>
+    <text x="1048" y="584" class="field">FK    uploaded_by_id : bigint (nullable)</text>
+    <text x="1048" y="602" class="field">... 1 more fields</text>
+  </g>
+  <g id="grpo_servicegrpolineposting" class="card" data-table="grpo_servicegrpolineposting">
+    <title>grpo_servicegrpolineposting</title>
+    <rect class="card-outline" x="1395" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1395" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1395" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="1409" y="172" class="card-title" fill="#94a3b8">grpo_servicegrpolineposting</text>
+    <text x="1675" y="172" class="meta" text-anchor="end">grpo</text>
+    <text x="1409" y="208" class="field">PK    id : bigint</text>
+    <text x="1409" y="226" class="field">      service_description : varchar</text>
+    <text x="1409" y="244" class="field">      amount : decimal</text>
+    <text x="1409" y="262" class="field">      tax_code : varchar</text>
+    <text x="1409" y="280" class="field">      gl_account : varchar</text>
+    <text x="1409" y="298" class="field">FK    service_grpo_posting_id : bigint</text>
+    <text x="1409" y="316" class="field">      location_code : int (nullable)</text>
+    <text x="1409" y="334" class="field">      location_name : varchar</text>
+    <text x="1409" y="352" class="field">... 6 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

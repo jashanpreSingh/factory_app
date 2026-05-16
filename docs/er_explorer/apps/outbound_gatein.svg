@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1375" height="840" viewBox="0 0 1375 840">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">Outbound Gatein ER Slice</text>
+  <text x="60" y="80" class="subtitle">2 local tables, 1 linked external tables, 1 local relationships, 1 external relationships</text>
+  <text x="1055" y="112" class="section">Linked external tables</text>
+  <g class="relation" data-src="outbound_gatein_outboundpurpose" data-dst="outbound_gatein_outboundgateentry" data-label="purpose_id">
+    <title>outbound_gatein_outboundpurpose to outbound_gatein_outboundgateentry via purpose_id</title>
+    <path class="edge-hit" d="M 230 695 L 190 695 L 190 359 L 230 359"/>
+    <path class="edge" d="M 230 695 L 190 695 L 190 359 L 230 359"/>
+    <rect class="edge-label-bg" x="154.0" y="519.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="190.0" y="531.0" text-anchor="middle">purpose_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_vehicleentry" data-dst="outbound_gatein_outboundgateentry" data-label="vehicle_entry_id">
+    <title>driver_management_vehicleentry to outbound_gatein_outboundgateentry via vehicle_entry_id</title>
+    <path class="edge-hit" d="M 1055 242 L 655 242 L 655 359 L 615 359"/>
+    <path class="edge external-edge" d="M 1055 242 L 655 242 L 655 359 L 615 359"/>
+    <rect class="edge-label-bg" x="722.5" y="234.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="776.5" y="246.0" text-anchor="middle">vehicle_entry_id</text>
+  </g>
+  <g id="outbound_gatein_outboundgateentry" class="card" data-table="outbound_gatein_outboundgateentry">
+    <title>outbound_gatein_outboundgateentry</title>
+    <rect class="card-outline" x="230" y="132" width="385" height="454" rx="8" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+    <rect x="230" y="132" width="385" height="34" rx="8" fill="#e2e8f0" stroke="#475569" stroke-width="1"/>
+    <rect x="230" y="158" width="385" height="8" fill="#e2e8f0"/>
+    <text x="244" y="154" class="card-title" fill="#475569">outbound_gatein_outboundgateentry</text>
+    <text x="244" y="190" class="field">PK    id : bigint</text>
+    <text x="244" y="208" class="field">      sales_order_ref : varchar</text>
+    <text x="244" y="226" class="field">      customer_name : varchar</text>
+    <text x="244" y="244" class="field">      customer_code : varchar</text>
+    <text x="244" y="262" class="field">      transporter_name : varchar</text>
+    <text x="244" y="280" class="field">      transporter_contact : varchar</text>
+    <text x="244" y="298" class="field">      lr_number : varchar</text>
+    <text x="244" y="316" class="field">      vehicle_empty_confirmed : boolean</text>
+    <text x="244" y="334" class="field">      trailer_type : varchar</text>
+    <text x="244" y="352" class="field">      trailer_length_ft : decimal (nullable)</text>
+    <text x="244" y="370" class="field">      assigned_zone : varchar</text>
+    <text x="244" y="388" class="field">      assigned_bay : varchar</text>
+    <text x="244" y="406" class="field">      expected_loading_time : datetime (nullable)</text>
+    <text x="244" y="424" class="field">      arrival_time : datetime</text>
+    <text x="244" y="442" class="field">      released_for_loading_at : datetime (nullable)</text>
+    <text x="244" y="460" class="field">      exit_time : datetime (nullable)</text>
+    <text x="244" y="478" class="field">      remarks : text</text>
+    <text x="244" y="496" class="field">      created_at : datetime</text>
+    <text x="244" y="514" class="field">      updated_at : datetime</text>
+    <text x="244" y="532" class="field">      created_by_id : bigint (nullable)</text>
+    <text x="244" y="550" class="field">FK/UK vehicle_entry_id : bigint</text>
+    <text x="244" y="568" class="field">FK    purpose_id : bigint (nullable)</text>
+  </g>
+  <g id="outbound_gatein_outboundpurpose" class="card" data-table="outbound_gatein_outboundpurpose">
+    <title>outbound_gatein_outboundpurpose</title>
+    <rect class="card-outline" x="230" y="630" width="320" height="130" rx="8" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+    <rect x="230" y="630" width="320" height="34" rx="8" fill="#e2e8f0" stroke="#475569" stroke-width="1"/>
+    <rect x="230" y="656" width="320" height="8" fill="#e2e8f0"/>
+    <text x="244" y="652" class="card-title" fill="#475569">outbound_gatein_outboundpurpose</text>
+    <text x="244" y="688" class="field">PK    id : bigint</text>
+    <text x="244" y="706" class="field">UK    name : varchar</text>
+    <text x="244" y="724" class="field">      description : text</text>
+    <text x="244" y="742" class="field">      is_active : boolean</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="1055" y="132" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1055" y="132" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1055" y="158" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1069" y="154" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="1301" y="154" class="meta" text-anchor="end">driver_management</text>
+    <text x="1069" y="190" class="field">PK    id : int</text>
+    <text x="1069" y="208" class="field">      created_at : datetime</text>
+    <text x="1069" y="226" class="field">      updated_at : datetime</text>
+    <text x="1069" y="244" class="field">      is_active : boolean</text>
+    <text x="1069" y="262" class="field">UK    entry_no : varchar</text>
+    <text x="1069" y="280" class="field">      status : varchar</text>
+    <text x="1069" y="298" class="field">      is_locked : boolean</text>
+    <text x="1069" y="316" class="field">      entry_time : datetime</text>
+    <text x="1069" y="334" class="field">... 7 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

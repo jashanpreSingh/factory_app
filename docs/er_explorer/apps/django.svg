@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1310" height="900" viewBox="0 0 1310 900">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">Django ER Slice</text>
+  <text x="60" y="80" class="subtitle">4 local tables, 1 linked external tables, 1 local relationships, 1 external relationships</text>
+  <text x="990" y="112" class="section">Linked external tables</text>
+  <g class="relation" data-src="django_content_type" data-dst="django_admin_log" data-label="content_type_id">
+    <title>django_content_type to django_admin_log via content_type_id</title>
+    <path class="edge-hit" d="M 230 188 L 190 188 L 190 389 L 230 389"/>
+    <path class="edge" d="M 230 188 L 190 188 L 190 389 L 230 389"/>
+    <rect class="edge-label-bg" x="139.0" y="280.5" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="190.0" y="292.5" text-anchor="middle">content_type_id</text>
+  </g>
+  <g class="relation" data-src="django_content_type" data-dst="auth_permission" data-label="content_type_id">
+    <title>django_content_type to auth_permission via content_type_id</title>
+    <path class="edge-hit" d="M 550 188 L 590 188 L 590 197 L 990 197"/>
+    <path class="edge external-edge" d="M 550 188 L 590 188 L 590 197 L 990 197"/>
+    <rect class="edge-label-bg" x="714.5" y="189.0" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="765.5" y="201.0" text-anchor="middle">content_type_id</text>
+  </g>
+  <g id="django_content_type" class="card" data-table="django_content_type">
+    <title>django_content_type</title>
+    <rect class="card-outline" x="230" y="132" width="320" height="112" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <rect x="230" y="132" width="320" height="34" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+    <rect x="230" y="158" width="320" height="8" fill="#ede9fe"/>
+    <text x="244" y="154" class="card-title" fill="#7c3aed">django_content_type</text>
+    <text x="244" y="190" class="field">PK    id : int</text>
+    <text x="244" y="208" class="field">      app_label : varchar</text>
+    <text x="244" y="226" class="field">      model : varchar</text>
+  </g>
+  <g id="django_admin_log" class="card" data-table="django_admin_log">
+    <title>django_admin_log</title>
+    <rect class="card-outline" x="230" y="288" width="320" height="202" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <rect x="230" y="288" width="320" height="34" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+    <rect x="230" y="314" width="320" height="8" fill="#ede9fe"/>
+    <text x="244" y="310" class="card-title" fill="#7c3aed">django_admin_log</text>
+    <text x="244" y="346" class="field">PK    id : int</text>
+    <text x="244" y="364" class="field">      action_time : datetime</text>
+    <text x="244" y="382" class="field">      object_id : text (nullable)</text>
+    <text x="244" y="400" class="field">      object_repr : varchar</text>
+    <text x="244" y="418" class="field">      action_flag : int</text>
+    <text x="244" y="436" class="field">      change_message : text</text>
+    <text x="244" y="454" class="field">FK    content_type_id : int (nullable)</text>
+    <text x="244" y="472" class="field">      user_id : int</text>
+  </g>
+  <g id="django_migrations" class="card" data-table="django_migrations">
+    <title>django_migrations</title>
+    <rect class="card-outline" x="230" y="534" width="320" height="130" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <rect x="230" y="534" width="320" height="34" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+    <rect x="230" y="560" width="320" height="8" fill="#ede9fe"/>
+    <text x="244" y="556" class="card-title" fill="#7c3aed">django_migrations</text>
+    <text x="244" y="592" class="field">PK    id : bigint</text>
+    <text x="244" y="610" class="field">      app : varchar</text>
+    <text x="244" y="628" class="field">      name : varchar</text>
+    <text x="244" y="646" class="field">      applied : datetime</text>
+  </g>
+  <g id="django_session" class="card" data-table="django_session">
+    <title>django_session</title>
+    <rect class="card-outline" x="230" y="708" width="320" height="112" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+    <rect x="230" y="708" width="320" height="34" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1"/>
+    <rect x="230" y="734" width="320" height="8" fill="#ede9fe"/>
+    <text x="244" y="730" class="card-title" fill="#7c3aed">django_session</text>
+    <text x="244" y="766" class="field">PK    session_key : varchar</text>
+    <text x="244" y="784" class="field">      session_data : text</text>
+    <text x="244" y="802" class="field">      expire_date : datetime</text>
+  </g>
+  <g id="auth_permission" class="card" data-table="auth_permission">
+    <title>auth_permission</title>
+    <rect class="card-outline" x="990" y="132" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="990" y="132" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="990" y="158" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1004" y="154" class="card-title" fill="#94a3b8">auth_permission</text>
+    <text x="1236" y="154" class="meta" text-anchor="end">auth</text>
+    <text x="1004" y="190" class="field">PK    id : int</text>
+    <text x="1004" y="208" class="field">      name : varchar</text>
+    <text x="1004" y="226" class="field">FK    content_type_id : int</text>
+    <text x="1004" y="244" class="field">      codename : varchar</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

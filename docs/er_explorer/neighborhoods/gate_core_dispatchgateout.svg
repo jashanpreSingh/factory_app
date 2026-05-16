@@ -1,0 +1,304 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2088" height="1234" viewBox="0 0 2088 1234">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">gate_core_dispatchgateout Neighborhood</text>
+  <text x="60" y="80" class="subtitle">6 parent/lookup tables, 1 child tables, 8 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <text x="1738" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgateout" data-label="created_by_id">
+    <title>accounts_user to gate_core_dispatchgateout via created_by_id</title>
+    <path class="edge-hit" d="M 354 223 L 372 223 L 372 136 L 1169 136 L 1169 274 L 1187 274"/>
+    <path class="edge" d="M 354 223 L 372 223 L 372 136 L 1169 136 L 1169 274 L 1187 274"/>
+    <rect class="edge-label-bg" x="751.0" y="128.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="796.0" y="140.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgateout" data-label="updated_by_id">
+    <title>accounts_user to gate_core_dispatchgateout via updated_by_id</title>
+    <path class="edge-hit" d="M 354 297 L 378 297 L 378 386 L 1163 386 L 1163 398 L 1187 398"/>
+    <path class="edge" d="M 354 297 L 378 297 L 378 386 L 1163 386 L 1163 398 L 1187 398"/>
+    <rect class="edge-label-bg" x="687.0" y="378.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="732.0" y="390.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_dispatchgateout" data-label="company_id">
+    <title>company_company to gate_core_dispatchgateout via company_id</title>
+    <path class="edge-hit" d="M 320 465 L 338 465 L 338 771 L 1187 771"/>
+    <path class="edge" d="M 320 465 L 338 465 L 338 771 L 1187 771"/>
+    <rect class="edge-label-bg" x="564.5" y="763.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="600.5" y="775.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="dispatch_plans_dispatchplan" data-dst="gate_core_dispatchgateout" data-label="dispatch_plan_id">
+    <title>dispatch_plans_dispatchplan to gate_core_dispatchgateout via dispatch_plan_id</title>
+    <path class="edge-hit" d="M 687 510 L 705 510 L 705 896 L 1187 896"/>
+    <path class="edge" d="M 687 510 L 705 510 L 705 896 L 1187 896"/>
+    <rect class="edge-label-bg" x="690.0" y="888.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="744.0" y="900.0" text-anchor="middle">dispatch_plan_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_dispatchgateout" data-label="driver_id">
+    <title>driver_management_driver to gate_core_dispatchgateout via driver_id</title>
+    <path class="edge-hit" d="M 1007 260 L 1025 260 L 1025 523 L 1187 523"/>
+    <path class="edge" d="M 1007 260 L 1025 260 L 1025 523 L 1187 523"/>
+    <rect class="edge-label-bg" x="992.0" y="455.5" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1025.0" y="467.5" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_vehicleentry" data-dst="gate_core_dispatchgateout" data-label="vehicle_entry_id">
+    <title>driver_management_vehicleentry to gate_core_dispatchgateout via vehicle_entry_id</title>
+    <path class="edge-hit" d="M 320 670 L 1133 670 L 1133 1020 L 1187 1020"/>
+    <path class="edge" d="M 320 670 L 1133 670 L 1133 1020 L 1187 1020"/>
+    <rect class="edge-label-bg" x="874.5" y="662.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="928.5" y="674.0" text-anchor="middle">vehicle_entry_id</text>
+  </g>
+  <g class="relation" data-src="gate_core_dispatchgateout" data-dst="gate_core_dispatchgateoutline" data-label="entry_id">
+    <title>gate_core_dispatchgateout to gate_core_dispatchgateoutline via entry_id</title>
+    <path class="edge-hit" d="M 1558 647 L 1720 647 L 1720 260 L 1738 260"/>
+    <path class="edge" d="M 1558 647 L 1720 647 L 1720 260 L 1738 260"/>
+    <rect class="edge-label-bg" x="1690.0" y="517.5" width="60" height="16" rx="4"/>
+    <text class="edge-label" x="1720.0" y="529.5" text-anchor="middle">entry_id</text>
+  </g>
+  <g class="relation" data-src="vehicle_management_vehicle" data-dst="gate_core_dispatchgateout" data-label="vehicle_id">
+    <title>vehicle_management_vehicle to gate_core_dispatchgateout via vehicle_id</title>
+    <path class="edge-hit" d="M 701 260 L 719 260 L 719 636 L 1151 636 L 1151 647 L 1187 647"/>
+    <path class="edge" d="M 701 260 L 719 260 L 719 636 L 1151 636 L 1151 647 L 1187 647"/>
+    <rect class="edge-label-bg" x="725.5" y="628.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="761.5" y="640.0" text-anchor="middle">vehicle_id</text>
+  </g>
+  <g id="accounts_user" class="card" data-table="accounts_user">
+    <title>accounts_user</title>
+    <rect class="card-outline" x="60" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">accounts_user</text>
+    <text x="340" y="172" class="meta" text-anchor="end">accounts</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      password : varchar</text>
+    <text x="74" y="244" class="field">      last_login : datetime (nullable)</text>
+    <text x="74" y="262" class="field">      is_superuser : boolean</text>
+    <text x="74" y="280" class="field">UK    email : varchar</text>
+    <text x="74" y="298" class="field">      full_name : varchar</text>
+    <text x="74" y="316" class="field">UK    employee_code : varchar</text>
+    <text x="74" y="334" class="field">      is_active : boolean</text>
+    <text x="74" y="352" class="field">... 2 more fields</text>
+  </g>
+  <g id="company_company" class="card" data-table="company_company">
+    <title>company_company</title>
+    <rect class="card-outline" x="60" y="400" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="422" class="card-title" fill="#94a3b8">company_company</text>
+    <text x="306" y="422" class="meta" text-anchor="end">company</text>
+    <text x="74" y="458" class="field">PK    id : int</text>
+    <text x="74" y="476" class="field">      name : varchar</text>
+    <text x="74" y="494" class="field">UK    code : varchar</text>
+    <text x="74" y="512" class="field">      is_active : boolean</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="60" y="560" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="560" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="586" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="582" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="306" y="582" class="meta" text-anchor="end">driver_management</text>
+    <text x="74" y="618" class="field">PK    id : int</text>
+    <text x="74" y="636" class="field">      created_at : datetime</text>
+    <text x="74" y="654" class="field">      updated_at : datetime</text>
+    <text x="74" y="672" class="field">      is_active : boolean</text>
+    <text x="74" y="690" class="field">UK    entry_no : varchar</text>
+    <text x="74" y="708" class="field">      status : varchar</text>
+    <text x="74" y="726" class="field">      is_locked : boolean</text>
+    <text x="74" y="744" class="field">      entry_time : datetime</text>
+    <text x="74" y="762" class="field">... 7 more fields</text>
+  </g>
+  <g id="vehicle_management_vehicle" class="card" data-table="vehicle_management_vehicle">
+    <title>vehicle_management_vehicle</title>
+    <rect class="card-outline" x="400" y="150" width="301" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="400" y="150" width="301" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="400" y="176" width="301" height="8" fill="#e2e8f0"/>
+    <text x="414" y="172" class="card-title" fill="#94a3b8">vehicle_management_vehicle</text>
+    <text x="687" y="172" class="meta" text-anchor="end">vehicle_management</text>
+    <text x="414" y="208" class="field">PK    id : int</text>
+    <text x="414" y="226" class="field">      created_at : datetime</text>
+    <text x="414" y="244" class="field">      updated_at : datetime</text>
+    <text x="414" y="262" class="field">      is_active : boolean</text>
+    <text x="414" y="280" class="field">UK    vehicle_number : varchar</text>
+    <text x="414" y="298" class="field">FK    vehicle_type_id : int (nullable)</text>
+    <text x="414" y="316" class="field">      capacity_ton : decimal (nullable)</text>
+    <text x="414" y="334" class="field">      created_by_id : int (nullable)</text>
+    <text x="414" y="352" class="field">... 2 more fields</text>
+  </g>
+  <g id="dispatch_plans_dispatchplan" class="card" data-table="dispatch_plans_dispatchplan">
+    <title>dispatch_plans_dispatchplan</title>
+    <rect class="card-outline" x="400" y="400" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="400" y="400" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="400" y="426" width="287" height="8" fill="#e2e8f0"/>
+    <text x="414" y="422" class="card-title" fill="#94a3b8">dispatch_plans_dispatchplan</text>
+    <text x="673" y="422" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="414" y="458" class="field">PK    id : bigint</text>
+    <text x="414" y="476" class="field">      created_at : datetime</text>
+    <text x="414" y="494" class="field">      updated_at : datetime</text>
+    <text x="414" y="512" class="field">      is_active : boolean</text>
+    <text x="414" y="530" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="414" y="548" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="414" y="566" class="field">      booking_status : varchar</text>
+    <text x="414" y="584" class="field">      dispatch_date : date (nullable)</text>
+    <text x="414" y="602" class="field">... 39 more fields</text>
+  </g>
+  <g id="driver_management_driver" class="card" data-table="driver_management_driver">
+    <title>driver_management_driver</title>
+    <rect class="card-outline" x="747" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="747" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="747" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="761" y="172" class="card-title" fill="#94a3b8">driver_management_driver</text>
+    <text x="993" y="172" class="meta" text-anchor="end">driver_management</text>
+    <text x="761" y="208" class="field">PK    id : int</text>
+    <text x="761" y="226" class="field">      created_at : datetime</text>
+    <text x="761" y="244" class="field">      updated_at : datetime</text>
+    <text x="761" y="262" class="field">      is_active : boolean</text>
+    <text x="761" y="280" class="field">      name : varchar</text>
+    <text x="761" y="298" class="field">      mobile_no : varchar</text>
+    <text x="761" y="316" class="field">UK    license_no : varchar</text>
+    <text x="761" y="334" class="field">      id_proof_type : varchar</text>
+    <text x="761" y="352" class="field">... 4 more fields</text>
+  </g>
+  <g id="gate_core_dispatchgateout" class="card" data-table="gate_core_dispatchgateout">
+    <title>gate_core_dispatchgateout</title>
+    <rect class="card-outline" x="1187" y="150" width="371" height="994" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="1187" y="150" width="371" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="1187" y="176" width="371" height="8" fill="#bfdbfe"/>
+    <text x="1201" y="172" class="card-title" fill="#0f172a">gate_core_dispatchgateout</text>
+    <text x="1201" y="208" class="field">PK    id : bigint</text>
+    <text x="1201" y="226" class="field">      created_at : datetime</text>
+    <text x="1201" y="244" class="field">      updated_at : datetime</text>
+    <text x="1201" y="262" class="field">      is_active : boolean</text>
+    <text x="1201" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="1201" y="298" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="1201" y="316" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="1201" y="334" class="field">      customer_code : varchar</text>
+    <text x="1201" y="352" class="field">      customer_name : varchar</text>
+    <text x="1201" y="370" class="field">      ship_to_address : text</text>
+    <text x="1201" y="388" class="field">      invoice_amount : decimal (nullable)</text>
+    <text x="1201" y="406" class="field">      sap_weight : decimal (nullable)</text>
+    <text x="1201" y="424" class="field">      gate_out_date : date</text>
+    <text x="1201" y="442" class="field">      out_time : time</text>
+    <text x="1201" y="460" class="field">      security_name : varchar</text>
+    <text x="1201" y="478" class="field">      seal_no : varchar</text>
+    <text x="1201" y="496" class="field">      pgi_document_no : varchar</text>
+    <text x="1201" y="514" class="field">      goods_issue_posted : boolean</text>
+    <text x="1201" y="532" class="field">      invoice_checked : boolean</text>
+    <text x="1201" y="550" class="field">      delivery_note_checked : boolean</text>
+    <text x="1201" y="568" class="field">      eway_bill_checked : boolean</text>
+    <text x="1201" y="586" class="field">      lr_checked : boolean</text>
+    <text x="1201" y="604" class="field">      physical_quantity : decimal (nullable)</text>
+    <text x="1201" y="622" class="field">      physical_uom : varchar</text>
+    <text x="1201" y="640" class="field">      gross_weight : decimal (nullable)</text>
+    <text x="1201" y="658" class="field">      tare_weight : decimal (nullable)</text>
+    <text x="1201" y="676" class="field">      net_weight : decimal (nullable)</text>
+    <text x="1201" y="694" class="field">      weighbridge_slip_no : varchar</text>
+    <text x="1201" y="712" class="field">      first_weighment_time : datetime (nullable)</text>
+    <text x="1201" y="730" class="field">      second_weighment_time : datetime (nullable)</text>
+    <text x="1201" y="748" class="field">      dock_photo : varchar (nullable)</text>
+    <text x="1201" y="766" class="field">      gatepass_document : varchar (nullable)</text>
+    <text x="1201" y="784" class="field">      attachment_notes : text</text>
+    <text x="1201" y="802" class="field">      remarks : text</text>
+    <text x="1201" y="820" class="field">      gatepass_no : varchar</text>
+    <text x="1201" y="838" class="field">      gatepass_code : varchar</text>
+    <text x="1201" y="856" class="field">      gate_printed : boolean</text>
+    <text x="1201" y="874" class="field">      print_commit : boolean</text>
+    <text x="1201" y="892" class="field">      printed_at : datetime (nullable)</text>
+    <text x="1201" y="910" class="field">      committed_at : datetime (nullable)</text>
+    <text x="1201" y="928" class="field">      status : varchar</text>
+    <text x="1201" y="946" class="field">      cancel_reason : text</text>
+    <text x="1201" y="964" class="field">      cancelled_at : datetime (nullable)</text>
+    <text x="1201" y="982" class="field">      rejected_reason : text</text>
+    <text x="1201" y="1000" class="field">      rejected_at : datetime (nullable)</text>
+    <text x="1201" y="1018" class="field">FK    company_id : bigint</text>
+    <text x="1201" y="1036" class="field">FK    created_by_id : bigint (nullable)</text>
+    <text x="1201" y="1054" class="field">FK    dispatch_plan_id : bigint (nullable)</text>
+    <text x="1201" y="1072" class="field">FK    driver_id : bigint</text>
+    <text x="1201" y="1090" class="field">FK    updated_by_id : bigint (nullable)</text>
+    <text x="1201" y="1108" class="field">FK    vehicle_id : bigint</text>
+    <text x="1201" y="1126" class="field">FK    vehicle_entry_id : bigint (nullable)</text>
+  </g>
+  <g id="gate_core_dispatchgateoutline" class="card" data-table="gate_core_dispatchgateoutline">
+    <title>gate_core_dispatchgateoutline</title>
+    <rect class="card-outline" x="1738" y="150" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1738" y="150" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1738" y="176" width="280" height="8" fill="#e2e8f0"/>
+    <text x="1752" y="172" class="card-title" fill="#94a3b8">gate_core_dispatchgateoutline</text>
+    <text x="2004" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="1752" y="208" class="field">PK    id : bigint</text>
+    <text x="1752" y="226" class="field">      created_at : datetime</text>
+    <text x="1752" y="244" class="field">      updated_at : datetime</text>
+    <text x="1752" y="262" class="field">      is_active : boolean</text>
+    <text x="1752" y="280" class="field">      line_num : int</text>
+    <text x="1752" y="298" class="field">      item_code : varchar</text>
+    <text x="1752" y="316" class="field">      item_name : varchar</text>
+    <text x="1752" y="334" class="field">      order_qty : decimal (nullable)</text>
+    <text x="1752" y="352" class="field">... 6 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

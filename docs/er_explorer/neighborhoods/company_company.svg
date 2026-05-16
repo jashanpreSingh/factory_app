@@ -1,0 +1,938 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="6745" height="906" viewBox="0 0 6745 906">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">company_company Neighborhood</text>
+  <text x="60" y="80" class="subtitle">0 parent/lookup tables, 36 child tables, 36 direct relationships</text>
+  <text x="1000" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="company_company" data-dst="barcode_barcodesequence" data-label="company_id">
+    <title>company_company to barcode_barcodesequence via company_id</title>
+    <path class="edge-hit" d="M 820 362 L 946 362 L 946 384 L 3284 384 L 3284 368 L 3603 368 L 3603 386 L 5752 386 L 5752 492 L 5770 492"/>
+    <path class="edge" d="M 820 362 L 946 362 L 946 384 L 3284 384 L 3284 368 L 3603 368 L 3603 386 L 5752 386 L 5752 492 L 5770 492"/>
+    <rect class="edge-label-bg" x="3302.0" y="360.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="3338.0" y="372.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_box" data-label="company_id">
+    <title>company_company to barcode_box via company_id</title>
+    <path class="edge-hit" d="M 820 369 L 958 369 L 958 634 L 1974 634 L 1974 510 L 1992 510"/>
+    <path class="edge" d="M 820 369 L 958 369 L 958 634 L 1974 634 L 1974 510 L 1992 510"/>
+    <rect class="edge-label-bg" x="1299.5" y="626.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1335.5" y="638.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_boxmovement" data-label="company_id">
+    <title>company_company to barcode_boxmovement via company_id</title>
+    <path class="edge-hit" d="M 820 302 L 844 302 L 844 136 L 3599 136 L 3599 260 L 3617 260"/>
+    <path class="edge" d="M 820 302 L 844 302 L 844 136 L 3599 136 L 3599 260 L 3617 260"/>
+    <rect class="edge-label-bg" x="2161.5" y="128.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2197.5" y="140.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_labelprintlog" data-label="company_id">
+    <title>company_company to barcode_labelprintlog via company_id</title>
+    <path class="edge-hit" d="M 820 306 L 850 306 L 850 132 L 6078 132 L 6078 260 L 6096 260"/>
+    <path class="edge" d="M 820 306 L 850 306 L 850 132 L 6078 132 L 6078 260 L 6096 260"/>
+    <rect class="edge-label-bg" x="3399.0" y="124.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="3435.0" y="136.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_loosestock" data-label="company_id">
+    <title>company_company to barcode_loosestock via company_id</title>
+    <path class="edge-hit" d="M 820 372 L 964 372 L 964 636 L 3266 636 L 3266 616 L 3585 616 L 3585 510 L 3617 510"/>
+    <path class="edge" d="M 820 372 L 964 372 L 964 636 L 3266 636 L 3266 616 L 3585 616 L 3585 510 L 3617 510"/>
+    <rect class="edge-label-bg" x="2113.5" y="628.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2149.5" y="640.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_pallet" data-label="company_id">
+    <title>company_company to barcode_pallet via company_id</title>
+    <path class="edge-hit" d="M 820 309 L 856 309 L 856 96 L 2280 96 L 2280 260 L 2298 260"/>
+    <path class="edge" d="M 820 309 L 856 309 L 856 96 L 2280 96 L 2280 260 L 2298 260"/>
+    <rect class="edge-label-bg" x="1498.5" y="88.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1534.5" y="100.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_palletmovement" data-label="company_id">
+    <title>company_company to barcode_palletmovement via company_id</title>
+    <path class="edge-hit" d="M 820 313 L 862 313 L 862 60 L 4974 60 L 4974 260 L 4992 260"/>
+    <path class="edge" d="M 820 313 L 862 313 L 862 60 L 4974 60 L 4974 260 L 4992 260"/>
+    <rect class="edge-label-bg" x="2843.5" y="52.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2879.5" y="64.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_scanlog" data-label="company_id">
+    <title>company_company to barcode_scanlog via company_id</title>
+    <path class="edge-hit" d="M 820 376 L 970 376 L 970 830 L 6064 830 L 6064 528 L 6078 528 L 6078 510 L 6096 510"/>
+    <path class="edge" d="M 820 376 L 970 376 L 970 830 L 6064 830 L 6064 528 L 6078 528 L 6078 510 L 6096 510"/>
+    <rect class="edge-label-bg" x="3355.0" y="822.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="3391.0" y="834.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="company_usercompany" data-label="company_id">
+    <title>company_company to company_usercompany via company_id</title>
+    <path class="edge-hit" d="M 820 358 L 940 358 L 940 24 L 4960 24 L 4960 483 L 4992 483"/>
+    <path class="edge" d="M 820 358 L 940 358 L 940 24 L 4960 24 L 4960 483 L 4992 483"/>
+    <rect class="edge-label-bg" x="2932.5" y="16.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2968.5" y="28.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="dispatch_plans_dispatchplan" data-label="company_id">
+    <title>company_company to dispatch_plans_dispatchplan via company_id</title>
+    <path class="edge-hit" d="M 820 379 L 976 379 L 976 672 L 1322 672 L 1322 510 L 1340 510"/>
+    <path class="edge" d="M 820 379 L 976 379 L 976 672 L 1322 672 L 1322 510 L 1340 510"/>
+    <rect class="edge-label-bg" x="978.5" y="664.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1014.5" y="676.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="dispatch_plans_transporterapinvoiceposting" data-label="company_id">
+    <title>company_company to dispatch_plans_transporterapinvoiceposting via company_id</title>
+    <path class="edge-hit" d="M 820 316 L 868 316 L 868 708 L 2912 708 L 2912 260 L 2930 260"/>
+    <path class="edge" d="M 820 316 L 868 316 L 868 708 L 2912 708 L 2912 260 L 2930 260"/>
+    <rect class="edge-label-bg" x="1867.0" y="700.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1903.0" y="712.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="driver_management_vehicleentry" data-label="company_id">
+    <title>company_company to driver_management_vehicleentry via company_id</title>
+    <path class="edge-hit" d="M 820 383 L 982 383 L 982 510 L 1000 510"/>
+    <path class="edge" d="M 820 383 L 982 383 L 982 510 L 1000 510"/>
+    <rect class="edge-label-bg" x="937.5" y="375.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="973.5" y="387.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_bstgatein" data-label="company_id">
+    <title>company_company to gate_core_bstgatein via company_id</title>
+    <path class="edge-hit" d="M 820 320 L 874 320 L 874 744 L 1655 744 L 1655 260 L 1673 260"/>
+    <path class="edge" d="M 820 320 L 874 320 L 874 744 L 1655 744 L 1655 260 L 1673 260"/>
+    <rect class="edge-label-bg" x="1240.5" y="736.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1276.5" y="748.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_bstgateout" data-label="company_id">
+    <title>company_company to gate_core_bstgateout via company_id</title>
+    <path class="edge-hit" d="M 820 323 L 880 323 L 880 776 L 1312 776 L 1312 276 L 1322 276 L 1322 260 L 1340 260"/>
+    <path class="edge" d="M 820 323 L 880 323 L 880 776 L 1312 776 L 1312 276 L 1322 276 L 1322 260 L 1340 260"/>
+    <rect class="edge-label-bg" x="1075.5" y="768.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1111.5" y="780.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_bstgatereturn" data-label="company_id">
+    <title>company_company to gate_core_bstgatereturn via company_id</title>
+    <path class="edge-hit" d="M 820 386 L 986 386 L 986 780 L 2278 780 L 2278 528 L 2280 528 L 2280 510 L 2298 510"/>
+    <path class="edge" d="M 820 386 L 986 386 L 986 780 L 2278 780 L 2278 528 L 2280 528 L 2280 510 L 2298 510"/>
+    <rect class="edge-label-bg" x="1461.0" y="772.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1497.0" y="784.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_dispatchgatelock" data-label="company_id">
+    <title>company_company to gate_core_dispatchgatelock via company_id</title>
+    <path class="edge-hit" d="M 820 327 L 886 327 L 886 852 L 3905 852 L 3905 260 L 3923 260"/>
+    <path class="edge" d="M 820 327 L 886 327 L 886 852 L 3905 852 L 3905 260 L 3923 260"/>
+    <rect class="edge-label-bg" x="2369.0" y="844.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2405.0" y="856.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_dispatchgateout" data-label="company_id">
+    <title>company_company to gate_core_dispatchgateout via company_id</title>
+    <path class="edge-hit" d="M 820 390 L 838 390 L 838 816 L 1641 816 L 1641 510 L 1673 510"/>
+    <path class="edge" d="M 820 390 L 838 390 L 838 816 L 1641 816 L 1641 510 L 1673 510"/>
+    <rect class="edge-label-bg" x="1150.5" y="808.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1186.5" y="820.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_emptyvehiclegatein" data-label="company_id">
+    <title>company_company to gate_core_emptyvehiclegatein via company_id</title>
+    <path class="edge-hit" d="M 820 330 L 892 330 L 892 882 L 1960 882 L 1960 240 L 1974 240 L 1974 260 L 1992 260"/>
+    <path class="edge" d="M 820 330 L 892 330 L 892 882 L 1960 882 L 1960 240 L 1974 240 L 1974 260 L 1992 260"/>
+    <rect class="edge-label-bg" x="1425.0" y="874.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1461.0" y="886.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_emptyvehiclegateout" data-label="company_id">
+    <title>company_company to gate_core_emptyvehiclegateout via company_id</title>
+    <path class="edge-hit" d="M 820 334 L 898 334 L 898 366 L 986 366 L 986 384 L 990 384 L 990 386 L 1274 386 L 1274 618 L 1326 618 L 1326 672 L 2266 672 L 2266 618 L 2284 618 L 2284 634 L 2572 634 L 2572 312 L 2586 312 L 2586 260 L 2604 260"/>
+    <path class="edge" d="M 820 334 L 898 334 L 898 366 L 986 366 L 986 384 L 990 384 L 990 386 L 1274 386 L 1274 618 L 1326 618 L 1326 672 L 2266 672 L 2266 618 L 2284 618 L 2284 634 L 2572 634 L 2572 312 L 2586 312 L 2586 260 L 2604 260"/>
+    <rect class="edge-label-bg" x="1729.0" y="664.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1765.0" y="676.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_jobworkgatein" data-label="company_id">
+    <title>company_company to gate_core_jobworkgatein via company_id</title>
+    <path class="edge-hit" d="M 820 393 L 944 393 L 944 780 L 1266 780 L 1266 634 L 1274 634 L 1274 616 L 1308 616 L 1308 393 L 1326 393 L 1326 386 L 1634 386 L 1634 348 L 1659 348 L 1659 744 L 2590 744 L 2590 564 L 2586 564 L 2586 510 L 2604 510"/>
+    <path class="edge" d="M 820 393 L 944 393 L 944 780 L 1266 780 L 1266 634 L 1274 634 L 1274 616 L 1308 616 L 1308 393 L 1326 393 L 1326 386 L 1634 386 L 1634 348 L 1659 348 L 1659 744 L 2590 744 L 2590 564 L 2586 564 L 2586 510 L 2604 510"/>
+    <rect class="edge-label-bg" x="1598.0" y="352.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1634.0" y="364.5" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="gate_core_rejectedqcreturnentry" data-label="company_id">
+    <title>company_company to gate_core_rejectedqcreturnentry via company_id</title>
+    <path class="edge-hit" d="M 820 397 L 852 397 L 852 830 L 1220 830 L 1220 776 L 2898 776 L 2898 510 L 2930 510"/>
+    <path class="edge" d="M 820 397 L 852 397 L 852 830 L 1220 830 L 1220 776 L 2898 776 L 2898 510 L 2930 510"/>
+    <rect class="edge-label-bg" x="1728.5" y="768.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1764.5" y="780.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="mail_emaillog" data-label="company_id">
+    <title>company_company to mail_emaillog via company_id</title>
+    <path class="edge-hit" d="M 820 337 L 904 337 L 904 168 L 986 168 L 986 136 L 1308 136 L 1308 168 L 1326 168 L 1326 136 L 1634 136 L 1634 337 L 1641 337 L 1641 386 L 1947 386 L 1947 337 L 1978 337 L 1978 816 L 3204 816 L 3204 600 L 3284 600 L 3284 618 L 3572 618 L 3572 168 L 3603 168 L 3603 136 L 3891 136 L 3891 168 L 3909 168 L 3909 136 L 4238 136 L 4238 168 L 4277 168 L 4277 136 L 4565 136 L 4565 168 L 4645 168 L 4645 136 L 4953 136 L 4953 337 L 4978 337 L 4978 582 L 5367 582 L 5367 636 L 5738 636 L 5738 600 L 6082 600 L 6082 636 L 6370 636 L 6370 337 L 6384 337 L 6384 260 L 6402 260"/>
+    <path class="edge" d="M 820 337 L 904 337 L 904 168 L 986 168 L 986 136 L 1308 136 L 1308 168 L 1326 168 L 1326 136 L 1634 136 L 1634 337 L 1641 337 L 1641 386 L 1947 386 L 1947 337 L 1978 337 L 1978 816 L 3204 816 L 3204 600 L 3284 600 L 3284 618 L 3572 618 L 3572 168 L 3603 168 L 3603 136 L 3891 136 L 3891 168 L 3909 168 L 3909 136 L 4238 136 L 4238 168 L 4277 168 L 4277 136 L 4565 136 L 4565 168 L 4645 168 L 4645 136 L 4953 136 L 4953 337 L 4978 337 L 4978 582 L 5367 582 L 5367 636 L 5738 636 L 5738 600 L 6082 600 L 6082 636 L 6370 636 L 6370 337 L 6384 337 L 6384 260 L 6402 260"/>
+    <rect class="edge-label-bg" x="3536.0" y="398.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="3572.0" y="410.5" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="notifications_notification" data-label="company_id">
+    <title>company_company to notifications_notification via company_id</title>
+    <path class="edge-hit" d="M 820 400 L 806 400 L 806 672 L 1036 672 L 1036 708 L 1308 708 L 1308 616 L 1326 616 L 1326 634 L 1358 634 L 1358 708 L 1588 708 L 1588 816 L 1978 816 L 1978 882 L 4946 882 L 4946 636 L 4960 636 L 4960 580 L 5360 580 L 5360 708 L 5756 708 L 5756 598 L 6050 598 L 6050 708 L 6372 708 L 6372 492 L 6384 492 L 6384 510 L 6402 510"/>
+    <path class="edge" d="M 820 400 L 806 400 L 806 672 L 1036 672 L 1036 708 L 1308 708 L 1308 616 L 1326 616 L 1326 634 L 1358 634 L 1358 708 L 1588 708 L 1588 816 L 1978 816 L 1978 882 L 4946 882 L 4946 636 L 4960 636 L 4960 580 L 5360 580 L 5360 708 L 5756 708 L 5756 598 L 6050 598 L 6050 708 L 6372 708 L 6372 492 L 6384 492 L 6384 510 L 6402 510"/>
+    <rect class="edge-label-bg" x="3670.0" y="874.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="3706.0" y="886.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="outbound_dispatch_shipmentorder" data-label="company_id">
+    <title>company_company to outbound_dispatch_shipmentorder via company_id</title>
+    <path class="edge-hit" d="M 820 365 L 986 365 L 986 384 L 1274 384 L 1274 386 L 1308 386 L 1308 366 L 1326 366 L 1326 384 L 1588 384 L 1588 386 L 1680 386 L 1680 384 L 1910 384 L 1910 386 L 2266 386 L 2266 204 L 2284 204 L 2284 96 L 2878 96 L 2878 204 L 2916 204 L 2916 96 L 3280 96 L 3280 492 L 3298 492"/>
+    <path class="edge" d="M 820 365 L 986 365 L 986 384 L 1274 384 L 1274 386 L 1308 386 L 1308 366 L 1326 366 L 1326 384 L 1588 384 L 1588 386 L 1680 386 L 1680 384 L 1910 384 L 1910 386 L 2266 386 L 2266 204 L 2284 204 L 2284 96 L 2878 96 L 2878 204 L 2916 204 L 2916 96 L 3280 96 L 3280 492 L 3298 492"/>
+    <rect class="edge-label-bg" x="2248.0" y="184.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2284.0" y="196.5" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_execution_breakdowncategory" data-label="company_id">
+    <title>company_company to production_execution_breakdowncategory via company_id</title>
+    <path class="edge-hit" d="M 820 418 L 760 418 L 760 679 L 3244 679 L 3244 418 L 3266 418 L 3266 366 L 3585 366 L 3585 456 L 3603 456 L 3603 634 L 3612 634 L 3612 679 L 4992 679"/>
+    <path class="edge" d="M 820 418 L 760 418 L 760 679 L 3244 679 L 3244 418 L 3266 418 L 3266 366 L 3585 366 L 3585 456 L 3603 456 L 3603 634 L 3612 634 L 3612 679 L 4992 679"/>
+    <rect class="edge-label-bg" x="2992.5" y="671.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="3028.5" y="683.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_execution_lineclearance" data-label="company_id">
+    <title>company_company to production_execution_lineclearance via company_id</title>
+    <path class="edge-hit" d="M 820 404 L 714 404 L 714 600 L 898 600 L 898 636 L 1082 636 L 1082 852 L 1956 852 L 1956 882 L 2002 882 L 2002 634 L 2284 634 L 2284 672 L 2324 672 L 2324 780 L 2876 780 L 2876 744 L 2916 744 L 2916 386 L 3204 386 L 3204 404 L 3284 404 L 3284 96 L 3905 96 L 3905 240 L 3909 240 L 3909 404 L 3934 404 L 3934 456 L 3909 456 L 3909 510 L 3923 510"/>
+    <path class="edge" d="M 820 404 L 714 404 L 714 600 L 898 600 L 898 636 L 1082 636 L 1082 852 L 1956 852 L 1956 882 L 2002 882 L 2002 634 L 2284 634 L 2284 672 L 2324 672 L 2324 780 L 2876 780 L 2876 744 L 2916 744 L 2916 386 L 3204 386 L 3204 404 L 3284 404 L 3284 96 L 3905 96 L 3905 240 L 3909 240 L 3909 404 L 3934 404 L 3934 456 L 3909 456 L 3909 510 L 3923 510"/>
+    <rect class="edge-label-bg" x="2385.5" y="772.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2421.5" y="784.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_execution_lineskuconfig" data-label="company_id">
+    <title>company_company to production_execution_lineskuconfig via company_id</title>
+    <path class="edge-hit" d="M 820 341 L 910 341 L 910 204 L 944 204 L 944 132 L 1641 132 L 1641 168 L 1659 168 L 1659 132 L 1947 132 L 1947 168 L 1978 168 L 1978 132 L 2232 132 L 2232 136 L 2266 136 L 2266 168 L 2278 168 L 2278 528 L 2266 528 L 2266 598 L 2284 598 L 2284 634 L 2324 634 L 2324 672 L 2600 672 L 2600 744 L 2830 744 L 2830 672 L 2922 672 L 2922 708 L 3284 708 L 3284 618 L 3585 618 L 3585 708 L 4900 708 L 4900 776 L 5300 776 L 5300 420 L 5363 420 L 5363 260 L 5381 260"/>
+    <path class="edge" d="M 820 341 L 910 341 L 910 204 L 944 204 L 944 132 L 1641 132 L 1641 168 L 1659 168 L 1659 132 L 1947 132 L 1947 168 L 1978 168 L 1978 132 L 2232 132 L 2232 136 L 2266 136 L 2266 168 L 2278 168 L 2278 528 L 2266 528 L 2266 598 L 2284 598 L 2284 634 L 2324 634 L 2324 672 L 2600 672 L 2600 744 L 2830 744 L 2830 672 L 2922 672 L 2922 708 L 3284 708 L 3284 618 L 3585 618 L 3585 708 L 4900 708 L 4900 776 L 5300 776 L 5300 420 L 5363 420 L 5363 260 L 5381 260"/>
+    <rect class="edge-label-bg" x="2898.0" y="700.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2934.0" y="712.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_execution_machine" data-label="company_id">
+    <title>company_company to production_execution_machine via company_id</title>
+    <path class="edge-hit" d="M 820 299 L 668 299 L 668 251 L 944 251 L 944 204 L 986 204 L 986 136 L 990 136 L 990 60 L 1956 60 L 1956 368 L 1978 368 L 1978 384 L 2232 384 L 2232 386 L 2266 386 L 2266 420 L 2284 420 L 2284 386 L 2590 386 L 2590 634 L 2646 634 L 2646 672 L 2830 672 L 2830 634 L 2878 634 L 2878 780 L 3198 780 L 3198 776 L 3280 776 L 3280 492 L 3266 492 L 3266 420 L 3244 420 L 3244 386 L 3266 386 L 3266 348 L 3290 348 L 3290 251 L 3298 251"/>
+    <path class="edge" d="M 820 299 L 668 299 L 668 251 L 944 251 L 944 204 L 986 204 L 986 136 L 990 136 L 990 60 L 1956 60 L 1956 368 L 1978 368 L 1978 384 L 2232 384 L 2232 386 L 2266 386 L 2266 420 L 2284 420 L 2284 386 L 2590 386 L 2590 634 L 2646 634 L 2646 672 L 2830 672 L 2830 634 L 2878 634 L 2878 780 L 3198 780 L 3198 776 L 3280 776 L 3280 492 L 3266 492 L 3266 420 L 3244 420 L 3244 386 L 3266 386 L 3266 348 L 3290 348 L 3290 251 L 3298 251"/>
+    <rect class="edge-label-bg" x="2160.0" y="376.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2196.0" y="388.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_execution_machinechecklistentry" data-label="company_id">
+    <title>company_company to production_execution_machinechecklistentry via company_id</title>
+    <path class="edge-hit" d="M 820 407 L 622 407 L 622 830 L 806 830 L 806 780 L 944 780 L 944 816 L 1266 816 L 1266 830 L 1864 830 L 1864 636 L 1956 636 L 1956 634 L 2048 634 L 2048 830 L 2186 830 L 2186 708 L 2266 708 L 2266 672 L 2284 672 L 2284 780 L 2370 780 L 2370 830 L 2554 830 L 2554 636 L 2572 636 L 2572 634 L 2600 634 L 2600 672 L 2646 672 L 2646 708 L 2692 708 L 2692 634 L 2784 634 L 2784 744 L 2876 744 L 2876 634 L 2968 634 L 2968 744 L 3244 744 L 3244 816 L 3284 816 L 3284 830 L 3585 830 L 3585 816 L 3980 816 L 3980 852 L 4259 852 L 4259 407 L 4273 407 L 4273 510 L 4291 510"/>
+    <path class="edge" d="M 820 407 L 622 407 L 622 830 L 806 830 L 806 780 L 944 780 L 944 816 L 1266 816 L 1266 830 L 1864 830 L 1864 636 L 1956 636 L 1956 634 L 2048 634 L 2048 830 L 2186 830 L 2186 708 L 2266 708 L 2266 672 L 2284 672 L 2284 780 L 2370 780 L 2370 830 L 2554 830 L 2554 636 L 2572 636 L 2572 634 L 2600 634 L 2600 672 L 2646 672 L 2646 708 L 2692 708 L 2692 634 L 2784 634 L 2784 744 L 2876 744 L 2876 634 L 2968 634 L 2968 744 L 3244 744 L 3244 816 L 3284 816 L 3284 830 L 3585 830 L 3585 816 L 3980 816 L 3980 852 L 4259 852 L 4259 407 L 4273 407 L 4273 510 L 4291 510"/>
+    <rect class="edge-label-bg" x="2385.0" y="822.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2421.0" y="834.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_execution_machinechecklisttemplate" data-label="company_id">
+    <title>company_company to production_execution_machinechecklisttemplate via company_id</title>
+    <path class="edge-hit" d="M 820 411 L 576 411 L 576 24 L 2508 24 L 2508 132 L 2572 132 L 2572 276 L 2590 276 L 2590 386 L 2878 386 L 2878 368 L 2916 368 L 2916 384 L 3204 384 L 3204 386 L 3244 386 L 3244 384 L 3266 384 L 3266 368 L 3572 368 L 3572 384 L 4238 384 L 4238 368 L 4256 368 L 4256 96 L 4578 96 L 4578 276 L 4627 276 L 4627 96 L 4992 96 L 4992 24 L 5349 24 L 5349 564 L 5363 564 L 5363 510 L 5381 510"/>
+    <path class="edge" d="M 820 411 L 576 411 L 576 24 L 2508 24 L 2508 132 L 2572 132 L 2572 276 L 2590 276 L 2590 386 L 2878 386 L 2878 368 L 2916 368 L 2916 384 L 3204 384 L 3204 386 L 3244 386 L 3244 384 L 3266 384 L 3266 368 L 3572 368 L 3572 384 L 4238 384 L 4238 368 L 4256 368 L 4256 96 L 4578 96 L 4578 276 L 4627 276 L 4627 96 L 4992 96 L 4992 24 L 5349 24 L 5349 564 L 5363 564 L 5363 510 L 5381 510"/>
+    <rect class="edge-label-bg" x="3104.0" y="376.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="3140.0" y="388.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_execution_productionline" data-label="company_id">
+    <title>company_company to production_execution_productionline via company_id</title>
+    <path class="edge-hit" d="M 820 421 L 530 421 L 530 724 L 3298 724"/>
+    <path class="edge" d="M 820 421 L 530 421 L 530 724 L 3298 724"/>
+    <rect class="edge-label-bg" x="1581.5" y="716.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1617.5" y="728.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_execution_productionrun" data-label="company_id">
+    <title>company_company to production_execution_productionrun via company_id</title>
+    <path class="edge-hit" d="M 820 344 L 982 344 L 982 260 L 1000 260"/>
+    <path class="edge" d="M 820 344 L 982 344 L 982 260 L 1000 260"/>
+    <rect class="edge-label-bg" x="916.0" y="336.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="952.0" y="348.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="production_planning_productionplan" data-label="company_id">
+    <title>company_company to production_planning_productionplan via company_id</title>
+    <path class="edge-hit" d="M 820 348 L 922 348 L 922 618 L 986 618 L 986 634 L 990 634 L 990 708 L 1036 708 L 1036 776 L 1128 776 L 1128 882 L 1910 882 L 1910 830 L 2048 830 L 2048 852 L 2186 852 L 2186 830 L 2278 830 L 2278 780 L 2324 780 L 2324 816 L 2416 816 L 2416 852 L 2462 852 L 2462 776 L 2590 776 L 2590 744 L 2600 744 L 2600 776 L 2738 776 L 2738 830 L 2876 830 L 2876 780 L 2898 780 L 2898 776 L 3198 776 L 3198 634 L 3204 634 L 3204 618 L 3290 618 L 3290 616 L 3566 616 L 3566 618 L 3603 618 L 3603 636 L 3658 636 L 3658 776 L 4302 776 L 4302 852 L 4641 852 L 4641 260 L 4659 260"/>
+    <path class="edge" d="M 820 348 L 922 348 L 922 618 L 986 618 L 986 634 L 990 634 L 990 708 L 1036 708 L 1036 776 L 1128 776 L 1128 882 L 1910 882 L 1910 830 L 2048 830 L 2048 852 L 2186 852 L 2186 830 L 2278 830 L 2278 780 L 2324 780 L 2324 816 L 2416 816 L 2416 852 L 2462 852 L 2462 776 L 2590 776 L 2590 744 L 2600 744 L 2600 776 L 2738 776 L 2738 830 L 2876 830 L 2876 780 L 2898 780 L 2898 776 L 3198 776 L 3198 634 L 3204 634 L 3204 618 L 3290 618 L 3290 616 L 3566 616 L 3566 618 L 3603 618 L 3603 636 L 3658 636 L 3658 776 L 4302 776 L 4302 852 L 4641 852 L 4641 260 L 4659 260"/>
+    <rect class="edge-label-bg" x="2751.5" y="822.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2787.5" y="834.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="quality_control_materialtype" data-label="company_id">
+    <title>company_company to quality_control_materialtype via company_id</title>
+    <path class="edge-hit" d="M 820 351 L 928 351 L 928 634 L 1082 634 L 1082 636 L 1404 636 L 1404 776 L 2094 776 L 2094 882 L 2508 882 L 2508 636 L 2554 636 L 2554 634 L 2922 634 L 2922 672 L 3266 672 L 3266 852 L 3585 852 L 3585 780 L 4026 780 L 4026 816 L 4210 816 L 4210 636 L 4273 636 L 4273 580 L 4277 580 L 4277 351 L 4273 351 L 4273 260 L 4291 260"/>
+    <path class="edge" d="M 820 351 L 928 351 L 928 634 L 1082 634 L 1082 636 L 1404 636 L 1404 776 L 2094 776 L 2094 882 L 2508 882 L 2508 636 L 2554 636 L 2554 634 L 2922 634 L 2922 672 L 3266 672 L 3266 852 L 3585 852 L 3585 780 L 4026 780 L 4026 816 L 4210 816 L 4210 636 L 4273 636 L 4273 580 L 4277 580 L 4277 351 L 4273 351 L 4273 260 L 4291 260"/>
+    <rect class="edge-label-bg" x="2575.0" y="626.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2611.0" y="638.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="warehouse_bomrequest" data-label="company_id">
+    <title>company_company to warehouse_bomrequest via company_id</title>
+    <path class="edge-hit" d="M 820 414 L 986 414 L 986 386 L 1274 386 L 1274 414 L 1326 414 L 1326 634 L 1404 634 L 1404 636 L 1450 636 L 1450 744 L 1726 744 L 1726 708 L 2140 708 L 2140 744 L 2370 744 L 2370 708 L 2646 708 L 2646 744 L 2692 744 L 2692 708 L 2922 708 L 2922 744 L 3014 744 L 3014 634 L 3152 634 L 3152 780 L 3284 780 L 3284 830 L 3290 830 L 3290 882 L 3603 882 L 3603 776 L 3612 776 L 3612 744 L 4624 744 L 4624 636 L 4627 636 L 4627 510 L 4659 510"/>
+    <path class="edge" d="M 820 414 L 986 414 L 986 386 L 1274 386 L 1274 414 L 1326 414 L 1326 634 L 1404 634 L 1404 636 L 1450 636 L 1450 744 L 1726 744 L 1726 708 L 2140 708 L 2140 744 L 2370 744 L 2370 708 L 2646 708 L 2646 744 L 2692 744 L 2692 708 L 2922 708 L 2922 744 L 3014 744 L 3014 634 L 3152 634 L 3152 780 L 3284 780 L 3284 830 L 3290 830 L 3290 882 L 3603 882 L 3603 776 L 3612 776 L 3612 744 L 4624 744 L 4624 636 L 4627 636 L 4627 510 L 4659 510"/>
+    <rect class="edge-label-bg" x="2803.5" y="700.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="2839.5" y="712.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="warehouse_finishedgoodsreceipt" data-label="company_id">
+    <title>company_company to warehouse_finishedgoodsreceipt via company_id</title>
+    <path class="edge-hit" d="M 820 355 L 934 355 L 934 96 L 1818 96 L 1818 136 L 1947 136 L 1947 204 L 1960 204 L 1960 60 L 2878 60 L 2878 96 L 2916 96 L 2916 60 L 3888 60 L 3888 136 L 3909 136 L 3909 96 L 4238 96 L 4238 136 L 4259 136 L 4259 384 L 4565 384 L 4565 355 L 4645 355 L 4645 384 L 5266 384 L 5266 456 L 5360 456 L 5360 355 L 5367 355 L 5367 136 L 5406 136 L 5406 60 L 5689 60 L 5689 355 L 5752 355 L 5752 260 L 5770 260"/>
+    <path class="edge" d="M 820 355 L 934 355 L 934 96 L 1818 96 L 1818 136 L 1947 136 L 1947 204 L 1960 204 L 1960 60 L 2878 60 L 2878 96 L 2916 96 L 2916 60 L 3888 60 L 3888 136 L 3909 136 L 3909 96 L 4238 96 L 4238 136 L 4259 136 L 4259 384 L 4565 384 L 4565 355 L 4645 355 L 4645 384 L 5266 384 L 5266 456 L 5360 456 L 5360 355 L 5367 355 L 5367 136 L 5406 136 L 5406 60 L 5689 60 L 5689 355 L 5752 355 L 5752 260 L 5770 260"/>
+    <rect class="edge-label-bg" x="3627.5" y="52.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="3663.5" y="64.0" text-anchor="middle">company_id</text>
+  </g>
+  <g id="company_company" class="card" data-table="company_company">
+    <title>company_company</title>
+    <rect class="card-outline" x="500" y="295" width="320" height="130" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="295" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="321" width="320" height="8" fill="#bfdbfe"/>
+    <text x="514" y="317" class="card-title" fill="#0f172a">company_company</text>
+    <text x="514" y="353" class="field">PK    id : int</text>
+    <text x="514" y="371" class="field">      name : varchar</text>
+    <text x="514" y="389" class="field">UK    code : varchar</text>
+    <text x="514" y="407" class="field">      is_active : boolean</text>
+  </g>
+  <g id="production_execution_productionrun" class="card" data-table="production_execution_productionrun">
+    <title>production_execution_productionrun</title>
+    <rect class="card-outline" x="1000" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="172" class="card-title" fill="#94a3b8">production_execution_productionrun</text>
+    <text x="1280" y="172" class="meta" text-anchor="end">production_execution</text>
+    <text x="1014" y="208" class="field">PK    id : bigint</text>
+    <text x="1014" y="226" class="field">      run_number : int</text>
+    <text x="1014" y="244" class="field">      date : date</text>
+    <text x="1014" y="262" class="field">      rated_speed : decimal (nullable)</text>
+    <text x="1014" y="280" class="field">      total_production : decimal</text>
+    <text x="1014" y="298" class="field">      total_breakdown_time : int</text>
+    <text x="1014" y="316" class="field">      status : varchar</text>
+    <text x="1014" y="334" class="field">      created_at : datetime</text>
+    <text x="1014" y="352" class="field">... 20 more fields</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="1000" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="422" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="1246" y="422" class="meta" text-anchor="end">driver_management</text>
+    <text x="1014" y="458" class="field">PK    id : int</text>
+    <text x="1014" y="476" class="field">      created_at : datetime</text>
+    <text x="1014" y="494" class="field">      updated_at : datetime</text>
+    <text x="1014" y="512" class="field">      is_active : boolean</text>
+    <text x="1014" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="1014" y="548" class="field">      status : varchar</text>
+    <text x="1014" y="566" class="field">      is_locked : boolean</text>
+    <text x="1014" y="584" class="field">      entry_time : datetime</text>
+    <text x="1014" y="602" class="field">... 7 more fields</text>
+  </g>
+  <g id="gate_core_bstgateout" class="card" data-table="gate_core_bstgateout">
+    <title>gate_core_bstgateout</title>
+    <rect class="card-outline" x="1340" y="150" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1340" y="150" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1340" y="176" width="280" height="8" fill="#e2e8f0"/>
+    <text x="1354" y="172" class="card-title" fill="#94a3b8">gate_core_bstgateout</text>
+    <text x="1606" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="1354" y="208" class="field">PK    id : bigint</text>
+    <text x="1354" y="226" class="field">      created_at : datetime</text>
+    <text x="1354" y="244" class="field">      updated_at : datetime</text>
+    <text x="1354" y="262" class="field">      is_active : boolean</text>
+    <text x="1354" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="1354" y="298" class="field">      sap_doc_entry : int</text>
+    <text x="1354" y="316" class="field">      sap_doc_num : varchar</text>
+    <text x="1354" y="334" class="field">      sap_doc_date : date (nullable)</text>
+    <text x="1354" y="352" class="field">... 19 more fields</text>
+  </g>
+  <g id="dispatch_plans_dispatchplan" class="card" data-table="dispatch_plans_dispatchplan">
+    <title>dispatch_plans_dispatchplan</title>
+    <rect class="card-outline" x="1340" y="400" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1340" y="400" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1340" y="426" width="287" height="8" fill="#e2e8f0"/>
+    <text x="1354" y="422" class="card-title" fill="#94a3b8">dispatch_plans_dispatchplan</text>
+    <text x="1613" y="422" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="1354" y="458" class="field">PK    id : bigint</text>
+    <text x="1354" y="476" class="field">      created_at : datetime</text>
+    <text x="1354" y="494" class="field">      updated_at : datetime</text>
+    <text x="1354" y="512" class="field">      is_active : boolean</text>
+    <text x="1354" y="530" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="1354" y="548" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="1354" y="566" class="field">      booking_status : varchar</text>
+    <text x="1354" y="584" class="field">      dispatch_date : date (nullable)</text>
+    <text x="1354" y="602" class="field">... 39 more fields</text>
+  </g>
+  <g id="gate_core_bstgatein" class="card" data-table="gate_core_bstgatein">
+    <title>gate_core_bstgatein</title>
+    <rect class="card-outline" x="1673" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1673" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1673" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1687" y="172" class="card-title" fill="#94a3b8">gate_core_bstgatein</text>
+    <text x="1919" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="1687" y="208" class="field">PK    id : bigint</text>
+    <text x="1687" y="226" class="field">      created_at : datetime</text>
+    <text x="1687" y="244" class="field">      updated_at : datetime</text>
+    <text x="1687" y="262" class="field">      is_active : boolean</text>
+    <text x="1687" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="1687" y="298" class="field">      gate_in_date : date</text>
+    <text x="1687" y="316" class="field">      in_time : time</text>
+    <text x="1687" y="334" class="field">      security_name : varchar</text>
+    <text x="1687" y="352" class="field">... 12 more fields</text>
+  </g>
+  <g id="gate_core_dispatchgateout" class="card" data-table="gate_core_dispatchgateout">
+    <title>gate_core_dispatchgateout</title>
+    <rect class="card-outline" x="1673" y="400" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1673" y="400" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1673" y="426" width="273" height="8" fill="#e2e8f0"/>
+    <text x="1687" y="422" class="card-title" fill="#94a3b8">gate_core_dispatchgateout</text>
+    <text x="1932" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="1687" y="458" class="field">PK    id : bigint</text>
+    <text x="1687" y="476" class="field">      created_at : datetime</text>
+    <text x="1687" y="494" class="field">      updated_at : datetime</text>
+    <text x="1687" y="512" class="field">      is_active : boolean</text>
+    <text x="1687" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="1687" y="548" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="1687" y="566" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="1687" y="584" class="field">      customer_code : varchar</text>
+    <text x="1687" y="602" class="field">... 44 more fields</text>
+  </g>
+  <g id="gate_core_emptyvehiclegatein" class="card" data-table="gate_core_emptyvehiclegatein">
+    <title>gate_core_emptyvehiclegatein</title>
+    <rect class="card-outline" x="1992" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1992" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1992" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="2006" y="172" class="card-title" fill="#94a3b8">gate_core_emptyvehiclegatein</text>
+    <text x="2238" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="2006" y="208" class="field">PK    id : bigint</text>
+    <text x="2006" y="226" class="field">      created_at : datetime</text>
+    <text x="2006" y="244" class="field">      updated_at : datetime</text>
+    <text x="2006" y="262" class="field">      is_active : boolean</text>
+    <text x="2006" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="2006" y="298" class="field">      reason : varchar</text>
+    <text x="2006" y="316" class="field">      gate_in_date : date</text>
+    <text x="2006" y="334" class="field">      in_time : time</text>
+    <text x="2006" y="352" class="field">... 19 more fields</text>
+  </g>
+  <g id="barcode_box" class="card" data-table="barcode_box">
+    <title>barcode_box</title>
+    <rect class="card-outline" x="1992" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1992" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1992" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="2006" y="422" class="card-title" fill="#94a3b8">barcode_box</text>
+    <text x="2238" y="422" class="meta" text-anchor="end">barcode</text>
+    <text x="2006" y="458" class="field">PK    id : bigint</text>
+    <text x="2006" y="476" class="field">FK    company_id : bigint</text>
+    <text x="2006" y="494" class="field">UK    box_barcode : varchar</text>
+    <text x="2006" y="512" class="field">      barcode_data : json</text>
+    <text x="2006" y="530" class="field">      item_code : varchar</text>
+    <text x="2006" y="548" class="field">      item_name : varchar</text>
+    <text x="2006" y="566" class="field">      batch_number : varchar</text>
+    <text x="2006" y="584" class="field">      qty : decimal</text>
+    <text x="2006" y="602" class="field">... 14 more fields</text>
+  </g>
+  <g id="barcode_pallet" class="card" data-table="barcode_pallet">
+    <title>barcode_pallet</title>
+    <rect class="card-outline" x="2298" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2298" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2298" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="2312" y="172" class="card-title" fill="#94a3b8">barcode_pallet</text>
+    <text x="2544" y="172" class="meta" text-anchor="end">barcode</text>
+    <text x="2312" y="208" class="field">PK    id : bigint</text>
+    <text x="2312" y="226" class="field">UK    pallet_id : varchar</text>
+    <text x="2312" y="244" class="field">      barcode_data : json</text>
+    <text x="2312" y="262" class="field">      item_code : varchar</text>
+    <text x="2312" y="280" class="field">      item_name : varchar</text>
+    <text x="2312" y="298" class="field">      batch_number : varchar</text>
+    <text x="2312" y="316" class="field">      box_count : int</text>
+    <text x="2312" y="334" class="field">      total_qty : decimal</text>
+    <text x="2312" y="352" class="field">... 13 more fields</text>
+  </g>
+  <g id="gate_core_bstgatereturn" class="card" data-table="gate_core_bstgatereturn">
+    <title>gate_core_bstgatereturn</title>
+    <rect class="card-outline" x="2298" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2298" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2298" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="2312" y="422" class="card-title" fill="#94a3b8">gate_core_bstgatereturn</text>
+    <text x="2544" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="2312" y="458" class="field">PK    id : bigint</text>
+    <text x="2312" y="476" class="field">      created_at : datetime</text>
+    <text x="2312" y="494" class="field">      updated_at : datetime</text>
+    <text x="2312" y="512" class="field">      is_active : boolean</text>
+    <text x="2312" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="2312" y="548" class="field">      gate_in_date : date</text>
+    <text x="2312" y="566" class="field">      in_time : time</text>
+    <text x="2312" y="584" class="field">      security_name : varchar</text>
+    <text x="2312" y="602" class="field">... 12 more fields</text>
+  </g>
+  <g id="gate_core_emptyvehiclegateout" class="card" data-table="gate_core_emptyvehiclegateout">
+    <title>gate_core_emptyvehiclegateout</title>
+    <rect class="card-outline" x="2604" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2604" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2604" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="2618" y="172" class="card-title" fill="#94a3b8">gate_core_emptyvehiclegateout</text>
+    <text x="2850" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="2618" y="208" class="field">PK    id : bigint</text>
+    <text x="2618" y="226" class="field">      created_at : datetime</text>
+    <text x="2618" y="244" class="field">      updated_at : datetime</text>
+    <text x="2618" y="262" class="field">      is_active : boolean</text>
+    <text x="2618" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="2618" y="298" class="field">      gate_out_date : date</text>
+    <text x="2618" y="316" class="field">      out_time : time</text>
+    <text x="2618" y="334" class="field">      security_name : varchar</text>
+    <text x="2618" y="352" class="field">... 11 more fields</text>
+  </g>
+  <g id="gate_core_jobworkgatein" class="card" data-table="gate_core_jobworkgatein">
+    <title>gate_core_jobworkgatein</title>
+    <rect class="card-outline" x="2604" y="400" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2604" y="400" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2604" y="426" width="280" height="8" fill="#e2e8f0"/>
+    <text x="2618" y="422" class="card-title" fill="#94a3b8">gate_core_jobworkgatein</text>
+    <text x="2870" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="2618" y="458" class="field">PK    id : bigint</text>
+    <text x="2618" y="476" class="field">      created_at : datetime</text>
+    <text x="2618" y="494" class="field">      updated_at : datetime</text>
+    <text x="2618" y="512" class="field">      is_active : boolean</text>
+    <text x="2618" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="2618" y="548" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="2618" y="566" class="field">      sap_doc_num : varchar</text>
+    <text x="2618" y="584" class="field">      sap_doc_date : date (nullable)</text>
+    <text x="2618" y="602" class="field">... 29 more fields</text>
+  </g>
+  <g id="dispatch_plans_transporterapinvoiceposting" class="card" data-table="dispatch_plans_transporterapinvoiceposting">
+    <title>dispatch_plans_transporterapinvoiceposting</title>
+    <rect class="card-outline" x="2930" y="150" width="322" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2930" y="150" width="322" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2930" y="176" width="322" height="8" fill="#e2e8f0"/>
+    <text x="2944" y="172" class="card-title" fill="#94a3b8">dispatch_plans_transporterapinvoiceposting</text>
+    <text x="3238" y="172" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="2944" y="208" class="field">PK    id : bigint</text>
+    <text x="2944" y="226" class="field">      created_at : datetime</text>
+    <text x="2944" y="244" class="field">      updated_at : datetime</text>
+    <text x="2944" y="262" class="field">      is_active : boolean</text>
+    <text x="2944" y="280" class="field">      vendor_code : varchar</text>
+    <text x="2944" y="298" class="field">      vendor_name : varchar</text>
+    <text x="2944" y="316" class="field">      invoice_number : varchar</text>
+    <text x="2944" y="334" class="field">      invoice_date : date (nullable)</text>
+    <text x="2944" y="352" class="field">... 15 more fields</text>
+  </g>
+  <g id="gate_core_rejectedqcreturnentry" class="card" data-table="gate_core_rejectedqcreturnentry">
+    <title>gate_core_rejectedqcreturnentry</title>
+    <rect class="card-outline" x="2930" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2930" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2930" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="2944" y="422" class="card-title" fill="#94a3b8">gate_core_rejectedqcreturnentry</text>
+    <text x="3176" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="2944" y="458" class="field">PK    id : bigint</text>
+    <text x="2944" y="476" class="field">      created_at : datetime</text>
+    <text x="2944" y="494" class="field">      updated_at : datetime</text>
+    <text x="2944" y="512" class="field">      is_active : boolean</text>
+    <text x="2944" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="2944" y="548" class="field">      gate_out_date : date</text>
+    <text x="2944" y="566" class="field">      out_time : time (nullable)</text>
+    <text x="2944" y="584" class="field">      challan_no : varchar</text>
+    <text x="2944" y="602" class="field">... 17 more fields</text>
+  </g>
+  <g id="production_execution_machine" class="card" data-table="production_execution_machine">
+    <title>production_execution_machine</title>
+    <rect class="card-outline" x="3298" y="150" width="260" height="202" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="3298" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="3298" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="3312" y="172" class="card-title" fill="#94a3b8">production_execution_machine</text>
+    <text x="3544" y="172" class="meta" text-anchor="end">production_execution</text>
+    <text x="3312" y="208" class="field">PK    id : bigint</text>
+    <text x="3312" y="226" class="field">      name : varchar</text>
+    <text x="3312" y="244" class="field">      machine_type : varchar</text>
+    <text x="3312" y="262" class="field">      is_active : boolean</text>
+    <text x="3312" y="280" class="field">      created_at : datetime</text>
+    <text x="3312" y="298" class="field">      updated_at : datetime</text>
+    <text x="3312" y="316" class="field">FK    company_id : int</text>
+    <text x="3312" y="334" class="field">FK    line_id : bigint</text>
+  </g>
+  <g id="outbound_dispatch_shipmentorder" class="card" data-table="outbound_dispatch_shipmentorder">
+    <title>outbound_dispatch_shipmentorder</title>
+    <rect class="card-outline" x="3298" y="382" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="3298" y="382" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="3298" y="408" width="260" height="8" fill="#e2e8f0"/>
+    <text x="3312" y="404" class="card-title" fill="#94a3b8">outbound_dispatch_shipmentorder</text>
+    <text x="3544" y="404" class="meta" text-anchor="end">outbound_dispatch</text>
+    <text x="3312" y="440" class="field">PK    id : bigint</text>
+    <text x="3312" y="458" class="field">      created_at : datetime</text>
+    <text x="3312" y="476" class="field">      updated_at : datetime</text>
+    <text x="3312" y="494" class="field">      is_active : boolean</text>
+    <text x="3312" y="512" class="field">      sap_doc_entry : int</text>
+    <text x="3312" y="530" class="field">      sap_doc_num : int</text>
+    <text x="3312" y="548" class="field">      customer_code : varchar</text>
+    <text x="3312" y="566" class="field">      customer_name : varchar</text>
+    <text x="3312" y="584" class="field">... 16 more fields</text>
+  </g>
+  <g id="production_execution_productionline" class="card" data-table="production_execution_productionline">
+    <title>production_execution_productionline</title>
+    <rect class="card-outline" x="3298" y="632" width="273" height="184" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="3298" y="632" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="3298" y="658" width="273" height="8" fill="#e2e8f0"/>
+    <text x="3312" y="654" class="card-title" fill="#94a3b8">production_execution_productionline</text>
+    <text x="3557" y="654" class="meta" text-anchor="end">production_execution</text>
+    <text x="3312" y="690" class="field">PK    id : bigint</text>
+    <text x="3312" y="708" class="field">      name : varchar</text>
+    <text x="3312" y="726" class="field">      description : text</text>
+    <text x="3312" y="744" class="field">      is_active : boolean</text>
+    <text x="3312" y="762" class="field">      created_at : datetime</text>
+    <text x="3312" y="780" class="field">      updated_at : datetime</text>
+    <text x="3312" y="798" class="field">FK    company_id : int</text>
+  </g>
+  <g id="barcode_boxmovement" class="card" data-table="barcode_boxmovement">
+    <title>barcode_boxmovement</title>
+    <rect class="card-outline" x="3617" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="3617" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="3617" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="3631" y="172" class="card-title" fill="#94a3b8">barcode_boxmovement</text>
+    <text x="3863" y="172" class="meta" text-anchor="end">barcode</text>
+    <text x="3631" y="208" class="field">PK    id : bigint</text>
+    <text x="3631" y="226" class="field">      movement_type : varchar</text>
+    <text x="3631" y="244" class="field">      from_warehouse : varchar</text>
+    <text x="3631" y="262" class="field">      to_warehouse : varchar</text>
+    <text x="3631" y="280" class="field">      from_bin : varchar</text>
+    <text x="3631" y="298" class="field">      to_bin : varchar</text>
+    <text x="3631" y="316" class="field">      performed_at : datetime</text>
+    <text x="3631" y="334" class="field">FK    box_id : bigint</text>
+    <text x="3631" y="352" class="field">... 4 more fields</text>
+  </g>
+  <g id="barcode_loosestock" class="card" data-table="barcode_loosestock">
+    <title>barcode_loosestock</title>
+    <rect class="card-outline" x="3617" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="3617" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="3617" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="3631" y="422" class="card-title" fill="#94a3b8">barcode_loosestock</text>
+    <text x="3863" y="422" class="meta" text-anchor="end">barcode</text>
+    <text x="3631" y="458" class="field">PK    id : bigint</text>
+    <text x="3631" y="476" class="field">      item_code : varchar</text>
+    <text x="3631" y="494" class="field">      item_name : varchar</text>
+    <text x="3631" y="512" class="field">      batch_number : varchar</text>
+    <text x="3631" y="530" class="field">      qty : decimal</text>
+    <text x="3631" y="548" class="field">      original_qty : decimal</text>
+    <text x="3631" y="566" class="field">      uom : varchar</text>
+    <text x="3631" y="584" class="field">      reason : varchar</text>
+    <text x="3631" y="602" class="field">... 10 more fields</text>
+  </g>
+  <g id="gate_core_dispatchgatelock" class="card" data-table="gate_core_dispatchgatelock">
+    <title>gate_core_dispatchgatelock</title>
+    <rect class="card-outline" x="3923" y="150" width="301" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="3923" y="150" width="301" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="3923" y="176" width="301" height="8" fill="#e2e8f0"/>
+    <text x="3937" y="172" class="card-title" fill="#94a3b8">gate_core_dispatchgatelock</text>
+    <text x="4210" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="3937" y="208" class="field">PK    id : bigint</text>
+    <text x="3937" y="226" class="field">      created_at : datetime</text>
+    <text x="3937" y="244" class="field">      updated_at : datetime</text>
+    <text x="3937" y="262" class="field">      is_active : boolean</text>
+    <text x="3937" y="280" class="field">      locked : boolean</text>
+    <text x="3937" y="298" class="field">      reason : text</text>
+    <text x="3937" y="316" class="field">      locked_at : datetime (nullable)</text>
+    <text x="3937" y="334" class="field">      unlocked_at : datetime (nullable)</text>
+    <text x="3937" y="352" class="field">... 4 more fields</text>
+  </g>
+  <g id="production_execution_lineclearance" class="card" data-table="production_execution_lineclearance">
+    <title>production_execution_lineclearance</title>
+    <rect class="card-outline" x="3923" y="400" width="322" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="3923" y="400" width="322" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="3923" y="426" width="322" height="8" fill="#e2e8f0"/>
+    <text x="3937" y="422" class="card-title" fill="#94a3b8">production_execution_lineclearance</text>
+    <text x="4231" y="422" class="meta" text-anchor="end">production_execution</text>
+    <text x="3937" y="458" class="field">PK    id : bigint</text>
+    <text x="3937" y="476" class="field">      date : date</text>
+    <text x="3937" y="494" class="field">      document_id : varchar</text>
+    <text x="3937" y="512" class="field">      qa_approved : boolean</text>
+    <text x="3937" y="530" class="field">      qa_approved_at : datetime (nullable)</text>
+    <text x="3937" y="548" class="field">      production_supervisor_sign : varchar</text>
+    <text x="3937" y="566" class="field">      status : varchar</text>
+    <text x="3937" y="584" class="field">      created_at : datetime</text>
+    <text x="3937" y="602" class="field">... 8 more fields</text>
+  </g>
+  <g id="quality_control_materialtype" class="card" data-table="quality_control_materialtype">
+    <title>quality_control_materialtype</title>
+    <rect class="card-outline" x="4291" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="4291" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="4291" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="4305" y="172" class="card-title" fill="#94a3b8">quality_control_materialtype</text>
+    <text x="4537" y="172" class="meta" text-anchor="end">quality_control</text>
+    <text x="4305" y="208" class="field">PK    id : int</text>
+    <text x="4305" y="226" class="field">      created_at : datetime</text>
+    <text x="4305" y="244" class="field">      updated_at : datetime</text>
+    <text x="4305" y="262" class="field">      is_active : boolean</text>
+    <text x="4305" y="280" class="field">      code : varchar</text>
+    <text x="4305" y="298" class="field">      name : varchar</text>
+    <text x="4305" y="316" class="field">      description : text</text>
+    <text x="4305" y="334" class="field">FK    company_id : int</text>
+    <text x="4305" y="352" class="field">... 2 more fields</text>
+  </g>
+  <g id="production_execution_machinechecklistentry" class="card" data-table="production_execution_machinechecklistentry">
+    <title>production_execution_machinechecklistentry</title>
+    <rect class="card-outline" x="4291" y="400" width="322" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="4291" y="400" width="322" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="4291" y="426" width="322" height="8" fill="#e2e8f0"/>
+    <text x="4305" y="422" class="card-title" fill="#94a3b8">production_execution_machinechecklistentry</text>
+    <text x="4599" y="422" class="meta" text-anchor="end">production_execution</text>
+    <text x="4305" y="458" class="field">PK    id : bigint</text>
+    <text x="4305" y="476" class="field">      machine_type : varchar</text>
+    <text x="4305" y="494" class="field">      date : date</text>
+    <text x="4305" y="512" class="field">      month : int</text>
+    <text x="4305" y="530" class="field">      year : int</text>
+    <text x="4305" y="548" class="field">      task_description : varchar</text>
+    <text x="4305" y="566" class="field">      frequency : varchar</text>
+    <text x="4305" y="584" class="field">      status : varchar</text>
+    <text x="4305" y="602" class="field">... 8 more fields</text>
+  </g>
+  <g id="production_planning_productionplan" class="card" data-table="production_planning_productionplan">
+    <title>production_planning_productionplan</title>
+    <rect class="card-outline" x="4659" y="150" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="4659" y="150" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="4659" y="176" width="280" height="8" fill="#e2e8f0"/>
+    <text x="4673" y="172" class="card-title" fill="#94a3b8">production_planning_productionplan</text>
+    <text x="4925" y="172" class="meta" text-anchor="end">production_planning</text>
+    <text x="4673" y="208" class="field">PK    id : bigint</text>
+    <text x="4673" y="226" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="4673" y="244" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="4673" y="262" class="field">      item_code : varchar</text>
+    <text x="4673" y="280" class="field">      item_name : varchar</text>
+    <text x="4673" y="298" class="field">      planned_qty : decimal</text>
+    <text x="4673" y="316" class="field">      completed_qty : decimal</text>
+    <text x="4673" y="334" class="field">      target_start_date : date</text>
+    <text x="4673" y="352" class="field">... 15 more fields</text>
+  </g>
+  <g id="warehouse_bomrequest" class="card" data-table="warehouse_bomrequest">
+    <title>warehouse_bomrequest</title>
+    <rect class="card-outline" x="4659" y="400" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="4659" y="400" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="4659" y="426" width="287" height="8" fill="#e2e8f0"/>
+    <text x="4673" y="422" class="card-title" fill="#94a3b8">warehouse_bomrequest</text>
+    <text x="4932" y="422" class="meta" text-anchor="end">warehouse</text>
+    <text x="4673" y="458" class="field">PK    id : bigint</text>
+    <text x="4673" y="476" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="4673" y="494" class="field">      required_qty : decimal</text>
+    <text x="4673" y="512" class="field">      status : varchar</text>
+    <text x="4673" y="530" class="field">      remarks : text</text>
+    <text x="4673" y="548" class="field">      rejection_reason : text</text>
+    <text x="4673" y="566" class="field">      material_issue_status : varchar</text>
+    <text x="4673" y="584" class="field">      sap_issue_doc_entries : json</text>
+    <text x="4673" y="602" class="field">... 7 more fields</text>
+  </g>
+  <g id="barcode_palletmovement" class="card" data-table="barcode_palletmovement">
+    <title>barcode_palletmovement</title>
+    <rect class="card-outline" x="4992" y="150" width="343" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="4992" y="150" width="343" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="4992" y="176" width="343" height="8" fill="#e2e8f0"/>
+    <text x="5006" y="172" class="card-title" fill="#94a3b8">barcode_palletmovement</text>
+    <text x="5321" y="172" class="meta" text-anchor="end">barcode</text>
+    <text x="5006" y="208" class="field">PK    id : bigint</text>
+    <text x="5006" y="226" class="field">      movement_type : varchar</text>
+    <text x="5006" y="244" class="field">      from_warehouse : varchar</text>
+    <text x="5006" y="262" class="field">      to_warehouse : varchar</text>
+    <text x="5006" y="280" class="field">      from_bin : varchar</text>
+    <text x="5006" y="298" class="field">      to_bin : varchar</text>
+    <text x="5006" y="316" class="field">      sap_transfer_doc_entry : int (nullable)</text>
+    <text x="5006" y="334" class="field">      quantity : decimal</text>
+    <text x="5006" y="352" class="field">... 5 more fields</text>
+  </g>
+  <g id="company_usercompany" class="card" data-table="company_usercompany">
+    <title>company_usercompany</title>
+    <rect class="card-outline" x="4992" y="400" width="260" height="166" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="4992" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="4992" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="5006" y="422" class="card-title" fill="#94a3b8">company_usercompany</text>
+    <text x="5238" y="422" class="meta" text-anchor="end">company</text>
+    <text x="5006" y="458" class="field">PK    id : int</text>
+    <text x="5006" y="476" class="field">FK    role_id : int</text>
+    <text x="5006" y="494" class="field">      is_default : boolean</text>
+    <text x="5006" y="512" class="field">      is_active : boolean</text>
+    <text x="5006" y="530" class="field">FK    company_id : int</text>
+    <text x="5006" y="548" class="field">      user_id : int</text>
+  </g>
+  <g id="production_execution_breakdowncategory" class="card" data-table="production_execution_breakdowncategory">
+    <title>production_execution_breakdowncategory</title>
+    <rect class="card-outline" x="4992" y="596" width="294" height="166" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="4992" y="596" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="4992" y="622" width="294" height="8" fill="#e2e8f0"/>
+    <text x="5006" y="618" class="card-title" fill="#94a3b8">production_execution_breakdowncategory</text>
+    <text x="5272" y="618" class="meta" text-anchor="end">production_execution</text>
+    <text x="5006" y="654" class="field">PK    id : bigint</text>
+    <text x="5006" y="672" class="field">      name : varchar</text>
+    <text x="5006" y="690" class="field">      is_active : boolean</text>
+    <text x="5006" y="708" class="field">      created_at : datetime</text>
+    <text x="5006" y="726" class="field">      updated_at : datetime</text>
+    <text x="5006" y="744" class="field">FK    company_id : int</text>
+  </g>
+  <g id="production_execution_lineskuconfig" class="card" data-table="production_execution_lineskuconfig">
+    <title>production_execution_lineskuconfig</title>
+    <rect class="card-outline" x="5381" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="5381" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="5381" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="5395" y="172" class="card-title" fill="#94a3b8">production_execution_lineskuconfig</text>
+    <text x="5661" y="172" class="meta" text-anchor="end">production_execution</text>
+    <text x="5395" y="208" class="field">PK    id : bigint</text>
+    <text x="5395" y="226" class="field">      sku_code : varchar</text>
+    <text x="5395" y="244" class="field">      sku_name : varchar</text>
+    <text x="5395" y="262" class="field">      rated_speed : decimal (nullable)</text>
+    <text x="5395" y="280" class="field">      labour_count : int</text>
+    <text x="5395" y="298" class="field">      other_manpower_count : int</text>
+    <text x="5395" y="316" class="field">      supervisor : varchar</text>
+    <text x="5395" y="334" class="field">      operators : varchar</text>
+    <text x="5395" y="352" class="field">... 8 more fields</text>
+  </g>
+  <g id="production_execution_machinechecklisttemplate" class="card" data-table="production_execution_machinechecklisttemplate">
+    <title>production_execution_machinechecklisttemplate</title>
+    <rect class="card-outline" x="5381" y="400" width="343" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="5381" y="400" width="343" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="5381" y="426" width="343" height="8" fill="#e2e8f0"/>
+    <text x="5395" y="422" class="card-title" fill="#94a3b8">production_execution_machinechecklisttemplate</text>
+    <text x="5710" y="422" class="meta" text-anchor="end">production_execution</text>
+    <text x="5395" y="458" class="field">PK    id : bigint</text>
+    <text x="5395" y="476" class="field">      machine_type : varchar</text>
+    <text x="5395" y="494" class="field">      task : varchar</text>
+    <text x="5395" y="512" class="field">      frequency : varchar</text>
+    <text x="5395" y="530" class="field">      sort_order : int</text>
+    <text x="5395" y="548" class="field">      is_active : boolean</text>
+    <text x="5395" y="566" class="field">      created_at : datetime</text>
+    <text x="5395" y="584" class="field">      updated_at : datetime</text>
+    <text x="5395" y="602" class="field">... 1 more fields</text>
+  </g>
+  <g id="warehouse_finishedgoodsreceipt" class="card" data-table="warehouse_finishedgoodsreceipt">
+    <title>warehouse_finishedgoodsreceipt</title>
+    <rect class="card-outline" x="5770" y="150" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="5770" y="150" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="5770" y="176" width="280" height="8" fill="#e2e8f0"/>
+    <text x="5784" y="172" class="card-title" fill="#94a3b8">warehouse_finishedgoodsreceipt</text>
+    <text x="6036" y="172" class="meta" text-anchor="end">warehouse</text>
+    <text x="5784" y="208" class="field">PK    id : bigint</text>
+    <text x="5784" y="226" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="5784" y="244" class="field">      item_code : varchar</text>
+    <text x="5784" y="262" class="field">      item_name : varchar</text>
+    <text x="5784" y="280" class="field">      produced_qty : decimal</text>
+    <text x="5784" y="298" class="field">      good_qty : decimal</text>
+    <text x="5784" y="316" class="field">      rejected_qty : decimal</text>
+    <text x="5784" y="334" class="field">      warehouse : varchar</text>
+    <text x="5784" y="352" class="field">... 11 more fields</text>
+  </g>
+  <g id="barcode_barcodesequence" class="card" data-table="barcode_barcodesequence">
+    <title>barcode_barcodesequence</title>
+    <rect class="card-outline" x="5770" y="400" width="260" height="184" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="5770" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="5770" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="5784" y="422" class="card-title" fill="#94a3b8">barcode_barcodesequence</text>
+    <text x="6016" y="422" class="meta" text-anchor="end">barcode</text>
+    <text x="5784" y="458" class="field">PK    id : bigint</text>
+    <text x="5784" y="476" class="field">      sequence_type : varchar</text>
+    <text x="5784" y="494" class="field">      date_str : varchar</text>
+    <text x="5784" y="512" class="field">      line_key : varchar</text>
+    <text x="5784" y="530" class="field">      next_value : int</text>
+    <text x="5784" y="548" class="field">      updated_at : datetime</text>
+    <text x="5784" y="566" class="field">FK    company_id : bigint</text>
+  </g>
+  <g id="barcode_labelprintlog" class="card" data-table="barcode_labelprintlog">
+    <title>barcode_labelprintlog</title>
+    <rect class="card-outline" x="6096" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="6096" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="6096" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="6110" y="172" class="card-title" fill="#94a3b8">barcode_labelprintlog</text>
+    <text x="6342" y="172" class="meta" text-anchor="end">barcode</text>
+    <text x="6110" y="208" class="field">PK    id : bigint</text>
+    <text x="6110" y="226" class="field">      label_type : varchar</text>
+    <text x="6110" y="244" class="field">      reference_id : varchar</text>
+    <text x="6110" y="262" class="field">      reference_code : varchar</text>
+    <text x="6110" y="280" class="field">      print_type : varchar</text>
+    <text x="6110" y="298" class="field">      reprint_reason : text</text>
+    <text x="6110" y="316" class="field">      printed_at : datetime</text>
+    <text x="6110" y="334" class="field">      printer_name : varchar</text>
+    <text x="6110" y="352" class="field">... 2 more fields</text>
+  </g>
+  <g id="barcode_scanlog" class="card" data-table="barcode_scanlog">
+    <title>barcode_scanlog</title>
+    <rect class="card-outline" x="6096" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="6096" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="6096" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="6110" y="422" class="card-title" fill="#94a3b8">barcode_scanlog</text>
+    <text x="6342" y="422" class="meta" text-anchor="end">barcode</text>
+    <text x="6110" y="458" class="field">PK    id : bigint</text>
+    <text x="6110" y="476" class="field">      scan_type : varchar</text>
+    <text x="6110" y="494" class="field">      barcode_raw : varchar</text>
+    <text x="6110" y="512" class="field">      barcode_parsed : json</text>
+    <text x="6110" y="530" class="field">      entity_type : varchar</text>
+    <text x="6110" y="548" class="field">      entity_id : varchar</text>
+    <text x="6110" y="566" class="field">      scan_result : varchar</text>
+    <text x="6110" y="584" class="field">      context_ref_type : varchar</text>
+    <text x="6110" y="602" class="field">... 5 more fields</text>
+  </g>
+  <g id="mail_emaillog" class="card" data-table="mail_emaillog">
+    <title>mail_emaillog</title>
+    <rect class="card-outline" x="6402" y="150" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="6402" y="150" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="6402" y="176" width="273" height="8" fill="#e2e8f0"/>
+    <text x="6416" y="172" class="card-title" fill="#94a3b8">mail_emaillog</text>
+    <text x="6661" y="172" class="meta" text-anchor="end">mail</text>
+    <text x="6416" y="208" class="field">PK    id : bigint</text>
+    <text x="6416" y="226" class="field">      recipient_email : varchar</text>
+    <text x="6416" y="244" class="field">      subject : varchar</text>
+    <text x="6416" y="262" class="field">      body : text</text>
+    <text x="6416" y="280" class="field">      email_type : varchar</text>
+    <text x="6416" y="298" class="field">      click_action_url : varchar</text>
+    <text x="6416" y="316" class="field">      reference_type : varchar</text>
+    <text x="6416" y="334" class="field">      reference_id : int (nullable)</text>
+    <text x="6416" y="352" class="field">... 8 more fields</text>
+  </g>
+  <g id="notifications_notification" class="card" data-table="notifications_notification">
+    <title>notifications_notification</title>
+    <rect class="card-outline" x="6402" y="400" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="6402" y="400" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="6402" y="426" width="273" height="8" fill="#e2e8f0"/>
+    <text x="6416" y="422" class="card-title" fill="#94a3b8">notifications_notification</text>
+    <text x="6661" y="422" class="meta" text-anchor="end">notifications</text>
+    <text x="6416" y="458" class="field">PK    id : bigint</text>
+    <text x="6416" y="476" class="field">      title : varchar</text>
+    <text x="6416" y="494" class="field">      body : text</text>
+    <text x="6416" y="512" class="field">      notification_type : varchar</text>
+    <text x="6416" y="530" class="field">      click_action_url : varchar</text>
+    <text x="6416" y="548" class="field">      reference_type : varchar</text>
+    <text x="6416" y="566" class="field">      reference_id : int (nullable)</text>
+    <text x="6416" y="584" class="field">      is_read : boolean</text>
+    <text x="6416" y="602" class="field">... 6 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

@@ -16,10 +16,11 @@ Including another URLconf
 """
 from django.conf import settings
 from django.contrib import admin
-from django.urls import path,include
+from django.urls import path,include,re_path
 from django.conf.urls.static import static
 from django.utils.html import mark_safe
-from .view import RootApiView
+from django.views.static import serve
+from .view import RootApiView, refresh_er_explorer
 
 # Configure admin site branding from settings
 admin.site.site_header = mark_safe(settings.ADMIN_SITE_HEADER)
@@ -54,8 +55,20 @@ urlpatterns = [
     path("api/v1/warehouse/", include("warehouse.urls")),
     path("api/v1/barcode/", include("barcode.urls")),
     path("api/v1/ai/", include("ai_assistant.urls")),
+    path(
+        "api/v1/dev/er-explorer/refresh/",
+        refresh_er_explorer,
+        name="refresh-er-explorer",
+    ),
 
 ]
 
-if settings.DEBUG:
+if settings.DEBUG or getattr(settings, "ER_EXPLORER_REFRESH_ENABLED", False):
+    urlpatterns += [
+        re_path(
+            r"^docs/(?P<path>.*)$",
+            serve,
+            {"document_root": settings.BASE_DIR / "docs"},
+        ),
+    ]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

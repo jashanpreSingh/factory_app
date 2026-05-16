@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Factory App ER Explorer</title>
+  <script src="schema.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --line: #dbe3ef;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --soft: #eff6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      height: 100vh;
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      height: 100vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+    aside {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--line);
+      flex: 0 0 auto;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    .summary {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .sidebar-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+      overscroll-behavior: contain;
+    }
+    .section-title {
+      margin: 14px 4px 8px;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .search {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 11px;
+      font: inherit;
+      outline: none;
+    }
+    .search:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    }
+    .button-list {
+      display: grid;
+      gap: 6px;
+    }
+    button {
+      font: inherit;
+    }
+    .nav-button {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .nav-button:hover {
+      background: #f1f5f9;
+    }
+    .nav-button.active {
+      background: var(--soft);
+      border-color: #bfdbfe;
+      color: #1d4ed8;
+    }
+    .nav-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .count {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    main {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    .toolbar h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tool-button {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+      color: #1f2937;
+      min-width: 36px;
+    }
+    .tool-button:hover {
+      border-color: #93c5fd;
+      color: #1d4ed8;
+    }
+    .tool-button:disabled {
+      color: #94a3b8;
+      cursor: wait;
+      background: #f8fafc;
+    }
+    .tool-button.primary {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+    .refresh-status {
+      min-width: 150px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .refresh-status.error {
+      color: #b91c1c;
+    }
+    .zoom-label {
+      min-width: 62px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .viewport {
+      min-height: 0;
+      overflow: auto;
+      position: relative;
+      background:
+        linear-gradient(90deg, rgba(148, 163, 184, .18) 1px, transparent 1px),
+        linear-gradient(rgba(148, 163, 184, .18) 1px, transparent 1px);
+      background-size: 24px 24px;
+      background-color: #f8fafc;
+    }
+    .scaled {
+      position: relative;
+      margin: 24px;
+    }
+    .diagram {
+      transform-origin: top left;
+      display: block;
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 40px rgba(15, 23, 42, .08);
+      background: #fff;
+      overflow: hidden;
+    }
+    .details {
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      padding: 11px 16px;
+      display: grid;
+      grid-template-columns: minmax(220px, 350px) 1fr;
+      gap: 18px;
+      max-height: 178px;
+      overflow: auto;
+    }
+    .details h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .field-grid,
+    .relationship-list {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .field-row {
+      display: grid;
+      grid-template-columns: 52px minmax(90px, 1fr) 90px;
+      gap: 8px;
+      border-bottom: 1px solid #f1f5f9;
+      padding: 2px 0;
+      min-width: 0;
+    }
+    .field-row span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tag {
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+    .rel-row {
+      border-bottom: 1px solid #f1f5f9;
+      padding: 3px 0;
+    }
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 300px 1fr; }
+      .details { grid-template-columns: 1fr; max-height: 220px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <header>
+        <h1>ER Explorer</h1>
+        <p class="summary" id="summary"></p>
+      </header>
+      <div class="sidebar-body">
+        <button class="nav-button active" id="overviewButton" type="button">
+          <span class="nav-name">Overview</span>
+          <span class="count">all</span>
+        </button>
+        <div class="section-title">Apps</div>
+        <div class="button-list" id="appList"></div>
+        <div class="section-title">Tables</div>
+        <input class="search" id="search" placeholder="Search tables or fields">
+        <div class="button-list" id="tableList" style="margin-top: 10px"></div>
+      </div>
+    </aside>
+    <main>
+      <div class="toolbar">
+        <h2 id="diagramTitle">Overview</h2>
+        <div class="toolbar-actions">
+          <button class="tool-button primary" id="refreshEr" type="button">Refresh from DB</button>
+          <span class="refresh-status" id="refreshStatus"></span>
+          <button class="tool-button" id="zoomOut" type="button">-</button>
+          <span class="zoom-label" id="zoomLabel">100%</span>
+          <button class="tool-button" id="zoomIn" type="button">+</button>
+          <button class="tool-button" id="zoomReset" type="button">Reset</button>
+        </div>
+      </div>
+      <div class="viewport" id="viewport">
+        <div class="scaled" id="scaled">
+          <object class="diagram" id="diagram" type="image/svg+xml" aria-label="ER diagram"></object>
+        </div>
+      </div>
+      <div class="details" id="details"></div>
+    </main>
+  </div>
+  <script>
+    const schema = window.ER_SCHEMA;
+    const diagrams = schema.diagrams;
+    const tablesByName = new Map(schema.tables.map((table) => [table.name, table]));
+    const appsByName = new Map(schema.apps.map((app) => [app.name, app]));
+    let activeKind = "overview";
+    let activeName = "overview";
+    let zoom = 1;
+
+    const summary = document.getElementById("summary");
+    const appList = document.getElementById("appList");
+    const tableList = document.getElementById("tableList");
+    const search = document.getElementById("search");
+    const overviewButton = document.getElementById("overviewButton");
+    const diagram = document.getElementById("diagram");
+    const scaled = document.getElementById("scaled");
+    const viewport = document.getElementById("viewport");
+    const diagramTitle = document.getElementById("diagramTitle");
+    const zoomLabel = document.getElementById("zoomLabel");
+    const details = document.getElementById("details");
+    const refreshEr = document.getElementById("refreshEr");
+    const refreshStatus = document.getElementById("refreshStatus");
+
+    summary.textContent = `${schema.stats.tables} tables, ${schema.stats.relationships} relationships. Generated ${schema.generatedAt} from ${schema.source}.`;
+
+    function appTitle(name) {
+      return name.replaceAll("_", " ");
+    }
+
+    function setActiveButtons() {
+      overviewButton.classList.toggle("active", activeKind === "overview");
+      document.querySelectorAll("[data-app]").forEach((button) => {
+        button.classList.toggle("active", activeKind === "app" && button.dataset.app === activeName);
+      });
+      document.querySelectorAll("[data-table]").forEach((button) => {
+        button.classList.toggle("active", activeKind === "table" && button.dataset.table === activeName);
+      });
+    }
+
+    function currentDiagramId() {
+      if (activeKind === "overview") return "overview";
+      if (activeKind === "app") return `app:${activeName}`;
+      return `table:${activeName}`;
+    }
+
+    function setZoom(value) {
+      const previous = zoom;
+      zoom = Math.max(.25, Math.min(4, value));
+      const current = diagrams[currentDiagramId()];
+      scaled.style.width = `${current.width * zoom}px`;
+      scaled.style.height = `${current.height * zoom}px`;
+      diagram.style.width = `${current.width}px`;
+      diagram.style.height = `${current.height}px`;
+      diagram.style.transform = `scale(${zoom})`;
+      zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+      if (previous !== zoom) {
+        const factor = zoom / previous;
+        viewport.scrollLeft = viewport.scrollLeft * factor;
+        viewport.scrollTop = viewport.scrollTop * factor;
+      }
+    }
+
+    function refreshUrl() {
+      const path = "/api/v1/dev/er-explorer/refresh/";
+      if (window.location.protocol === "file:") {
+        return `http://127.0.0.1:8000${path}`;
+      }
+      return path;
+    }
+
+    async function refreshFromDatabase() {
+      refreshEr.disabled = true;
+      refreshStatus.classList.remove("error");
+      refreshStatus.textContent = "Refreshing...";
+      try {
+        const response = await fetch(refreshUrl(), {
+          method: "POST",
+          headers: { "Accept": "application/json" },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || `Refresh failed with HTTP ${response.status}`);
+        }
+        refreshStatus.textContent = "Updated. Reloading...";
+        window.location.reload();
+      } catch (error) {
+        refreshStatus.classList.add("error");
+        refreshStatus.textContent = error.message || "Refresh failed";
+      } finally {
+        refreshEr.disabled = false;
+      }
+    }
+
+    function installSvgInteractivity() {
+      let doc;
+      try {
+        doc = diagram.contentDocument;
+      } catch (error) {
+        return;
+      }
+      const svg = doc && doc.querySelector("svg");
+      if (!svg || svg.dataset.erHostInteractive === "1") return;
+      svg.dataset.erHostInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+      const overviewApps = Array.from(svg.querySelectorAll(".overview-app"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      overviewApps.forEach((appCard) => {
+        appCard.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const app = appCard.dataset.app;
+          if (app && diagrams[`app:${app}`]) {
+            showDiagram("app", app);
+          }
+        });
+      });
+      svg.addEventListener("click", clear);
+    }
+
+    function showDiagram(kind, name) {
+      activeKind = kind;
+      activeName = name;
+      const item = diagrams[currentDiagramId()];
+      diagram.data = item.src;
+      diagramTitle.textContent = item.title;
+      zoom = 1;
+      setZoom(1);
+      setActiveButtons();
+      viewport.scrollTop = 0;
+      viewport.scrollLeft = 0;
+      renderDetails();
+    }
+
+    function renderApps() {
+      appList.innerHTML = "";
+      schema.apps.forEach((app) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "nav-button";
+        button.dataset.app = app.name;
+        button.innerHTML = `<span class="nav-name">${appTitle(app.name)}</span><span class="count">${app.tableCount}</span>`;
+        button.addEventListener("click", () => showDiagram("app", app.name));
+        appList.appendChild(button);
+      });
+    }
+
+    function matchesSearch(table, query) {
+      if (!query) return true;
+      const haystack = [
+        table.name,
+        table.app,
+        ...table.fields.flatMap((field) => [field.name, field.type, field.tags.join(" "), field.notes.join(" ")]),
+      ].join(" ").toLowerCase();
+      return haystack.includes(query);
+    }
+
+    function renderTables() {
+      const query = search.value.trim().toLowerCase();
+      const appFilter = activeKind === "app" ? activeName : null;
+      tableList.innerHTML = "";
+      schema.tables
+        .filter((table) => (!appFilter || table.app === appFilter) && matchesSearch(table, query))
+        .slice(0, query ? 80 : 160)
+        .forEach((table) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "nav-button";
+          button.dataset.table = table.name;
+          button.innerHTML = `<span class="nav-name">${table.name}</span><span class="count">${table.app}</span>`;
+          button.addEventListener("click", () => showDiagram("table", table.name));
+          tableList.appendChild(button);
+        });
+      setActiveButtons();
+    }
+
+    function renderDetails() {
+      if (activeKind === "overview") {
+        details.innerHTML = `
+          <div>
+            <h3>Overview</h3>
+            <div class="muted">Open an app for a module slice, or search and open a table for its direct neighborhood.</div>
+          </div>
+          <div class="relationship-list">
+            <div class="rel-row">Large diagrams are split into lazily loaded SVG files, so the page only renders one slice at a time.</div>
+          </div>
+        `;
+        renderTables();
+        return;
+      }
+
+      if (activeKind === "app") {
+        const app = appsByName.get(activeName);
+        details.innerHTML = `
+          <div>
+            <h3>${appTitle(app.name)}</h3>
+            <div class="muted">${app.tableCount} tables, ${app.relationshipCount} local/external relationships.</div>
+          </div>
+          <div class="relationship-list">
+            <div class="rel-row">Use the table search to open a focused neighborhood when a relationship label is hard to inspect in the app slice.</div>
+          </div>
+        `;
+        renderTables();
+        return;
+      }
+
+      const table = tablesByName.get(activeName);
+      const related = schema.relationships.filter((rel) => rel.src === table.name || rel.dst === table.name);
+      const fieldRows = table.fields.map((field) => `
+        <div class="field-row">
+          <span class="tag">${field.tags.join("/")}</span>
+          <span title="${field.name}">${field.name}</span>
+          <span title="${field.type}">${field.type}</span>
+        </div>
+      `).join("") || `<div class="muted">No fields listed.</div>`;
+      const relationshipRows = related.map((rel) => `
+        <div class="rel-row">${rel.src} -> ${rel.dst} <span class="muted">(${rel.label})</span></div>
+      `).join("") || `<div class="muted">No relationships found.</div>`;
+      details.innerHTML = `
+        <div>
+          <h3>${table.name}</h3>
+          <div class="muted">${table.app} / ${table.fields.length} fields / ${related.length} direct relationships</div>
+          <div class="field-grid" style="margin-top: 8px">${fieldRows}</div>
+        </div>
+        <div>
+          <h3>Direct Relationships</h3>
+          <div class="relationship-list">${relationshipRows}</div>
+        </div>
+      `;
+      renderTables();
+    }
+
+    overviewButton.addEventListener("click", () => showDiagram("overview", "overview"));
+    diagram.addEventListener("load", installSvgInteractivity);
+    search.addEventListener("input", renderTables);
+    refreshEr.addEventListener("click", refreshFromDatabase);
+    document.getElementById("zoomOut").addEventListener("click", () => setZoom(zoom - .15));
+    document.getElementById("zoomIn").addEventListener("click", () => setZoom(zoom + .15));
+    document.getElementById("zoomReset").addEventListener("click", () => setZoom(1));
+    viewport.addEventListener("wheel", (event) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setZoom(zoom + (event.deltaY < 0 ? .1 : -.1));
+    }, { passive: false });
+
+    renderApps();
+    renderTables();
+    showDiagram("overview", "overview");
+  </script>
+</body>
+</html>

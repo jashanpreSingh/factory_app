@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1118" height="720" viewBox="0 0 1118 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">grpo_grpoattachment Neighborhood</text>
+  <text x="60" y="80" class="subtitle">1 parent/lookup tables, 0 child tables, 1 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="grpo_grpoposting" data-dst="grpo_grpoattachment" data-label="grpo_posting_id">
+    <title>grpo_grpoposting to grpo_grpoattachment via grpo_posting_id</title>
+    <path class="edge-hit" d="M 368 260 L 386 260 L 386 360 L 548 360"/>
+    <path class="edge" d="M 368 260 L 386 260 L 386 360 L 548 360"/>
+    <rect class="edge-label-bg" x="357.0" y="352.0" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="408.0" y="364.0" text-anchor="middle">grpo_posting_id</text>
+  </g>
+  <g id="grpo_grpoposting" class="card" data-table="grpo_grpoposting">
+    <title>grpo_grpoposting</title>
+    <rect class="card-outline" x="60" y="150" width="308" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="308" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="308" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">grpo_grpoposting</text>
+    <text x="354" y="172" class="meta" text-anchor="end">grpo</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="74" y="244" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="74" y="262" class="field">      sap_doc_total : decimal (nullable)</text>
+    <text x="74" y="280" class="field">      status : varchar</text>
+    <text x="74" y="298" class="field">      error_message : text (nullable)</text>
+    <text x="74" y="316" class="field">      posted_at : datetime (nullable)</text>
+    <text x="74" y="334" class="field">      created_at : datetime</text>
+    <text x="74" y="352" class="field">... 4 more fields</text>
+  </g>
+  <g id="grpo_grpoattachment" class="card" data-table="grpo_grpoattachment">
+    <title>grpo_grpoattachment</title>
+    <rect class="card-outline" x="548" y="250" width="320" height="220" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="548" y="250" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="548" y="276" width="320" height="8" fill="#bfdbfe"/>
+    <text x="562" y="272" class="card-title" fill="#0f172a">grpo_grpoattachment</text>
+    <text x="562" y="308" class="field">PK    id : bigint</text>
+    <text x="562" y="326" class="field">      file : varchar</text>
+    <text x="562" y="344" class="field">      original_filename : varchar</text>
+    <text x="562" y="362" class="field">      sap_attachment_status : varchar</text>
+    <text x="562" y="380" class="field">      sap_absolute_entry : int (nullable)</text>
+    <text x="562" y="398" class="field">      sap_error_message : text (nullable)</text>
+    <text x="562" y="416" class="field">      uploaded_at : datetime</text>
+    <text x="562" y="434" class="field">FK    grpo_posting_id : bigint</text>
+    <text x="562" y="452" class="field">      uploaded_by_id : int (nullable)</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

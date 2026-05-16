@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1104" height="720" viewBox="0 0 1104 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">production_execution_productionruncost Neighborhood</text>
+  <text x="60" y="80" class="subtitle">1 parent/lookup tables, 0 child tables, 1 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="production_execution_productionrun" data-dst="production_execution_productionruncost" data-label="production_run_id">
+    <title>production_execution_productionrun to production_execution_productionruncost via production_run_id</title>
+    <path class="edge-hit" d="M 354 260 L 372 260 L 372 360 L 534 360"/>
+    <path class="edge" d="M 354 260 L 372 260 L 372 360 L 534 360"/>
+    <rect class="edge-label-bg" x="337.0" y="352.0" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="394.0" y="364.0" text-anchor="middle">production_run_id</text>
+  </g>
+  <g id="production_execution_productionrun" class="card" data-table="production_execution_productionrun">
+    <title>production_execution_productionrun</title>
+    <rect class="card-outline" x="60" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">production_execution_productionrun</text>
+    <text x="340" y="172" class="meta" text-anchor="end">production_execution</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      run_number : int</text>
+    <text x="74" y="244" class="field">      date : date</text>
+    <text x="74" y="262" class="field">      rated_speed : decimal (nullable)</text>
+    <text x="74" y="280" class="field">      total_production : decimal</text>
+    <text x="74" y="298" class="field">      total_breakdown_time : int</text>
+    <text x="74" y="316" class="field">      status : varchar</text>
+    <text x="74" y="334" class="field">      created_at : datetime</text>
+    <text x="74" y="352" class="field">... 20 more fields</text>
+  </g>
+  <g id="production_execution_productionruncost" class="card" data-table="production_execution_productionruncost">
+    <title>production_execution_productionruncost</title>
+    <rect class="card-outline" x="534" y="205" width="320" height="310" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="534" y="205" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="534" y="231" width="320" height="8" fill="#bfdbfe"/>
+    <text x="548" y="227" class="card-title" fill="#0f172a">production_execution_productionruncost</text>
+    <text x="548" y="263" class="field">PK    id : bigint</text>
+    <text x="548" y="281" class="field">      raw_material_cost : decimal</text>
+    <text x="548" y="299" class="field">      labour_cost : decimal</text>
+    <text x="548" y="317" class="field">      machine_cost : decimal</text>
+    <text x="548" y="335" class="field">      electricity_cost : decimal</text>
+    <text x="548" y="353" class="field">      water_cost : decimal</text>
+    <text x="548" y="371" class="field">      gas_cost : decimal</text>
+    <text x="548" y="389" class="field">      compressed_air_cost : decimal</text>
+    <text x="548" y="407" class="field">      overhead_cost : decimal</text>
+    <text x="548" y="425" class="field">      total_cost : decimal</text>
+    <text x="548" y="443" class="field">      produced_qty : decimal</text>
+    <text x="548" y="461" class="field">      per_unit_cost : decimal</text>
+    <text x="548" y="479" class="field">      calculated_at : datetime</text>
+    <text x="548" y="497" class="field">FK/UK production_run_id : bigint</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

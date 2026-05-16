@@ -1,0 +1,303 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2398" height="906" viewBox="0 0 2398 906">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">inventory_sapcompany Neighborhood</text>
+  <text x="60" y="80" class="subtitle">0 parent/lookup tables, 9 child tables, 9 direct relationships</text>
+  <text x="1000" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapbatchstock" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapbatchstock via company_id</title>
+    <path class="edge-hit" d="M 820 272 L 838 272 L 838 260 L 1000 260"/>
+    <path class="edge" d="M 820 272 L 838 272 L 838 260 L 1000 260"/>
+    <rect class="edge-label-bg" x="868.0" y="252.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="904.0" y="264.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapinventoryagingsnapshot" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapinventoryagingsnapshot via company_id</title>
+    <path class="edge-hit" d="M 820 382 L 868 382 L 868 510 L 1000 510"/>
+    <path class="edge" d="M 820 382 L 868 382 L 868 510 L 1000 510"/>
+    <rect class="edge-label-bg" x="832.0" y="480.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="868.0" y="492.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapinventorymovement" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapinventorymovement via company_id</title>
+    <path class="edge-hit" d="M 820 294 L 844 294 L 844 384 L 1350 384 L 1350 260 L 1368 260"/>
+    <path class="edge" d="M 820 294 L 844 294 L 844 384 L 1350 384 L 1350 260 L 1368 260"/>
+    <rect class="edge-label-bg" x="1075.0" y="376.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1111.0" y="388.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapinventoryvaluation" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapinventoryvaluation via company_id</title>
+    <path class="edge-hit" d="M 820 404 L 874 404 L 874 386 L 1336 386 L 1336 510 L 1368 510"/>
+    <path class="edge" d="M 820 404 L 874 404 L 874 386 L 1336 386 L 1336 510 L 1368 510"/>
+    <rect class="edge-label-bg" x="1111.0" y="378.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1147.0" y="390.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapitem" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapitem via company_id</title>
+    <path class="edge-hit" d="M 820 316 L 850 316 L 850 136 L 1669 136 L 1669 260 L 1687 260"/>
+    <path class="edge" d="M 820 316 L 850 316 L 850 136 L 1669 136 L 1669 260 L 1687 260"/>
+    <rect class="edge-label-bg" x="1189.5" y="128.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1225.5" y="140.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapitemgroup" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapitemgroup via company_id</title>
+    <path class="edge-hit" d="M 820 360 L 862 360 L 862 634 L 1655 634 L 1655 483 L 1687 483"/>
+    <path class="edge" d="M 820 360 L 862 360 L 862 634 L 1655 634 L 1655 483 L 1687 483"/>
+    <rect class="edge-label-bg" x="1156.0" y="626.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1192.0" y="638.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapitemwarehousestock" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapitemwarehousestock via company_id</title>
+    <path class="edge-hit" d="M 820 448 L 886 448 L 886 706 L 1687 706"/>
+    <path class="edge" d="M 820 448 L 886 448 L 886 706 L 1687 706"/>
+    <rect class="edge-label-bg" x="1088.5" y="698.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1124.5" y="710.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapsyncrun" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapsyncrun via company_id</title>
+    <path class="edge-hit" d="M 820 338 L 856 338 L 856 132 L 2009 132 L 2009 260 L 2027 260"/>
+    <path class="edge" d="M 820 338 L 856 338 L 856 132 L 2009 132 L 2009 260 L 2027 260"/>
+    <rect class="edge-label-bg" x="1348.5" y="124.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1384.5" y="136.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="inventory_sapcompany" data-dst="inventory_sapwarehouse" data-label="company_id">
+    <title>inventory_sapcompany to inventory_sapwarehouse via company_id</title>
+    <path class="edge-hit" d="M 820 426 L 880 426 L 880 636 L 1673 636 L 1673 580 L 2002 580 L 2002 528 L 2009 528 L 2009 510 L 2027 510"/>
+    <path class="edge" d="M 820 426 L 880 426 L 880 636 L 1673 636 L 1673 580 L 2002 580 L 2002 528 L 2009 528 L 2009 510 L 2027 510"/>
+    <rect class="edge-label-bg" x="1345.5" y="628.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1381.5" y="640.0" text-anchor="middle">company_id</text>
+  </g>
+  <g id="inventory_sapcompany" class="card" data-table="inventory_sapcompany">
+    <title>inventory_sapcompany</title>
+    <rect class="card-outline" x="500" y="250" width="320" height="220" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="250" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="276" width="320" height="8" fill="#bfdbfe"/>
+    <text x="514" y="272" class="card-title" fill="#0f172a">inventory_sapcompany</text>
+    <text x="514" y="308" class="field">PK    id : bigint</text>
+    <text x="514" y="326" class="field">UK    key : varchar</text>
+    <text x="514" y="344" class="field">UK    env_key : varchar</text>
+    <text x="514" y="362" class="field">      label : varchar</text>
+    <text x="514" y="380" class="field">UK    database : varchar</text>
+    <text x="514" y="398" class="field">      hana_ok : boolean</text>
+    <text x="514" y="416" class="field">      last_seen_at : datetime (nullable)</text>
+    <text x="514" y="434" class="field">      created_at : datetime</text>
+    <text x="514" y="452" class="field">      updated_at : datetime</text>
+  </g>
+  <g id="inventory_sapbatchstock" class="card" data-table="inventory_sapbatchstock">
+    <title>inventory_sapbatchstock</title>
+    <rect class="card-outline" x="1000" y="150" width="322" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="150" width="322" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="176" width="322" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="172" class="card-title" fill="#94a3b8">inventory_sapbatchstock</text>
+    <text x="1308" y="172" class="meta" text-anchor="end">inventory</text>
+    <text x="1014" y="208" class="field">PK    id : bigint</text>
+    <text x="1014" y="226" class="field">      item_code : varchar</text>
+    <text x="1014" y="244" class="field">      item_name : varchar</text>
+    <text x="1014" y="262" class="field">      system_number : int</text>
+    <text x="1014" y="280" class="field">      batch_number : varchar</text>
+    <text x="1014" y="298" class="field">      warehouse_code : varchar</text>
+    <text x="1014" y="316" class="field">      warehouse_name : varchar</text>
+    <text x="1014" y="334" class="field">      manufacturing_date : date (nullable)</text>
+    <text x="1014" y="352" class="field">... 9 more fields</text>
+  </g>
+  <g id="inventory_sapinventoryagingsnapshot" class="card" data-table="inventory_sapinventoryagingsnapshot">
+    <title>inventory_sapinventoryagingsnapshot</title>
+    <rect class="card-outline" x="1000" y="400" width="322" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="400" width="322" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="426" width="322" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="422" class="card-title" fill="#94a3b8">inventory_sapinventoryagingsnapshot</text>
+    <text x="1308" y="422" class="meta" text-anchor="end">inventory</text>
+    <text x="1014" y="458" class="field">PK    id : bigint</text>
+    <text x="1014" y="476" class="field">      item_code : varchar</text>
+    <text x="1014" y="494" class="field">      item_name : varchar</text>
+    <text x="1014" y="512" class="field">      warehouse_code : varchar</text>
+    <text x="1014" y="530" class="field">      warehouse_name : varchar</text>
+    <text x="1014" y="548" class="field">      on_hand : decimal</text>
+    <text x="1014" y="566" class="field">      inventory_value : decimal</text>
+    <text x="1014" y="584" class="field">      last_movement_date : date (nullable)</text>
+    <text x="1014" y="602" class="field">... 4 more fields</text>
+  </g>
+  <g id="inventory_sapinventorymovement" class="card" data-table="inventory_sapinventorymovement">
+    <title>inventory_sapinventorymovement</title>
+    <rect class="card-outline" x="1368" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1368" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1368" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1382" y="172" class="card-title" fill="#94a3b8">inventory_sapinventorymovement</text>
+    <text x="1614" y="172" class="meta" text-anchor="end">inventory</text>
+    <text x="1382" y="208" class="field">PK    id : bigint</text>
+    <text x="1382" y="226" class="field">      movement_type : varchar</text>
+    <text x="1382" y="244" class="field">      doc_entry : int</text>
+    <text x="1382" y="262" class="field">      doc_num : int (nullable)</text>
+    <text x="1382" y="280" class="field">      doc_date : date (nullable)</text>
+    <text x="1382" y="298" class="field">      doc_status : varchar</text>
+    <text x="1382" y="316" class="field">      card_code : varchar</text>
+    <text x="1382" y="334" class="field">      card_name : varchar</text>
+    <text x="1382" y="352" class="field">... 14 more fields</text>
+  </g>
+  <g id="inventory_sapinventoryvaluation" class="card" data-table="inventory_sapinventoryvaluation">
+    <title>inventory_sapinventoryvaluation</title>
+    <rect class="card-outline" x="1368" y="400" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1368" y="400" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1368" y="426" width="273" height="8" fill="#e2e8f0"/>
+    <text x="1382" y="422" class="card-title" fill="#94a3b8">inventory_sapinventoryvaluation</text>
+    <text x="1627" y="422" class="meta" text-anchor="end">inventory</text>
+    <text x="1382" y="458" class="field">PK    id : bigint</text>
+    <text x="1382" y="476" class="field">      trans_seq : int</text>
+    <text x="1382" y="494" class="field">      trans_type : int (nullable)</text>
+    <text x="1382" y="512" class="field">      created_by : int (nullable)</text>
+    <text x="1382" y="530" class="field">      base_ref : varchar</text>
+    <text x="1382" y="548" class="field">      doc_line_num : int (nullable)</text>
+    <text x="1382" y="566" class="field">      doc_date : date (nullable)</text>
+    <text x="1382" y="584" class="field">      create_date : date (nullable)</text>
+    <text x="1382" y="602" class="field">... 17 more fields</text>
+  </g>
+  <g id="inventory_sapitem" class="card" data-table="inventory_sapitem">
+    <title>inventory_sapitem</title>
+    <rect class="card-outline" x="1687" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1687" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1687" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="1701" y="172" class="card-title" fill="#94a3b8">inventory_sapitem</text>
+    <text x="1967" y="172" class="meta" text-anchor="end">inventory</text>
+    <text x="1701" y="208" class="field">PK    id : bigint</text>
+    <text x="1701" y="226" class="field">      item_code : varchar</text>
+    <text x="1701" y="244" class="field">      item_name : varchar</text>
+    <text x="1701" y="262" class="field">      foreign_name : varchar</text>
+    <text x="1701" y="280" class="field">      item_group_code : int (nullable)</text>
+    <text x="1701" y="298" class="field">      item_group_name : varchar</text>
+    <text x="1701" y="316" class="field">      barcode : varchar</text>
+    <text x="1701" y="334" class="field">      default_warehouse : varchar</text>
+    <text x="1701" y="352" class="field">... 21 more fields</text>
+  </g>
+  <g id="inventory_sapitemgroup" class="card" data-table="inventory_sapitemgroup">
+    <title>inventory_sapitemgroup</title>
+    <rect class="card-outline" x="1687" y="400" width="260" height="166" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1687" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1687" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1701" y="422" class="card-title" fill="#94a3b8">inventory_sapitemgroup</text>
+    <text x="1933" y="422" class="meta" text-anchor="end">inventory</text>
+    <text x="1701" y="458" class="field">PK    id : bigint</text>
+    <text x="1701" y="476" class="field">      group_code : int</text>
+    <text x="1701" y="494" class="field">      group_name : varchar</text>
+    <text x="1701" y="512" class="field">      locked : varchar</text>
+    <text x="1701" y="530" class="field">      last_synced_at : datetime</text>
+    <text x="1701" y="548" class="field">FK    company_id : bigint</text>
+  </g>
+  <g id="inventory_sapitemwarehousestock" class="card" data-table="inventory_sapitemwarehousestock">
+    <title>inventory_sapitemwarehousestock</title>
+    <rect class="card-outline" x="1687" y="596" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1687" y="596" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1687" y="622" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1701" y="618" class="card-title" fill="#94a3b8">inventory_sapitemwarehousestock</text>
+    <text x="1933" y="618" class="meta" text-anchor="end">inventory</text>
+    <text x="1701" y="654" class="field">PK    id : bigint</text>
+    <text x="1701" y="672" class="field">      item_code : varchar</text>
+    <text x="1701" y="690" class="field">      warehouse_code : varchar</text>
+    <text x="1701" y="708" class="field">      item_name : varchar</text>
+    <text x="1701" y="726" class="field">      item_group_name : varchar</text>
+    <text x="1701" y="744" class="field">      warehouse_name : varchar</text>
+    <text x="1701" y="762" class="field">      on_hand : decimal</text>
+    <text x="1701" y="780" class="field">      committed : decimal</text>
+    <text x="1701" y="798" class="field">... 12 more fields</text>
+  </g>
+  <g id="inventory_sapsyncrun" class="card" data-table="inventory_sapsyncrun">
+    <title>inventory_sapsyncrun</title>
+    <rect class="card-outline" x="2027" y="150" width="301" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2027" y="150" width="301" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2027" y="176" width="301" height="8" fill="#e2e8f0"/>
+    <text x="2041" y="172" class="card-title" fill="#94a3b8">inventory_sapsyncrun</text>
+    <text x="2314" y="172" class="meta" text-anchor="end">inventory</text>
+    <text x="2041" y="208" class="field">PK    id : bigint</text>
+    <text x="2041" y="226" class="field">      module : varchar</text>
+    <text x="2041" y="244" class="field">      status : varchar</text>
+    <text x="2041" y="262" class="field">      sections : json</text>
+    <text x="2041" y="280" class="field">      started_at : datetime</text>
+    <text x="2041" y="298" class="field">      finished_at : datetime (nullable)</text>
+    <text x="2041" y="316" class="field">      records_read : int</text>
+    <text x="2041" y="334" class="field">      records_upserted : int</text>
+    <text x="2041" y="352" class="field">... 2 more fields</text>
+  </g>
+  <g id="inventory_sapwarehouse" class="card" data-table="inventory_sapwarehouse">
+    <title>inventory_sapwarehouse</title>
+    <rect class="card-outline" x="2027" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2027" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2027" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="2041" y="422" class="card-title" fill="#94a3b8">inventory_sapwarehouse</text>
+    <text x="2273" y="422" class="meta" text-anchor="end">inventory</text>
+    <text x="2041" y="458" class="field">PK    id : bigint</text>
+    <text x="2041" y="476" class="field">      warehouse_code : varchar</text>
+    <text x="2041" y="494" class="field">      warehouse_name : varchar</text>
+    <text x="2041" y="512" class="field">      city : varchar</text>
+    <text x="2041" y="530" class="field">      state : varchar</text>
+    <text x="2041" y="548" class="field">      country : varchar</text>
+    <text x="2041" y="566" class="field">      inactive : varchar</text>
+    <text x="2041" y="584" class="field">      stock_rows : int</text>
+    <text x="2041" y="602" class="field">... 9 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

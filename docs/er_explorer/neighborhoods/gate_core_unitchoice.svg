@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1802" height="720" viewBox="0 0 1802 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">gate_core_unitchoice Neighborhood</text>
+  <text x="60" y="80" class="subtitle">0 parent/lookup tables, 4 child tables, 4 direct relationships</text>
+  <text x="1000" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="gate_core_unitchoice" data-dst="construction_gatein_constructiongateentry" data-label="unit_id">
+    <title>gate_core_unitchoice to construction_gatein_constructiongateentry via unit_id</title>
+    <path class="edge-hit" d="M 820 388 L 856 388 L 856 510 L 1000 510"/>
+    <path class="edge" d="M 820 388 L 856 388 L 856 510 L 1000 510"/>
+    <rect class="edge-label-bg" x="829.0" y="495.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="856.0" y="507.0" text-anchor="middle">unit_id</text>
+  </g>
+  <g class="relation" data-src="gate_core_unitchoice" data-dst="daily_needs_gatein_dailyneedgateentry" data-label="unit_id">
+    <title>gate_core_unitchoice to daily_needs_gatein_dailyneedgateentry via unit_id</title>
+    <path class="edge-hit" d="M 820 332 L 838 332 L 838 260 L 1000 260"/>
+    <path class="edge" d="M 820 332 L 838 332 L 838 260 L 1000 260"/>
+    <rect class="edge-label-bg" x="847.0" y="252.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="874.0" y="264.0" text-anchor="middle">unit_id</text>
+  </g>
+  <g class="relation" data-src="gate_core_unitchoice" data-dst="daily_needs_gatein_dailyneedgateentryitem" data-label="unit_id">
+    <title>gate_core_unitchoice to daily_needs_gatein_dailyneedgateentryitem via unit_id</title>
+    <path class="edge-hit" d="M 820 369 L 850 369 L 850 386 L 1378 386 L 1378 501 L 1396 501"/>
+    <path class="edge" d="M 820 369 L 850 369 L 850 386 L 1378 386 L 1378 501 L 1396 501"/>
+    <rect class="edge-label-bg" x="1130.0" y="378.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="1157.0" y="390.0" text-anchor="middle">unit_id</text>
+  </g>
+  <g class="relation" data-src="gate_core_unitchoice" data-dst="maintenance_gatein_maintenancegateentry" data-label="unit_id">
+    <title>gate_core_unitchoice to maintenance_gatein_maintenancegateentry via unit_id</title>
+    <path class="edge-hit" d="M 820 351 L 844 351 L 844 384 L 1364 384 L 1364 260 L 1396 260"/>
+    <path class="edge" d="M 820 351 L 844 351 L 844 384 L 1364 384 L 1364 260 L 1396 260"/>
+    <rect class="edge-label-bg" x="1126.5" y="376.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="1153.5" y="388.0" text-anchor="middle">unit_id</text>
+  </g>
+  <g id="gate_core_unitchoice" class="card" data-table="gate_core_unitchoice">
+    <title>gate_core_unitchoice</title>
+    <rect class="card-outline" x="500" y="313" width="320" height="94" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="313" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="339" width="320" height="8" fill="#bfdbfe"/>
+    <text x="514" y="335" class="card-title" fill="#0f172a">gate_core_unitchoice</text>
+    <text x="514" y="371" class="field">PK    id : int</text>
+    <text x="514" y="389" class="field">UK    name : varchar</text>
+  </g>
+  <g id="daily_needs_gatein_dailyneedgateentry" class="card" data-table="daily_needs_gatein_dailyneedgateentry">
+    <title>daily_needs_gatein_dailyneedgateentry</title>
+    <rect class="card-outline" x="1000" y="150" width="350" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="150" width="350" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="176" width="350" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="172" class="card-title" fill="#94a3b8">daily_needs_gatein_dailyneedgateentry</text>
+    <text x="1336" y="172" class="meta" text-anchor="end">daily_needs_gatein</text>
+    <text x="1014" y="208" class="field">PK    id : int</text>
+    <text x="1014" y="226" class="field">FK    item_category_id : int (nullable)</text>
+    <text x="1014" y="244" class="field">      supplier_name : varchar</text>
+    <text x="1014" y="262" class="field">      material_name : varchar</text>
+    <text x="1014" y="280" class="field">      quantity : decimal</text>
+    <text x="1014" y="298" class="field">FK    unit_id : int (nullable)</text>
+    <text x="1014" y="316" class="field">      receiving_department_id : int (nullable)</text>
+    <text x="1014" y="334" class="field">      bill_number : varchar (nullable)</text>
+    <text x="1014" y="352" class="field">... 9 more fields</text>
+  </g>
+  <g id="construction_gatein_constructiongateentry" class="card" data-table="construction_gatein_constructiongateentry">
+    <title>construction_gatein_constructiongateentry</title>
+    <rect class="card-outline" x="1000" y="400" width="343" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="400" width="343" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="426" width="343" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="422" class="card-title" fill="#94a3b8">construction_gatein_constructiongateentry</text>
+    <text x="1329" y="422" class="meta" text-anchor="end">construction_gatein</text>
+    <text x="1014" y="458" class="field">PK    id : int</text>
+    <text x="1014" y="476" class="field">      project_name : varchar (nullable)</text>
+    <text x="1014" y="494" class="field">UK    work_order_number : varchar (nullable)</text>
+    <text x="1014" y="512" class="field">      contractor_name : varchar</text>
+    <text x="1014" y="530" class="field">      contractor_contact : varchar (nullable)</text>
+    <text x="1014" y="548" class="field">      material_description : text</text>
+    <text x="1014" y="566" class="field">      quantity : decimal</text>
+    <text x="1014" y="584" class="field">FK    unit_id : int (nullable)</text>
+    <text x="1014" y="602" class="field">... 11 more fields</text>
+  </g>
+  <g id="maintenance_gatein_maintenancegateentry" class="card" data-table="maintenance_gatein_maintenancegateentry">
+    <title>maintenance_gatein_maintenancegateentry</title>
+    <rect class="card-outline" x="1396" y="150" width="336" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1396" y="150" width="336" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1396" y="176" width="336" height="8" fill="#e2e8f0"/>
+    <text x="1410" y="172" class="card-title" fill="#94a3b8">maintenance_gatein_maintenancegateentry</text>
+    <text x="1718" y="172" class="meta" text-anchor="end">maintenance_gatein</text>
+    <text x="1410" y="208" class="field">PK    id : int</text>
+    <text x="1410" y="226" class="field">UK    work_order_number : varchar (nullable)</text>
+    <text x="1410" y="244" class="field">      supplier_name : varchar</text>
+    <text x="1410" y="262" class="field">      material_description : text</text>
+    <text x="1410" y="280" class="field">      part_number : varchar (nullable)</text>
+    <text x="1410" y="298" class="field">      quantity : decimal</text>
+    <text x="1410" y="316" class="field">FK    unit_id : int (nullable)</text>
+    <text x="1410" y="334" class="field">      invoice_number : varchar (nullable)</text>
+    <text x="1410" y="352" class="field">... 10 more fields</text>
+  </g>
+  <g id="daily_needs_gatein_dailyneedgateentryitem" class="card" data-table="daily_needs_gatein_dailyneedgateentryitem">
+    <title>daily_needs_gatein_dailyneedgateentryitem</title>
+    <rect class="card-outline" x="1396" y="400" width="315" height="202" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1396" y="400" width="315" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1396" y="426" width="315" height="8" fill="#e2e8f0"/>
+    <text x="1410" y="422" class="card-title" fill="#94a3b8">daily_needs_gatein_dailyneedgateentryitem</text>
+    <text x="1697" y="422" class="meta" text-anchor="end">daily_needs_gatein</text>
+    <text x="1410" y="458" class="field">PK    id : bigint</text>
+    <text x="1410" y="476" class="field">      line_no : int</text>
+    <text x="1410" y="494" class="field">      material_name : varchar</text>
+    <text x="1410" y="512" class="field">      quantity : decimal</text>
+    <text x="1410" y="530" class="field">      created_at : datetime</text>
+    <text x="1410" y="548" class="field">      updated_at : datetime</text>
+    <text x="1410" y="566" class="field">FK    daily_need_entry_id : bigint</text>
+    <text x="1410" y="584" class="field">FK    unit_id : bigint (nullable)</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

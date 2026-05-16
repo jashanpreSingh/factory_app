@@ -1,0 +1,425 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1406" height="3072" viewBox="0 0 1406 3072">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">Barcode ER Slice</text>
+  <text x="60" y="80" class="subtitle">8 local tables, 3 linked external tables, 8 local relationships, 11 external relationships</text>
+  <text x="1052" y="112" class="section">Linked external tables</text>
+  <g class="relation" data-src="barcode_box" data-dst="barcode_boxmovement" data-label="box_id">
+    <title>barcode_box to barcode_boxmovement via box_id</title>
+    <path class="edge-hit" d="M 262 314 L 236 314 L 236 300 L 205 300 L 205 1164 L 242 1164 L 242 1178 L 262 1178"/>
+    <path class="edge" d="M 262 314 L 236 314 L 236 300 L 205 300 L 205 1164 L 242 1164 L 242 1178 L 262 1178"/>
+    <rect class="edge-label-bg" x="181.0" y="724.0" width="48" height="16" rx="4"/>
+    <text class="edge-label" x="205.0" y="736.0" text-anchor="middle">box_id</text>
+  </g>
+  <g class="relation" data-src="barcode_box" data-dst="barcode_loosestock" data-label="repacked_into_box_id">
+    <title>barcode_box to barcode_loosestock via repacked_into_box_id</title>
+    <path class="edge-hit" d="M 262 404 L 230 404 L 230 394 L 187 394 L 187 1514 L 242 1514 L 242 1524 L 262 1524"/>
+    <path class="edge" d="M 262 404 L 230 404 L 230 394 L 187 394 L 187 1514 L 242 1514 L 242 1524 L 262 1524"/>
+    <rect class="edge-label-bg" x="121.0" y="946.0" width="132" height="16" rx="4"/>
+    <text class="edge-label" x="187.0" y="958.0" text-anchor="middle">repacked_into_box_id</text>
+  </g>
+  <g class="relation" data-src="barcode_box" data-dst="barcode_loosestock" data-label="source_box_id">
+    <title>barcode_box to barcode_loosestock via source_box_id</title>
+    <path class="edge-hit" d="M 262 495 L 224 495 L 224 489 L 170 489 L 170 1613 L 236 1613 L 236 1619 L 262 1619"/>
+    <path class="edge" d="M 262 495 L 224 495 L 224 489 L 170 489 L 170 1613 L 236 1613 L 236 1619 L 262 1619"/>
+    <rect class="edge-label-bg" x="125.0" y="1043.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="170.0" y="1055.0" text-anchor="middle">source_box_id</text>
+  </g>
+  <g class="relation" data-src="barcode_pallet" data-dst="barcode_box" data-label="pallet_id">
+    <title>barcode_pallet to barcode_box via pallet_id</title>
+    <path class="edge-hit" d="M 262 703 L 242 703 L 242 701 L 222 701 L 222 221 L 242 221 L 242 223 L 262 223"/>
+    <path class="edge" d="M 262 703 L 242 703 L 242 701 L 222 701 L 222 221 L 242 221 L 242 223 L 262 223"/>
+    <rect class="edge-label-bg" x="189.0" y="453.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="222.0" y="465.0" text-anchor="middle">pallet_id</text>
+  </g>
+  <g class="relation" data-src="barcode_pallet" data-dst="barcode_boxmovement" data-label="from_pallet_id">
+    <title>barcode_pallet to barcode_boxmovement via from_pallet_id</title>
+    <path class="edge-hit" d="M 262 775 L 236 775 L 236 777 L 152 777 L 152 1249 L 236 1249 L 236 1247 L 262 1247"/>
+    <path class="edge" d="M 262 775 L 236 775 L 236 777 L 152 777 L 152 1249 L 236 1249 L 236 1247 L 262 1247"/>
+    <rect class="edge-label-bg" x="104.0" y="1005.0" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="152.0" y="1017.0" text-anchor="middle">from_pallet_id</text>
+  </g>
+  <g class="relation" data-src="barcode_pallet" data-dst="barcode_boxmovement" data-label="to_pallet_id">
+    <title>barcode_pallet to barcode_boxmovement via to_pallet_id</title>
+    <path class="edge-hit" d="M 262 848 L 230 848 L 230 854 L 135 854 L 135 1322 L 230 1322 L 230 1316 L 262 1316"/>
+    <path class="edge" d="M 262 848 L 230 848 L 230 854 L 135 854 L 135 1322 L 230 1322 L 230 1316 L 262 1316"/>
+    <rect class="edge-label-bg" x="93.0" y="1080.0" width="84" height="16" rx="4"/>
+    <text class="edge-label" x="135.0" y="1092.0" text-anchor="middle">to_pallet_id</text>
+  </g>
+  <g class="relation" data-src="barcode_pallet" data-dst="barcode_loosestock" data-label="source_pallet_id">
+    <title>barcode_pallet to barcode_loosestock via source_pallet_id</title>
+    <path class="edge-hit" d="M 262 921 L 224 921 L 224 931 L 117 931 L 117 1724 L 230 1724 L 230 1714 L 262 1714"/>
+    <path class="edge" d="M 262 921 L 224 921 L 224 931 L 117 931 L 117 1724 L 230 1724 L 230 1714 L 262 1714"/>
+    <rect class="edge-label-bg" x="63.0" y="1319.5" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="117.0" y="1331.5" text-anchor="middle">source_pallet_id</text>
+  </g>
+  <g class="relation" data-src="barcode_pallet" data-dst="barcode_palletmovement" data-label="pallet_id">
+    <title>barcode_pallet to barcode_palletmovement via pallet_id</title>
+    <path class="edge-hit" d="M 262 993 L 218 993 L 218 1007 L 100 1007 L 100 2014 L 242 2014 L 242 2000 L 262 2000"/>
+    <path class="edge" d="M 262 993 L 218 993 L 218 1007 L 100 1007 L 100 2014 L 242 2014 L 242 2000 L 262 2000"/>
+    <rect class="edge-label-bg" x="67.0" y="1502.5" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="100.0" y="1514.5" text-anchor="middle">pallet_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="barcode_box" data-label="created_by_id">
+    <title>accounts_user to barcode_box via created_by_id</title>
+    <path class="edge-hit" d="M 1052 242 L 1032 242 L 1032 222 L 652 222 L 652 226 L 611 226 L 611 246 L 591 246"/>
+    <path class="edge external-edge" d="M 1052 242 L 1032 242 L 1032 222 L 652 222 L 652 226 L 611 226 L 611 246 L 591 246"/>
+    <rect class="edge-label-bg" x="774.5" y="214.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="819.5" y="226.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_barcodesequence" data-label="company_id">
+    <title>company_company to barcode_barcodesequence via company_id</title>
+    <path class="edge-hit" d="M 1052 483 L 1002 483 L 1002 467 L 940 467 L 940 2266 L 602 2266 L 602 2282 L 582 2282"/>
+    <path class="edge external-edge" d="M 1052 483 L 1002 483 L 1002 467 L 940 467 L 940 2266 L 602 2266 L 602 2282 L 582 2282"/>
+    <rect class="edge-label-bg" x="904.0" y="1481.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="940.0" y="1493.5" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_box" data-label="company_id">
+    <title>company_company to barcode_box via company_id</title>
+    <path class="edge-hit" d="M 1052 410 L 1032 410 L 1032 398 L 688 398 L 688 347 L 617 347 L 617 359 L 591 359"/>
+    <path class="edge external-edge" d="M 1052 410 L 1032 410 L 1032 398 L 688 398 L 688 347 L 617 347 L 617 359 L 591 359"/>
+    <rect class="edge-label-bg" x="760.0" y="390.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="796.0" y="402.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_boxmovement" data-label="company_id">
+    <title>company_company to barcode_boxmovement via company_id</title>
+    <path class="edge-hit" d="M 1052 439 L 1020 439 L 1020 431 L 832 431 L 832 1239 L 602 1239 L 602 1247 L 582 1247"/>
+    <path class="edge external-edge" d="M 1052 439 L 1020 439 L 1020 431 L 832 431 L 832 1239 L 602 1239 L 602 1247 L 582 1247"/>
+    <rect class="edge-label-bg" x="796.0" y="842.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="832.0" y="854.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_labelprintlog" data-label="company_id">
+    <title>company_company to barcode_labelprintlog via company_id</title>
+    <path class="edge-hit" d="M 1052 497 L 996 497 L 996 493 L 976 493 L 976 2533 L 602 2533 L 602 2537 L 582 2537"/>
+    <path class="edge external-edge" d="M 1052 497 L 996 497 L 996 493 L 976 493 L 976 2533 L 602 2533 L 602 2537 L 582 2537"/>
+    <rect class="edge-label-bg" x="940.0" y="1664.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="976.0" y="1676.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_loosestock" data-label="company_id">
+    <title>company_company to barcode_loosestock via company_id</title>
+    <path class="edge-hit" d="M 1052 454 L 868 454 L 868 1619 L 612 1619"/>
+    <path class="edge external-edge" d="M 1052 454 L 868 454 L 868 1619 L 612 1619"/>
+    <rect class="edge-label-bg" x="832.0" y="1064.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="868.0" y="1076.5" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_pallet" data-label="company_id">
+    <title>company_company to barcode_pallet via company_id</title>
+    <path class="edge-hit" d="M 1052 425 L 1026 425 L 1026 429 L 760 429 L 760 779 L 611 779 L 611 775 L 591 775"/>
+    <path class="edge external-edge" d="M 1052 425 L 1026 425 L 1026 429 L 760 429 L 760 779 L 611 779 L 611 775 L 591 775"/>
+    <rect class="edge-label-bg" x="724.0" y="534.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="760.0" y="546.5" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_palletmovement" data-label="company_id">
+    <title>company_company to barcode_palletmovement via company_id</title>
+    <path class="edge-hit" d="M 1052 468 L 1008 468 L 1008 476 L 904 476 L 904 2008 L 625 2008 L 625 2000 L 605 2000"/>
+    <path class="edge external-edge" d="M 1052 468 L 1008 468 L 1008 476 L 904 476 L 904 2008 L 625 2008 L 625 2000 L 605 2000"/>
+    <rect class="edge-label-bg" x="868.0" y="1309.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="904.0" y="1321.5" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_scanlog" data-label="company_id">
+    <title>company_company to barcode_scanlog via company_id</title>
+    <path class="edge-hit" d="M 1052 512 L 990 512 L 990 524 L 1012 524 L 1012 2858 L 602 2858 L 602 2846 L 582 2846"/>
+    <path class="edge external-edge" d="M 1052 512 L 990 512 L 990 524 L 1012 524 L 1012 2858 L 602 2858 L 602 2846 L 582 2846"/>
+    <rect class="edge-label-bg" x="976.0" y="1856.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1012.0" y="1868.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_productionrun" data-dst="barcode_box" data-label="production_run_id">
+    <title>production_execution_productionrun to barcode_box via production_run_id</title>
+    <path class="edge-hit" d="M 1052 643 L 1032 643 L 1032 659 L 724 659 L 724 488 L 623 488 L 623 472 L 591 472"/>
+    <path class="edge external-edge" d="M 1052 643 L 1032 643 L 1032 659 L 724 659 L 724 488 L 623 488 L 623 472 L 591 472"/>
+    <rect class="edge-label-bg" x="679.0" y="651.0" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="736.0" y="663.0" text-anchor="middle">production_run_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_productionrun" data-dst="barcode_pallet" data-label="production_run_id">
+    <title>production_execution_productionrun to barcode_pallet via production_run_id</title>
+    <path class="edge-hit" d="M 1052 717 L 1026 717 L 1026 737 L 796 737 L 796 941 L 617 941 L 617 921 L 591 921"/>
+    <path class="edge external-edge" d="M 1052 717 L 1026 717 L 1026 737 L 796 737 L 796 941 L 617 941 L 617 921 L 591 921"/>
+    <rect class="edge-label-bg" x="739.0" y="805.5" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="796.0" y="817.5" text-anchor="middle">production_run_id</text>
+  </g>
+  <g id="barcode_box" class="card" data-table="barcode_box">
+    <title>barcode_box</title>
+    <rect class="card-outline" x="262" y="132" width="329" height="454" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+    <rect x="262" y="132" width="329" height="34" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="262" y="158" width="329" height="8" fill="#fef3c7"/>
+    <text x="276" y="154" class="card-title" fill="#d97706">barcode_box</text>
+    <text x="276" y="190" class="field">PK    id : bigint</text>
+    <text x="276" y="208" class="field">FK    company_id : bigint</text>
+    <text x="276" y="226" class="field">UK    box_barcode : varchar</text>
+    <text x="276" y="244" class="field">      barcode_data : json</text>
+    <text x="276" y="262" class="field">      item_code : varchar</text>
+    <text x="276" y="280" class="field">      item_name : varchar</text>
+    <text x="276" y="298" class="field">      batch_number : varchar</text>
+    <text x="276" y="316" class="field">      qty : decimal</text>
+    <text x="276" y="334" class="field">      uom : varchar</text>
+    <text x="276" y="352" class="field">      g_weight : decimal (nullable)</text>
+    <text x="276" y="370" class="field">      n_weight : decimal (nullable)</text>
+    <text x="276" y="388" class="field">      mfg_date : date</text>
+    <text x="276" y="406" class="field">      exp_date : date</text>
+    <text x="276" y="424" class="field">FK    pallet_id : bigint (nullable)</text>
+    <text x="276" y="442" class="field">FK    production_run_id : bigint (nullable)</text>
+    <text x="276" y="460" class="field">      production_line : varchar</text>
+    <text x="276" y="478" class="field">      current_warehouse : varchar</text>
+    <text x="276" y="496" class="field">      current_bin : varchar</text>
+    <text x="276" y="514" class="field">      status : varchar</text>
+    <text x="276" y="532" class="field">FK    created_by_id : bigint (nullable)</text>
+    <text x="276" y="550" class="field">      created_at : datetime</text>
+    <text x="276" y="568" class="field">      updated_at : datetime</text>
+  </g>
+  <g id="barcode_pallet" class="card" data-table="barcode_pallet">
+    <title>barcode_pallet</title>
+    <rect class="card-outline" x="262" y="630" width="329" height="436" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+    <rect x="262" y="630" width="329" height="34" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="262" y="656" width="329" height="8" fill="#fef3c7"/>
+    <text x="276" y="652" class="card-title" fill="#d97706">barcode_pallet</text>
+    <text x="276" y="688" class="field">PK    id : bigint</text>
+    <text x="276" y="706" class="field">UK    pallet_id : varchar</text>
+    <text x="276" y="724" class="field">      barcode_data : json</text>
+    <text x="276" y="742" class="field">      item_code : varchar</text>
+    <text x="276" y="760" class="field">      item_name : varchar</text>
+    <text x="276" y="778" class="field">      batch_number : varchar</text>
+    <text x="276" y="796" class="field">      box_count : int</text>
+    <text x="276" y="814" class="field">      total_qty : decimal</text>
+    <text x="276" y="832" class="field">      uom : varchar</text>
+    <text x="276" y="850" class="field">      mfg_date : date</text>
+    <text x="276" y="868" class="field">      exp_date : date</text>
+    <text x="276" y="886" class="field">      production_line : varchar</text>
+    <text x="276" y="904" class="field">      current_warehouse : varchar</text>
+    <text x="276" y="922" class="field">      current_bin : varchar</text>
+    <text x="276" y="940" class="field">      status : varchar</text>
+    <text x="276" y="958" class="field">      created_at : datetime</text>
+    <text x="276" y="976" class="field">      updated_at : datetime</text>
+    <text x="276" y="994" class="field">FK    company_id : bigint</text>
+    <text x="276" y="1012" class="field">      created_by_id : bigint (nullable)</text>
+    <text x="276" y="1030" class="field">FK    production_run_id : bigint (nullable)</text>
+    <text x="276" y="1048" class="field">      max_box_count : int</text>
+  </g>
+  <g id="barcode_boxmovement" class="card" data-table="barcode_boxmovement">
+    <title>barcode_boxmovement</title>
+    <rect class="card-outline" x="262" y="1110" width="320" height="274" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+    <rect x="262" y="1110" width="320" height="34" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="262" y="1136" width="320" height="8" fill="#fef3c7"/>
+    <text x="276" y="1132" class="card-title" fill="#d97706">barcode_boxmovement</text>
+    <text x="276" y="1168" class="field">PK    id : bigint</text>
+    <text x="276" y="1186" class="field">      movement_type : varchar</text>
+    <text x="276" y="1204" class="field">      from_warehouse : varchar</text>
+    <text x="276" y="1222" class="field">      to_warehouse : varchar</text>
+    <text x="276" y="1240" class="field">      from_bin : varchar</text>
+    <text x="276" y="1258" class="field">      to_bin : varchar</text>
+    <text x="276" y="1276" class="field">      performed_at : datetime</text>
+    <text x="276" y="1294" class="field">FK    box_id : bigint</text>
+    <text x="276" y="1312" class="field">FK    company_id : bigint</text>
+    <text x="276" y="1330" class="field">      performed_by_id : bigint (nullable)</text>
+    <text x="276" y="1348" class="field">FK    from_pallet_id : bigint (nullable)</text>
+    <text x="276" y="1366" class="field">FK    to_pallet_id : bigint (nullable)</text>
+  </g>
+  <g id="barcode_loosestock" class="card" data-table="barcode_loosestock">
+    <title>barcode_loosestock</title>
+    <rect class="card-outline" x="262" y="1428" width="350" height="382" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+    <rect x="262" y="1428" width="350" height="34" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="262" y="1454" width="350" height="8" fill="#fef3c7"/>
+    <text x="276" y="1450" class="card-title" fill="#d97706">barcode_loosestock</text>
+    <text x="276" y="1486" class="field">PK    id : bigint</text>
+    <text x="276" y="1504" class="field">      item_code : varchar</text>
+    <text x="276" y="1522" class="field">      item_name : varchar</text>
+    <text x="276" y="1540" class="field">      batch_number : varchar</text>
+    <text x="276" y="1558" class="field">      qty : decimal</text>
+    <text x="276" y="1576" class="field">      original_qty : decimal</text>
+    <text x="276" y="1594" class="field">      uom : varchar</text>
+    <text x="276" y="1612" class="field">      reason : varchar</text>
+    <text x="276" y="1630" class="field">      reason_notes : text</text>
+    <text x="276" y="1648" class="field">      current_warehouse : varchar</text>
+    <text x="276" y="1666" class="field">      status : varchar</text>
+    <text x="276" y="1684" class="field">      created_at : datetime</text>
+    <text x="276" y="1702" class="field">      updated_at : datetime</text>
+    <text x="276" y="1720" class="field">FK    company_id : bigint</text>
+    <text x="276" y="1738" class="field">      created_by_id : bigint (nullable)</text>
+    <text x="276" y="1756" class="field">FK    repacked_into_box_id : bigint (nullable)</text>
+    <text x="276" y="1774" class="field">FK    source_box_id : bigint (nullable)</text>
+    <text x="276" y="1792" class="field">FK    source_pallet_id : bigint (nullable)</text>
+  </g>
+  <g id="barcode_palletmovement" class="card" data-table="barcode_palletmovement">
+    <title>barcode_palletmovement</title>
+    <rect class="card-outline" x="262" y="1854" width="343" height="292" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+    <rect x="262" y="1854" width="343" height="34" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="262" y="1880" width="343" height="8" fill="#fef3c7"/>
+    <text x="276" y="1876" class="card-title" fill="#d97706">barcode_palletmovement</text>
+    <text x="276" y="1912" class="field">PK    id : bigint</text>
+    <text x="276" y="1930" class="field">      movement_type : varchar</text>
+    <text x="276" y="1948" class="field">      from_warehouse : varchar</text>
+    <text x="276" y="1966" class="field">      to_warehouse : varchar</text>
+    <text x="276" y="1984" class="field">      from_bin : varchar</text>
+    <text x="276" y="2002" class="field">      to_bin : varchar</text>
+    <text x="276" y="2020" class="field">      sap_transfer_doc_entry : int (nullable)</text>
+    <text x="276" y="2038" class="field">      quantity : decimal</text>
+    <text x="276" y="2056" class="field">      performed_at : datetime</text>
+    <text x="276" y="2074" class="field">      notes : text</text>
+    <text x="276" y="2092" class="field">FK    company_id : bigint</text>
+    <text x="276" y="2110" class="field">FK    pallet_id : bigint</text>
+    <text x="276" y="2128" class="field">      performed_by_id : bigint (nullable)</text>
+  </g>
+  <g id="barcode_barcodesequence" class="card" data-table="barcode_barcodesequence">
+    <title>barcode_barcodesequence</title>
+    <rect class="card-outline" x="262" y="2190" width="320" height="184" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+    <rect x="262" y="2190" width="320" height="34" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="262" y="2216" width="320" height="8" fill="#fef3c7"/>
+    <text x="276" y="2212" class="card-title" fill="#d97706">barcode_barcodesequence</text>
+    <text x="276" y="2248" class="field">PK    id : bigint</text>
+    <text x="276" y="2266" class="field">      sequence_type : varchar</text>
+    <text x="276" y="2284" class="field">      date_str : varchar</text>
+    <text x="276" y="2302" class="field">      line_key : varchar</text>
+    <text x="276" y="2320" class="field">      next_value : int</text>
+    <text x="276" y="2338" class="field">      updated_at : datetime</text>
+    <text x="276" y="2356" class="field">FK    company_id : bigint</text>
+  </g>
+  <g id="barcode_labelprintlog" class="card" data-table="barcode_labelprintlog">
+    <title>barcode_labelprintlog</title>
+    <rect class="card-outline" x="262" y="2418" width="320" height="238" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+    <rect x="262" y="2418" width="320" height="34" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="262" y="2444" width="320" height="8" fill="#fef3c7"/>
+    <text x="276" y="2440" class="card-title" fill="#d97706">barcode_labelprintlog</text>
+    <text x="276" y="2476" class="field">PK    id : bigint</text>
+    <text x="276" y="2494" class="field">      label_type : varchar</text>
+    <text x="276" y="2512" class="field">      reference_id : varchar</text>
+    <text x="276" y="2530" class="field">      reference_code : varchar</text>
+    <text x="276" y="2548" class="field">      print_type : varchar</text>
+    <text x="276" y="2566" class="field">      reprint_reason : text</text>
+    <text x="276" y="2584" class="field">      printed_at : datetime</text>
+    <text x="276" y="2602" class="field">      printer_name : varchar</text>
+    <text x="276" y="2620" class="field">FK    company_id : bigint</text>
+    <text x="276" y="2638" class="field">      printed_by_id : bigint (nullable)</text>
+  </g>
+  <g id="barcode_scanlog" class="card" data-table="barcode_scanlog">
+    <title>barcode_scanlog</title>
+    <rect class="card-outline" x="262" y="2700" width="320" height="292" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+    <rect x="262" y="2700" width="320" height="34" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+    <rect x="262" y="2726" width="320" height="8" fill="#fef3c7"/>
+    <text x="276" y="2722" class="card-title" fill="#d97706">barcode_scanlog</text>
+    <text x="276" y="2758" class="field">PK    id : bigint</text>
+    <text x="276" y="2776" class="field">      scan_type : varchar</text>
+    <text x="276" y="2794" class="field">      barcode_raw : varchar</text>
+    <text x="276" y="2812" class="field">      barcode_parsed : json</text>
+    <text x="276" y="2830" class="field">      entity_type : varchar</text>
+    <text x="276" y="2848" class="field">      entity_id : varchar</text>
+    <text x="276" y="2866" class="field">      scan_result : varchar</text>
+    <text x="276" y="2884" class="field">      context_ref_type : varchar</text>
+    <text x="276" y="2902" class="field">      context_ref_id : int (nullable)</text>
+    <text x="276" y="2920" class="field">      scanned_at : datetime</text>
+    <text x="276" y="2938" class="field">      device_info : varchar</text>
+    <text x="276" y="2956" class="field">FK    company_id : bigint</text>
+    <text x="276" y="2974" class="field">      scanned_by_id : bigint (nullable)</text>
+  </g>
+  <g id="accounts_user" class="card" data-table="accounts_user">
+    <title>accounts_user</title>
+    <rect class="card-outline" x="1052" y="132" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1052" y="132" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1052" y="158" width="294" height="8" fill="#e2e8f0"/>
+    <text x="1066" y="154" class="card-title" fill="#94a3b8">accounts_user</text>
+    <text x="1332" y="154" class="meta" text-anchor="end">accounts</text>
+    <text x="1066" y="190" class="field">PK    id : bigint</text>
+    <text x="1066" y="208" class="field">      password : varchar</text>
+    <text x="1066" y="226" class="field">      last_login : datetime (nullable)</text>
+    <text x="1066" y="244" class="field">      is_superuser : boolean</text>
+    <text x="1066" y="262" class="field">UK    email : varchar</text>
+    <text x="1066" y="280" class="field">      full_name : varchar</text>
+    <text x="1066" y="298" class="field">UK    employee_code : varchar</text>
+    <text x="1066" y="316" class="field">      is_active : boolean</text>
+    <text x="1066" y="334" class="field">... 2 more fields</text>
+  </g>
+  <g id="company_company" class="card" data-table="company_company">
+    <title>company_company</title>
+    <rect class="card-outline" x="1052" y="396" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1052" y="396" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1052" y="422" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1066" y="418" class="card-title" fill="#94a3b8">company_company</text>
+    <text x="1298" y="418" class="meta" text-anchor="end">company</text>
+    <text x="1066" y="454" class="field">PK    id : int</text>
+    <text x="1066" y="472" class="field">      name : varchar</text>
+    <text x="1066" y="490" class="field">UK    code : varchar</text>
+    <text x="1066" y="508" class="field">      is_active : boolean</text>
+  </g>
+  <g id="production_execution_productionrun" class="card" data-table="production_execution_productionrun">
+    <title>production_execution_productionrun</title>
+    <rect class="card-outline" x="1052" y="570" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1052" y="570" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1052" y="596" width="294" height="8" fill="#e2e8f0"/>
+    <text x="1066" y="592" class="card-title" fill="#94a3b8">production_execution_productionrun</text>
+    <text x="1332" y="592" class="meta" text-anchor="end">production_execution</text>
+    <text x="1066" y="628" class="field">PK    id : bigint</text>
+    <text x="1066" y="646" class="field">      run_number : int</text>
+    <text x="1066" y="664" class="field">      date : date</text>
+    <text x="1066" y="682" class="field">      rated_speed : decimal (nullable)</text>
+    <text x="1066" y="700" class="field">      total_production : decimal</text>
+    <text x="1066" y="718" class="field">      total_breakdown_time : int</text>
+    <text x="1066" y="736" class="field">      status : varchar</text>
+    <text x="1066" y="754" class="field">      created_at : datetime</text>
+    <text x="1066" y="772" class="field">... 20 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1113" height="744" viewBox="0 0 1113 744">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">maintenance_gatein_maintenancegateentry Neighborhood</text>
+  <text x="60" y="80" class="subtitle">3 parent/lookup tables, 0 child tables, 3 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="driver_management_vehicleentry" data-dst="maintenance_gatein_maintenancegateentry" data-label="vehicle_entry_id">
+    <title>driver_management_vehicleentry to maintenance_gatein_maintenancegateentry via vehicle_entry_id</title>
+    <path class="edge-hit" d="M 320 260 L 338 260 L 338 306 L 513 306"/>
+    <path class="edge" d="M 320 260 L 338 260 L 338 306 L 513 306"/>
+    <rect class="edge-label-bg" x="339.5" y="298.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="393.5" y="310.0" text-anchor="middle">vehicle_entry_id</text>
+  </g>
+  <g class="relation" data-src="gate_core_unitchoice" data-dst="maintenance_gatein_maintenancegateentry" data-label="unit_id">
+    <title>gate_core_unitchoice to maintenance_gatein_maintenancegateentry via unit_id</title>
+    <path class="edge-hit" d="M 320 447 L 489 447 L 489 402 L 513 402"/>
+    <path class="edge" d="M 320 447 L 489 447 L 489 402 L 513 402"/>
+    <rect class="edge-label-bg" x="412.0" y="439.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="439.0" y="451.0" text-anchor="middle">unit_id</text>
+  </g>
+  <g class="relation" data-src="maintenance_gatein_maintenancetype" data-dst="maintenance_gatein_maintenancegateentry" data-label="maintenance_type_id">
+    <title>maintenance_gatein_maintenancetype to maintenance_gatein_maintenancegateentry via maintenance_type_id</title>
+    <path class="edge-hit" d="M 333 589 L 351 589 L 351 498 L 513 498"/>
+    <path class="edge" d="M 333 589 L 351 589 L 351 498 L 513 498"/>
+    <rect class="edge-label-bg" x="314.5" y="490.0" width="126" height="16" rx="4"/>
+    <text class="edge-label" x="377.5" y="502.0" text-anchor="middle">maintenance_type_id</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="60" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="306" y="172" class="meta" text-anchor="end">driver_management</text>
+    <text x="74" y="208" class="field">PK    id : int</text>
+    <text x="74" y="226" class="field">      created_at : datetime</text>
+    <text x="74" y="244" class="field">      updated_at : datetime</text>
+    <text x="74" y="262" class="field">      is_active : boolean</text>
+    <text x="74" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="74" y="298" class="field">      status : varchar</text>
+    <text x="74" y="316" class="field">      is_locked : boolean</text>
+    <text x="74" y="334" class="field">      entry_time : datetime</text>
+    <text x="74" y="352" class="field">... 7 more fields</text>
+  </g>
+  <g id="gate_core_unitchoice" class="card" data-table="gate_core_unitchoice">
+    <title>gate_core_unitchoice</title>
+    <rect class="card-outline" x="60" y="400" width="260" height="94" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="422" class="card-title" fill="#94a3b8">gate_core_unitchoice</text>
+    <text x="306" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="74" y="458" class="field">PK    id : int</text>
+    <text x="74" y="476" class="field">UK    name : varchar</text>
+  </g>
+  <g id="maintenance_gatein_maintenancetype" class="card" data-table="maintenance_gatein_maintenancetype">
+    <title>maintenance_gatein_maintenancetype</title>
+    <rect class="card-outline" x="60" y="524" width="273" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="524" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="550" width="273" height="8" fill="#e2e8f0"/>
+    <text x="74" y="546" class="card-title" fill="#94a3b8">maintenance_gatein_maintenancetype</text>
+    <text x="319" y="546" class="meta" text-anchor="end">maintenance_gatein</text>
+    <text x="74" y="582" class="field">PK    id : int</text>
+    <text x="74" y="600" class="field">UK    type_name : varchar</text>
+    <text x="74" y="618" class="field">      description : text (nullable)</text>
+    <text x="74" y="636" class="field">      is_active : boolean</text>
+  </g>
+  <g id="maintenance_gatein_maintenancegateentry" class="card" data-table="maintenance_gatein_maintenancegateentry">
+    <title>maintenance_gatein_maintenancegateentry</title>
+    <rect class="card-outline" x="513" y="211" width="350" height="382" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="513" y="211" width="350" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="513" y="237" width="350" height="8" fill="#bfdbfe"/>
+    <text x="527" y="233" class="card-title" fill="#0f172a">maintenance_gatein_maintenancegateentry</text>
+    <text x="527" y="269" class="field">PK    id : int</text>
+    <text x="527" y="287" class="field">UK    work_order_number : varchar (nullable)</text>
+    <text x="527" y="305" class="field">      supplier_name : varchar</text>
+    <text x="527" y="323" class="field">      material_description : text</text>
+    <text x="527" y="341" class="field">      part_number : varchar (nullable)</text>
+    <text x="527" y="359" class="field">      quantity : decimal</text>
+    <text x="527" y="377" class="field">FK    unit_id : int (nullable)</text>
+    <text x="527" y="395" class="field">      invoice_number : varchar (nullable)</text>
+    <text x="527" y="413" class="field">      equipment_id : varchar (nullable)</text>
+    <text x="527" y="431" class="field">      urgency_level : varchar</text>
+    <text x="527" y="449" class="field">      inward_time : datetime</text>
+    <text x="527" y="467" class="field">      remarks : text (nullable)</text>
+    <text x="527" y="485" class="field">      created_at : datetime</text>
+    <text x="527" y="503" class="field">      created_by_id : int (nullable)</text>
+    <text x="527" y="521" class="field">      receiving_department_id : int (nullable)</text>
+    <text x="527" y="539" class="field">FK/UK vehicle_entry_id : int</text>
+    <text x="527" y="557" class="field">FK    maintenance_type_id : int (nullable)</text>
+    <text x="527" y="575" class="field">      updated_at : datetime</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

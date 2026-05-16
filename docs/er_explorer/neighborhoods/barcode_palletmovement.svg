@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1093" height="720" viewBox="0 0 1093 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">barcode_palletmovement Neighborhood</text>
+  <text x="60" y="80" class="subtitle">2 parent/lookup tables, 0 child tables, 2 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="barcode_pallet" data-dst="barcode_palletmovement" data-label="pallet_id">
+    <title>barcode_pallet to barcode_palletmovement via pallet_id</title>
+    <path class="edge-hit" d="M 320 420 L 338 420 L 338 409 L 500 409"/>
+    <path class="edge" d="M 320 420 L 338 420 L 338 409 L 500 409"/>
+    <rect class="edge-label-bg" x="371.5" y="401.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="404.5" y="413.0" text-anchor="middle">pallet_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="barcode_palletmovement" data-label="company_id">
+    <title>company_company to barcode_palletmovement via company_id</title>
+    <path class="edge-hit" d="M 320 215 L 482 215 L 482 311 L 500 311"/>
+    <path class="edge" d="M 320 215 L 482 215 L 482 311 L 500 311"/>
+    <rect class="edge-label-bg" x="422.0" y="207.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="458.0" y="219.0" text-anchor="middle">company_id</text>
+  </g>
+  <g id="company_company" class="card" data-table="company_company">
+    <title>company_company</title>
+    <rect class="card-outline" x="60" y="150" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">company_company</text>
+    <text x="306" y="172" class="meta" text-anchor="end">company</text>
+    <text x="74" y="208" class="field">PK    id : int</text>
+    <text x="74" y="226" class="field">      name : varchar</text>
+    <text x="74" y="244" class="field">UK    code : varchar</text>
+    <text x="74" y="262" class="field">      is_active : boolean</text>
+  </g>
+  <g id="barcode_pallet" class="card" data-table="barcode_pallet">
+    <title>barcode_pallet</title>
+    <rect class="card-outline" x="60" y="310" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="310" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="336" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="332" class="card-title" fill="#94a3b8">barcode_pallet</text>
+    <text x="306" y="332" class="meta" text-anchor="end">barcode</text>
+    <text x="74" y="368" class="field">PK    id : bigint</text>
+    <text x="74" y="386" class="field">UK    pallet_id : varchar</text>
+    <text x="74" y="404" class="field">      barcode_data : json</text>
+    <text x="74" y="422" class="field">      item_code : varchar</text>
+    <text x="74" y="440" class="field">      item_name : varchar</text>
+    <text x="74" y="458" class="field">      batch_number : varchar</text>
+    <text x="74" y="476" class="field">      box_count : int</text>
+    <text x="74" y="494" class="field">      total_qty : decimal</text>
+    <text x="74" y="512" class="field">... 13 more fields</text>
+  </g>
+  <g id="barcode_palletmovement" class="card" data-table="barcode_palletmovement">
+    <title>barcode_palletmovement</title>
+    <rect class="card-outline" x="500" y="214" width="343" height="292" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="214" width="343" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="240" width="343" height="8" fill="#bfdbfe"/>
+    <text x="514" y="236" class="card-title" fill="#0f172a">barcode_palletmovement</text>
+    <text x="514" y="272" class="field">PK    id : bigint</text>
+    <text x="514" y="290" class="field">      movement_type : varchar</text>
+    <text x="514" y="308" class="field">      from_warehouse : varchar</text>
+    <text x="514" y="326" class="field">      to_warehouse : varchar</text>
+    <text x="514" y="344" class="field">      from_bin : varchar</text>
+    <text x="514" y="362" class="field">      to_bin : varchar</text>
+    <text x="514" y="380" class="field">      sap_transfer_doc_entry : int (nullable)</text>
+    <text x="514" y="398" class="field">      quantity : decimal</text>
+    <text x="514" y="416" class="field">      performed_at : datetime</text>
+    <text x="514" y="434" class="field">      notes : text</text>
+    <text x="514" y="452" class="field">FK    company_id : bigint</text>
+    <text x="514" y="470" class="field">FK    pallet_id : bigint</text>
+    <text x="514" y="488" class="field">      performed_by_id : bigint (nullable)</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

@@ -1,0 +1,2519 @@
+---
+title: Factory App Database ER Diagram
+---
+erDiagram
+    accounts_department {
+        bigint id PK
+        varchar name
+        text description
+    }
+
+    accounts_user {
+        bigint id PK
+        varchar password
+        datetime last_login "nullable"
+        boolean is_superuser
+        varchar email UK
+        varchar full_name
+        varchar employee_code UK
+        boolean is_active
+        boolean is_staff
+        datetime date_joined
+    }
+
+    accounts_user_groups {
+        bigint id PK
+        bigint user_id FK
+        int group_id FK
+    }
+
+    accounts_user_user_permissions {
+        bigint id PK
+        bigint user_id FK
+        int permission_id FK
+    }
+
+    auth_group {
+        int id PK
+        varchar name UK
+    }
+
+    auth_group_permissions {
+        int id PK
+        int group_id FK
+        int permission_id FK
+    }
+
+    auth_permission {
+        int id PK
+        varchar name
+        int content_type_id FK
+        varchar codename
+    }
+
+    barcode_barcodesequence {
+        bigint id PK
+        varchar sequence_type
+        varchar date_str
+        varchar line_key
+        int next_value
+        datetime updated_at
+        bigint company_id FK
+    }
+
+    barcode_box {
+        bigint id PK
+        bigint company_id FK
+        varchar box_barcode UK
+        json barcode_data
+        varchar item_code
+        varchar item_name
+        varchar batch_number
+        decimal qty
+        varchar uom
+        decimal g_weight "nullable"
+        decimal n_weight "nullable"
+        date mfg_date
+        date exp_date
+        bigint pallet_id FK "nullable"
+        bigint production_run_id FK "nullable"
+        varchar production_line
+        varchar current_warehouse
+        varchar current_bin
+        varchar status
+        bigint created_by_id FK "nullable"
+        datetime created_at
+        datetime updated_at
+    }
+
+    barcode_boxmovement {
+        bigint id PK
+        varchar movement_type
+        varchar from_warehouse
+        varchar to_warehouse
+        varchar from_bin
+        varchar to_bin
+        datetime performed_at
+        bigint box_id FK
+        bigint company_id FK
+        bigint performed_by_id "nullable"
+        bigint from_pallet_id FK "nullable"
+        bigint to_pallet_id FK "nullable"
+    }
+
+    barcode_labelprintlog {
+        bigint id PK
+        varchar label_type
+        varchar reference_id
+        varchar reference_code
+        varchar print_type
+        text reprint_reason
+        datetime printed_at
+        varchar printer_name
+        bigint company_id FK
+        bigint printed_by_id "nullable"
+    }
+
+    barcode_loosestock {
+        bigint id PK
+        varchar item_code
+        varchar item_name
+        varchar batch_number
+        decimal qty
+        decimal original_qty
+        varchar uom
+        varchar reason
+        text reason_notes
+        varchar current_warehouse
+        varchar status
+        datetime created_at
+        datetime updated_at
+        bigint company_id FK
+        bigint created_by_id "nullable"
+        bigint repacked_into_box_id FK "nullable"
+        bigint source_box_id FK "nullable"
+        bigint source_pallet_id FK "nullable"
+    }
+
+    barcode_pallet {
+        bigint id PK
+        varchar pallet_id UK
+        json barcode_data
+        varchar item_code
+        varchar item_name
+        varchar batch_number
+        int box_count
+        decimal total_qty
+        varchar uom
+        date mfg_date
+        date exp_date
+        varchar production_line
+        varchar current_warehouse
+        varchar current_bin
+        varchar status
+        datetime created_at
+        datetime updated_at
+        bigint company_id FK
+        bigint created_by_id "nullable"
+        bigint production_run_id FK "nullable"
+        int max_box_count
+    }
+
+    barcode_palletmovement {
+        bigint id PK
+        varchar movement_type
+        varchar from_warehouse
+        varchar to_warehouse
+        varchar from_bin
+        varchar to_bin
+        int sap_transfer_doc_entry "nullable"
+        decimal quantity
+        datetime performed_at
+        text notes
+        bigint company_id FK
+        bigint pallet_id FK
+        bigint performed_by_id "nullable"
+    }
+
+    barcode_scanlog {
+        bigint id PK
+        varchar scan_type
+        varchar barcode_raw
+        json barcode_parsed
+        varchar entity_type
+        varchar entity_id
+        varchar scan_result
+        varchar context_ref_type
+        int context_ref_id "nullable"
+        datetime scanned_at
+        varchar device_info
+        bigint company_id FK
+        bigint scanned_by_id "nullable"
+    }
+
+    company_company {
+        int id PK
+        varchar name
+        varchar code UK
+        boolean is_active
+    }
+
+    company_usercompany {
+        int id PK
+        int role_id FK
+        boolean is_default
+        boolean is_active
+        int company_id FK
+        int user_id
+    }
+
+    company_userrole {
+        int id PK
+        varchar name
+        text description
+    }
+
+    construction_gatein_constructiongateentry {
+        int id PK
+        varchar project_name "nullable"
+        varchar work_order_number UK "nullable"
+        varchar contractor_name
+        varchar contractor_contact "nullable"
+        text material_description
+        decimal quantity
+        int unit_id FK "nullable"
+        varchar challan_number "nullable"
+        varchar invoice_number "nullable"
+        varchar site_engineer "nullable"
+        varchar security_approval
+        text remarks "nullable"
+        datetime inward_time
+        datetime created_at
+        int created_by_id "nullable"
+        int vehicle_entry_id FK UK
+        int material_category_id FK "nullable"
+        datetime updated_at
+    }
+
+    construction_gatein_constructionmaterialcategory {
+        int id PK
+        varchar category_name UK
+        text description "nullable"
+        boolean is_active
+    }
+
+    daily_needs_gatein_categorylist {
+        int id PK
+        varchar category_name UK
+    }
+
+    daily_needs_gatein_dailyneedgateentry {
+        int id PK
+        int item_category_id FK "nullable"
+        varchar supplier_name
+        varchar material_name
+        decimal quantity
+        int unit_id FK "nullable"
+        int receiving_department_id "nullable"
+        varchar bill_number "nullable"
+        varchar delivery_challan_number "nullable"
+        varchar canteen_supervisor "nullable"
+        varchar vehicle_or_person_name "nullable"
+        varchar contact_number "nullable"
+        text remarks "nullable"
+        datetime created_at
+        int created_by_id "nullable"
+        int vehicle_entry_id FK UK
+        datetime updated_at
+    }
+
+    daily_needs_gatein_dailyneedgateentryitem {
+        bigint id PK
+        int line_no
+        varchar material_name
+        decimal quantity
+        datetime created_at
+        datetime updated_at
+        bigint daily_need_entry_id FK
+        bigint unit_id FK "nullable"
+    }
+
+    database_connections_databaseconnection {
+        bigint id PK
+        varchar key UK
+        varchar name
+        varchar database_type
+        varchar environment
+        varchar host
+        int port
+        varchar database_name
+        varchar schema_name
+        varchar username
+        varchar password_secret_key
+        int pool_min_size
+        int pool_max_size
+        int connect_timeout_seconds
+        json options
+        boolean is_active
+        varchar last_health_status
+        text last_health_error
+        datetime last_checked_at "nullable"
+        datetime created_at
+        datetime updated_at
+    }
+
+    dispatch_plans_dispatchplan {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int sap_invoice_doc_entry
+        varchar sap_invoice_doc_num
+        varchar booking_status
+        date dispatch_date "nullable"
+        varchar priority
+        varchar transporter_name
+        varchar transporter_gstin
+        varchar contact_person
+        varchar mobile_no
+        varchar vehicle_no
+        varchar bilty_no
+        date bilty_date "nullable"
+        decimal freight "nullable"
+        decimal total_freight "nullable"
+        decimal kanta_weight "nullable"
+        text remarks
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint updated_by_id FK "nullable"
+        bigint linked_vehicle_entry_id FK "nullable"
+        bigint transporter_id FK "nullable"
+        bigint vehicle_id FK "nullable"
+        bigint driver_id FK "nullable"
+        varchar driver_id_proof_number
+        varchar driver_id_proof_type
+        varchar driver_license_no
+        varchar driver_mobile_no
+        varchar driver_name
+        varchar bilty_attachment "nullable"
+        varchar bilty_attachment_name
+        varchar eway_bill
+        decimal invoice_amount "nullable"
+        varchar invoice_number
+        decimal invoice_weight "nullable"
+        varchar place_of_supply
+        varchar budget_delivery_point
+        date effective_month "nullable"
+        varchar product_variety
+        varchar sac_code
+        int sac_entry "nullable"
+        int service_location_code "nullable"
+        varchar service_location_name
+        decimal total_litres "nullable"
+    }
+
+    dispatch_plans_transporterapinvoiceattachment {
+        bigint id PK
+        varchar file
+        varchar original_filename
+        varchar sap_attachment_status
+        int sap_absolute_entry "nullable"
+        text sap_error_message "nullable"
+        datetime uploaded_at
+        bigint uploaded_by_id FK "nullable"
+        bigint transporter_ap_invoice_id FK
+    }
+
+    dispatch_plans_transporterapinvoiceline {
+        bigint id PK
+        int base_entry
+        int base_line
+        int base_doc_num "nullable"
+        varchar bilty_no
+        varchar service_description
+        decimal line_total
+        varchar tax_code
+        varchar gl_account
+        bigint dispatch_plan_id FK
+        bigint service_grpo_line_id FK "nullable"
+        bigint service_grpo_posting_id FK
+        bigint transporter_ap_invoice_id FK
+    }
+
+    dispatch_plans_transporterapinvoiceposting {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar vendor_code
+        varchar vendor_name
+        varchar invoice_number
+        date invoice_date "nullable"
+        decimal invoice_amount
+        decimal selected_grpo_total "nullable"
+        decimal amount_difference "nullable"
+        int branch_id
+        int sap_doc_entry "nullable"
+        int sap_doc_num "nullable"
+        decimal sap_doc_total "nullable"
+        varchar status
+        text error_message "nullable"
+        datetime posted_at "nullable"
+        text comments
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint posted_by_id FK "nullable"
+        bigint updated_by_id FK "nullable"
+    }
+
+    django_admin_log {
+        int id PK
+        datetime action_time
+        text object_id "nullable"
+        varchar object_repr
+        int action_flag
+        text change_message
+        int content_type_id FK "nullable"
+        int user_id
+    }
+
+    django_apscheduler_djangojob {
+        varchar id PK
+        datetime next_run_time "nullable"
+        binary job_state
+    }
+
+    django_apscheduler_djangojobexecution {
+        bigint id PK
+        varchar status
+        datetime run_time
+        decimal duration "nullable"
+        decimal finished "nullable"
+        varchar exception "nullable"
+        text traceback "nullable"
+        varchar job_id FK
+    }
+
+    django_content_type {
+        int id PK
+        varchar app_label
+        varchar model
+    }
+
+    django_migrations {
+        bigint id PK
+        varchar app
+        varchar name
+        datetime applied
+    }
+
+    django_session {
+        varchar session_key PK
+        text session_data
+        datetime expire_date
+    }
+
+    driver_management_driver {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar name
+        varchar mobile_no
+        varchar license_no UK
+        varchar id_proof_type
+        varchar id_proof_number
+        varchar photo "nullable"
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+    }
+
+    driver_management_vehicleentry {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        varchar status
+        boolean is_locked
+        datetime entry_time
+        text remarks
+        int created_by_id "nullable"
+        int driver_id FK
+        int updated_by_id "nullable"
+        int vehicle_id FK
+        int company_id FK
+        varchar entry_type
+    }
+
+    gate_core_bstgatein {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        date gate_in_date
+        time in_time
+        varchar security_name
+        text remarks
+        varchar status
+        bigint bst_gate_out_id FK
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint driver_id FK
+        bigint updated_by_id FK "nullable"
+        bigint vehicle_id FK
+        bigint vehicle_entry_id FK
+        varchar sap_receipt_doc_num
+        date sap_receipt_doc_date "nullable"
+        varchar sap_receipt_reference
+    }
+
+    gate_core_bstgateinitem {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int line_num
+        varchar item_code
+        varchar item_name
+        decimal quantity
+        decimal actual_quantity
+        decimal receiving_quantity
+        varchar uom
+        varchar from_warehouse
+        varchar to_warehouse
+        bigint bst_gate_in_id FK
+        bigint bst_gate_out_item_id FK
+        bigint created_by_id FK "nullable"
+        bigint updated_by_id FK "nullable"
+    }
+
+    gate_core_bstgateout {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        int sap_doc_entry
+        varchar sap_doc_num
+        date sap_doc_date "nullable"
+        varchar sap_from_warehouse
+        varchar sap_to_warehouse
+        varchar sap_reference
+        text sap_comments
+        date gate_out_date
+        time out_time
+        varchar security_name
+        text remarks
+        varchar status
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint driver_id FK
+        bigint empty_vehicle_gate_in_id FK
+        bigint updated_by_id FK "nullable"
+        bigint vehicle_id FK
+        bigint vehicle_entry_id FK
+        text cancel_reason
+        datetime cancelled_at "nullable"
+        bigint cancelled_by_id FK "nullable"
+    }
+
+    gate_core_bstgateoutitem {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int line_num
+        varchar item_code
+        varchar item_name
+        decimal quantity
+        varchar uom
+        varchar from_warehouse
+        varchar to_warehouse
+        bigint bst_gate_out_id FK
+        bigint created_by_id FK "nullable"
+        bigint updated_by_id FK "nullable"
+        decimal actual_quantity
+    }
+
+    gate_core_bstgatereturn {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        date gate_in_date
+        time in_time
+        varchar security_name
+        text remarks
+        varchar status
+        bigint bst_gate_out_id FK
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint driver_id FK
+        bigint updated_by_id FK "nullable"
+        bigint vehicle_id FK
+        bigint vehicle_entry_id FK
+        varchar sap_return_doc_num
+        date sap_return_doc_date "nullable"
+        varchar sap_return_reference
+    }
+
+    gate_core_dispatchgatelock {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        boolean locked
+        text reason
+        datetime locked_at "nullable"
+        datetime unlocked_at "nullable"
+        bigint changed_by_id FK "nullable"
+        bigint company_id FK UK
+        bigint created_by_id FK "nullable"
+        bigint updated_by_id FK "nullable"
+    }
+
+    gate_core_dispatchgateout {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        int sap_invoice_doc_entry
+        varchar sap_invoice_doc_num
+        varchar customer_code
+        varchar customer_name
+        text ship_to_address
+        decimal invoice_amount "nullable"
+        decimal sap_weight "nullable"
+        date gate_out_date
+        time out_time
+        varchar security_name
+        varchar seal_no
+        varchar pgi_document_no
+        boolean goods_issue_posted
+        boolean invoice_checked
+        boolean delivery_note_checked
+        boolean eway_bill_checked
+        boolean lr_checked
+        decimal physical_quantity "nullable"
+        varchar physical_uom
+        decimal gross_weight "nullable"
+        decimal tare_weight "nullable"
+        decimal net_weight "nullable"
+        varchar weighbridge_slip_no
+        datetime first_weighment_time "nullable"
+        datetime second_weighment_time "nullable"
+        varchar dock_photo "nullable"
+        varchar gatepass_document "nullable"
+        text attachment_notes
+        text remarks
+        varchar gatepass_no
+        varchar gatepass_code
+        boolean gate_printed
+        boolean print_commit
+        datetime printed_at "nullable"
+        datetime committed_at "nullable"
+        varchar status
+        text cancel_reason
+        datetime cancelled_at "nullable"
+        text rejected_reason
+        datetime rejected_at "nullable"
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint dispatch_plan_id FK "nullable"
+        bigint driver_id FK
+        bigint updated_by_id FK "nullable"
+        bigint vehicle_id FK
+        bigint vehicle_entry_id FK "nullable"
+    }
+
+    gate_core_dispatchgateoutline {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int line_num
+        varchar item_code
+        varchar item_name
+        decimal order_qty "nullable"
+        decimal dispatched_qty "nullable"
+        varchar uom
+        varchar warehouse
+        bigint created_by_id FK "nullable"
+        bigint entry_id FK
+        bigint updated_by_id FK "nullable"
+    }
+
+    gate_core_emptyvehiclegatein {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        varchar reason
+        date gate_in_date
+        time in_time
+        varchar security_name
+        text remarks
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint driver_id FK
+        bigint updated_by_id FK "nullable"
+        bigint vehicle_id FK
+        bigint vehicle_entry_id FK UK
+        text document_notes
+        varchar document_reference
+        text sap_comments
+        date sap_doc_date "nullable"
+        int sap_doc_entry "nullable"
+        varchar sap_doc_num
+        varchar sap_from_warehouse
+        int sap_line_count
+        varchar sap_reference
+        varchar sap_to_warehouse
+        decimal sap_total_quantity
+    }
+
+    gate_core_emptyvehiclegateinitem {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int line_num
+        varchar item_code
+        varchar item_name
+        decimal sap_quantity
+        decimal actual_quantity
+        varchar uom
+        varchar from_warehouse
+        varchar to_warehouse
+        bigint created_by_id FK "nullable"
+        bigint empty_vehicle_gate_in_id FK
+        bigint updated_by_id FK "nullable"
+    }
+
+    gate_core_emptyvehiclegateout {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        date gate_out_date
+        time out_time
+        varchar security_name
+        text remarks
+        varchar status
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint driver_id FK
+        bigint updated_by_id FK "nullable"
+        bigint vehicle_id FK
+        bigint vehicle_entry_id FK
+        text cancel_reason
+        datetime cancelled_at "nullable"
+        bigint cancelled_by_id FK "nullable"
+    }
+
+    gate_core_gateattachment {
+        int id PK
+        varchar file
+        datetime uploaded_at
+        int gate_entry_id FK
+    }
+
+    gate_core_jobworkgatein {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        int sap_doc_entry "nullable"
+        varchar sap_doc_num
+        date sap_doc_date "nullable"
+        varchar sap_supplier_code
+        varchar sap_supplier_name
+        varchar sap_reference
+        text sap_comments
+        int sap_branch_id "nullable"
+        date gate_in_date
+        time in_time
+        varchar security_name
+        text remarks
+        varchar status
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint driver_id FK
+        bigint updated_by_id FK "nullable"
+        bigint vehicle_id FK
+        bigint vehicle_entry_id FK
+        time sap_doc_time "nullable"
+        int production_order_doc_entry "nullable"
+        varchar production_order_doc_num
+        varchar production_item_code
+        varchar production_item_name
+        decimal production_planned_qty "nullable"
+        decimal production_completed_qty "nullable"
+        decimal production_rejected_qty "nullable"
+        decimal production_remaining_qty "nullable"
+        date production_start_date "nullable"
+        date production_due_date "nullable"
+        varchar production_warehouse
+        varchar production_status
+    }
+
+    gate_core_jobworkgateinitem {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int line_num
+        varchar item_code
+        varchar item_name
+        decimal quantity
+        varchar uom
+        varchar warehouse_code
+        int base_type "nullable"
+        int base_entry "nullable"
+        int base_line "nullable"
+        bigint created_by_id FK "nullable"
+        bigint job_work_gate_in_id FK
+        bigint updated_by_id FK "nullable"
+    }
+
+    gate_core_rejectedqcreturnentry {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar entry_no UK
+        date gate_out_date
+        time out_time "nullable"
+        varchar challan_no
+        varchar eway_bill_no
+        varchar manual_sap_reference
+        varchar security_name
+        text remarks
+        varchar status
+        bigint company_id FK
+        bigint created_by_id FK "nullable"
+        bigint driver_id FK
+        bigint updated_by_id FK "nullable"
+        bigint vehicle_id FK
+        decimal gross_weight "nullable"
+        decimal tare_weight "nullable"
+        decimal net_weight "nullable"
+        varchar weighbridge_slip_no
+        datetime first_weighment_time "nullable"
+        datetime second_weighment_time "nullable"
+        json gatepass_documents
+    }
+
+    gate_core_rejectedqcreturnitem {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar gate_entry_no
+        varchar report_no
+        varchar internal_lot_no
+        varchar item_name
+        varchar supplier_name
+        decimal quantity "nullable"
+        varchar uom
+        bigint created_by_id FK "nullable"
+        bigint entry_id FK
+        bigint inspection_id FK UK
+        bigint updated_by_id FK "nullable"
+    }
+
+    gate_core_unitchoice {
+        int id PK
+        varchar name UK
+    }
+
+    grpo_grpoattachment {
+        bigint id PK
+        varchar file
+        varchar original_filename
+        varchar sap_attachment_status
+        int sap_absolute_entry "nullable"
+        text sap_error_message "nullable"
+        datetime uploaded_at
+        bigint grpo_posting_id FK
+        int uploaded_by_id "nullable"
+    }
+
+    grpo_grpolineposting {
+        bigint id PK
+        decimal quantity_posted
+        int base_entry "nullable"
+        int base_line "nullable"
+        int po_item_receipt_id FK
+        bigint grpo_posting_id FK
+    }
+
+    grpo_grpoposting {
+        bigint id PK
+        int sap_doc_entry "nullable"
+        int sap_doc_num "nullable"
+        decimal sap_doc_total "nullable"
+        varchar status
+        text error_message "nullable"
+        datetime posted_at "nullable"
+        datetime created_at
+        datetime updated_at
+        int po_receipt_id FK "nullable"
+        int posted_by_id "nullable"
+        int vehicle_entry_id FK
+    }
+
+    grpo_grpoposting_po_receipts {
+        bigint id PK
+        bigint grpoposting_id FK
+        int poreceipt_id FK
+    }
+
+    grpo_servicegrpoattachment {
+        bigint id PK
+        varchar file
+        varchar original_filename
+        varchar sap_attachment_status
+        int sap_absolute_entry "nullable"
+        text sap_error_message "nullable"
+        datetime uploaded_at
+        bigint uploaded_by_id FK "nullable"
+        bigint service_grpo_posting_id FK
+    }
+
+    grpo_servicegrpolineposting {
+        bigint id PK
+        varchar service_description
+        decimal amount
+        varchar tax_code
+        varchar gl_account
+        bigint service_grpo_posting_id FK
+        int location_code "nullable"
+        varchar location_name
+        varchar product_variety
+        varchar project_code
+        varchar sac_code
+        int sac_entry "nullable"
+        decimal total_litres "nullable"
+        decimal unit_price "nullable"
+    }
+
+    grpo_servicegrpoposting {
+        bigint id PK
+        varchar vendor_code
+        varchar vendor_name
+        int sap_doc_entry "nullable"
+        int sap_doc_num "nullable"
+        decimal sap_doc_total "nullable"
+        varchar status
+        text error_message "nullable"
+        datetime posted_at "nullable"
+        datetime created_at
+        datetime updated_at
+        bigint dispatch_plan_id FK
+        bigint posted_by_id FK "nullable"
+        varchar budget_delivery_point
+        date effective_month "nullable"
+        int location_code "nullable"
+        varchar location_name
+        varchar place_of_supply
+        varchar product_variety
+        varchar sac_code
+        int sac_entry "nullable"
+        decimal total_litres "nullable"
+    }
+
+    inventory_sapbatchstock {
+        bigint id PK
+        varchar item_code
+        varchar item_name
+        int system_number
+        varchar batch_number
+        varchar warehouse_code
+        varchar warehouse_name
+        date manufacturing_date "nullable"
+        date expiry_date "nullable"
+        date admission_date "nullable"
+        varchar status
+        decimal batch_quantity
+        decimal batch_balance
+        decimal warehouse_quantity
+        decimal committed_quantity
+        datetime last_synced_at
+        bigint company_id FK
+    }
+
+    inventory_sapcompany {
+        bigint id PK
+        varchar key UK
+        varchar env_key UK
+        varchar label
+        varchar database UK
+        boolean hana_ok
+        datetime last_seen_at "nullable"
+        datetime created_at
+        datetime updated_at
+    }
+
+    inventory_sapinventoryagingsnapshot {
+        bigint id PK
+        varchar item_code
+        varchar item_name
+        varchar warehouse_code
+        varchar warehouse_name
+        decimal on_hand
+        decimal inventory_value
+        date last_movement_date "nullable"
+        int days_since_movement "nullable"
+        varchar aging_bucket
+        datetime last_synced_at
+        bigint company_id FK
+    }
+
+    inventory_sapinventorymovement {
+        bigint id PK
+        varchar movement_type
+        int doc_entry
+        int doc_num "nullable"
+        date doc_date "nullable"
+        varchar doc_status
+        varchar card_code
+        varchar card_name
+        int journal_trans_id "nullable"
+        text comments
+        int line_num
+        varchar item_code
+        varchar item_name
+        varchar warehouse_code
+        varchar from_warehouse_code
+        varchar to_warehouse_code
+        decimal quantity_in
+        decimal quantity_out
+        decimal unit_price
+        decimal line_total
+        datetime last_synced_at
+        bigint company_id FK
+    }
+
+    inventory_sapinventoryvaluation {
+        bigint id PK
+        int trans_seq
+        int trans_type "nullable"
+        int created_by "nullable"
+        varchar base_ref
+        int doc_line_num "nullable"
+        date doc_date "nullable"
+        date create_date "nullable"
+        varchar item_code
+        varchar warehouse_code
+        decimal in_qty
+        decimal out_qty
+        decimal price
+        varchar currency
+        decimal rate
+        decimal open_stock
+        varchar inventory_account
+        varchar cost_account
+        varchar cost_method
+        int message_id "nullable"
+        int trans_num "nullable"
+        int layer_id "nullable"
+        int root_id "nullable"
+        datetime last_synced_at
+        bigint company_id FK
+    }
+
+    inventory_sapitem {
+        bigint id PK
+        varchar item_code
+        varchar item_name
+        varchar foreign_name
+        int item_group_code "nullable"
+        varchar item_group_name
+        varchar barcode
+        varchar default_warehouse
+        varchar supplier_code
+        varchar purchase_item
+        varchar sales_item
+        varchar inventory_item
+        varchar valid_for
+        varchar frozen_for
+        decimal min_level
+        decimal max_level
+        decimal avg_price
+        decimal last_purchase_price
+        date last_purchase_date "nullable"
+        int warehouse_count
+        decimal on_hand
+        decimal committed
+        decimal ordered
+        decimal available
+        decimal projected_available
+        decimal inventory_value
+        varchar stock_status
+        datetime last_synced_at
+        bigint company_id FK
+    }
+
+    inventory_sapitemgroup {
+        bigint id PK
+        int group_code
+        varchar group_name
+        varchar locked
+        datetime last_synced_at
+        bigint company_id FK
+    }
+
+    inventory_sapitemwarehousestock {
+        bigint id PK
+        varchar item_code
+        varchar warehouse_code
+        varchar item_name
+        varchar item_group_name
+        varchar warehouse_name
+        decimal on_hand
+        decimal committed
+        decimal ordered
+        decimal available
+        decimal projected_available
+        decimal min_stock
+        decimal max_stock
+        decimal min_order
+        decimal avg_price
+        decimal inventory_value
+        varchar locked
+        varchar stock_status
+        datetime last_synced_at
+        bigint company_id FK
+    }
+
+    inventory_sapsyncrun {
+        bigint id PK
+        varchar module
+        varchar status
+        json sections
+        datetime started_at
+        datetime finished_at "nullable"
+        int records_read
+        int records_upserted
+        json errors
+        bigint company_id FK "nullable"
+    }
+
+    inventory_sapwarehouse {
+        bigint id PK
+        varchar warehouse_code
+        varchar warehouse_name
+        varchar city
+        varchar state
+        varchar country
+        varchar inactive
+        int stock_rows
+        int sku_count
+        decimal on_hand
+        decimal committed
+        decimal ordered
+        decimal inventory_value
+        int low_stock_rows
+        int out_of_stock_rows
+        datetime last_synced_at
+        bigint company_id FK
+    }
+
+    labour_verification_departmentlabourresponse {
+        bigint id PK
+        int labour_count
+        json labour_details
+        text remarks
+        varchar status
+        datetime submitted_at "nullable"
+        datetime created_at
+        datetime updated_at
+        bigint department_id
+        bigint submitted_by_id "nullable"
+        bigint verification_request_id FK
+    }
+
+    labour_verification_labourverificationrequest {
+        bigint id PK
+        date date UK
+        varchar status
+        datetime created_at
+        datetime closed_at "nullable"
+        text remarks
+        bigint created_by_id "nullable"
+    }
+
+    mail_emaillog {
+        bigint id PK
+        varchar recipient_email
+        varchar subject
+        text body
+        varchar email_type
+        varchar click_action_url
+        varchar reference_type
+        int reference_id "nullable"
+        varchar template_name
+        json extra_data
+        varchar status
+        text error_message
+        datetime created_at
+        bigint company_id FK "nullable"
+        bigint created_by_id "nullable"
+        bigint recipient_id "nullable"
+    }
+
+    maintenance_gatein_maintenancegateentry {
+        int id PK
+        varchar work_order_number UK "nullable"
+        varchar supplier_name
+        text material_description
+        varchar part_number "nullable"
+        decimal quantity
+        int unit_id FK "nullable"
+        varchar invoice_number "nullable"
+        varchar equipment_id "nullable"
+        varchar urgency_level
+        datetime inward_time
+        text remarks "nullable"
+        datetime created_at
+        int created_by_id "nullable"
+        int receiving_department_id "nullable"
+        int vehicle_entry_id FK UK
+        int maintenance_type_id FK "nullable"
+        datetime updated_at
+    }
+
+    maintenance_gatein_maintenancetype {
+        int id PK
+        varchar type_name UK
+        text description "nullable"
+        boolean is_active
+    }
+
+    notifications_notification {
+        bigint id PK
+        varchar title
+        text body
+        varchar notification_type
+        varchar click_action_url
+        varchar reference_type
+        int reference_id "nullable"
+        boolean is_read
+        datetime read_at "nullable"
+        json extra_data
+        datetime created_at
+        int company_id FK "nullable"
+        int created_by_id "nullable"
+        int recipient_id
+    }
+
+    notifications_userdevice {
+        bigint id PK
+        text fcm_token UK
+        varchar device_type
+        varchar device_info
+        boolean is_active
+        datetime created_at
+        datetime last_used_at
+        int user_id
+    }
+
+    outbound_dispatch_goodsissueposting {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int sap_doc_entry "nullable"
+        int sap_doc_num "nullable"
+        varchar status
+        datetime posted_at "nullable"
+        text error_message
+        int retry_count
+        bigint created_by_id "nullable"
+        bigint posted_by_id "nullable"
+        bigint updated_by_id "nullable"
+        bigint shipment_order_id FK UK
+    }
+
+    outbound_dispatch_outboundloadrecord {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar trailer_condition
+        boolean trailer_temp_ok "nullable"
+        decimal trailer_temp_reading "nullable"
+        datetime inspected_at "nullable"
+        datetime loading_started_at "nullable"
+        datetime loading_completed_at "nullable"
+        boolean supervisor_confirmed
+        datetime confirmed_at "nullable"
+        bigint created_by_id "nullable"
+        bigint inspected_by_id "nullable"
+        bigint loaded_by_id "nullable"
+        bigint supervisor_id "nullable"
+        bigint updated_by_id "nullable"
+        bigint shipment_order_id FK UK
+    }
+
+    outbound_dispatch_picktask {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar pick_location
+        decimal pick_qty
+        decimal actual_qty "nullable"
+        varchar status
+        datetime picked_at "nullable"
+        varchar scanned_barcode
+        bigint assigned_to_id "nullable"
+        bigint created_by_id "nullable"
+        bigint updated_by_id "nullable"
+        bigint shipment_item_id FK
+    }
+
+    outbound_dispatch_shipmentorder {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int sap_doc_entry
+        int sap_doc_num
+        varchar customer_code
+        varchar customer_name
+        text ship_to_address
+        varchar carrier_code
+        varchar carrier_name
+        date scheduled_date
+        varchar dock_bay
+        datetime dock_slot_start "nullable"
+        datetime dock_slot_end "nullable"
+        varchar status
+        varchar bill_of_lading_no
+        varchar seal_number
+        decimal total_weight "nullable"
+        text notes
+        bigint company_id FK
+        bigint created_by_id "nullable"
+        bigint updated_by_id "nullable"
+        bigint vehicle_entry_id FK "nullable"
+    }
+
+    outbound_dispatch_shipmentorderitem {
+        bigint id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int sap_line_num
+        varchar item_code
+        varchar item_name
+        decimal ordered_qty
+        decimal picked_qty
+        decimal packed_qty
+        decimal loaded_qty
+        varchar uom
+        varchar warehouse_code
+        varchar batch_number
+        decimal weight "nullable"
+        varchar pick_status
+        bigint created_by_id "nullable"
+        bigint shipment_order_id FK
+        bigint updated_by_id "nullable"
+    }
+
+    outbound_gatein_outboundgateentry {
+        bigint id PK
+        varchar sales_order_ref
+        varchar customer_name
+        varchar customer_code
+        varchar transporter_name
+        varchar transporter_contact
+        varchar lr_number
+        boolean vehicle_empty_confirmed
+        varchar trailer_type
+        decimal trailer_length_ft "nullable"
+        varchar assigned_zone
+        varchar assigned_bay
+        datetime expected_loading_time "nullable"
+        datetime arrival_time
+        datetime released_for_loading_at "nullable"
+        datetime exit_time "nullable"
+        text remarks
+        datetime created_at
+        datetime updated_at
+        bigint created_by_id "nullable"
+        bigint vehicle_entry_id FK UK
+        bigint purpose_id FK "nullable"
+    }
+
+    outbound_gatein_outboundpurpose {
+        bigint id PK
+        varchar name UK
+        text description
+        boolean is_active
+    }
+
+    person_gatein_contractor {
+        int id PK
+        varchar contractor_name
+        varchar contact_person "nullable"
+        varchar mobile "nullable"
+        text address "nullable"
+        date contract_valid_till "nullable"
+        boolean is_active
+    }
+
+    person_gatein_entrylog {
+        int id PK
+        varchar name_snapshot
+        varchar photo_snapshot "nullable"
+        datetime entry_time
+        datetime exit_time "nullable"
+        varchar purpose "nullable"
+        varchar vehicle_no "nullable"
+        text remarks "nullable"
+        varchar status
+        datetime created_at
+        datetime updated_at
+        int approved_by_id "nullable"
+        int created_by_id "nullable"
+        int gate_in_id FK
+        int gate_out_id FK "nullable"
+        int labour_id FK "nullable"
+        int person_type_id FK
+        int visitor_id FK "nullable"
+        datetime actual_entry_time "nullable"
+    }
+
+    person_gatein_gate {
+        int id PK
+        varchar name
+        varchar location "nullable"
+        boolean is_active
+    }
+
+    person_gatein_labour {
+        int id PK
+        varchar name
+        varchar mobile "nullable"
+        varchar id_proof_no "nullable"
+        varchar photo "nullable"
+        varchar skill_type "nullable"
+        date permit_valid_till "nullable"
+        boolean is_active
+        int contractor_id FK
+    }
+
+    person_gatein_persontype {
+        int id PK
+        varchar name UK
+        boolean is_active
+    }
+
+    person_gatein_visitor {
+        int id PK
+        varchar name
+        varchar mobile "nullable"
+        varchar company_name "nullable"
+        varchar id_proof_type "nullable"
+        varchar id_proof_no "nullable"
+        varchar photo "nullable"
+        boolean blacklisted
+        datetime created_at
+    }
+
+    production_execution_breakdowncategory {
+        bigint id PK
+        varchar name
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        int company_id FK
+    }
+
+    production_execution_finalqccheck {
+        bigint id PK
+        datetime checked_at
+        varchar overall_result
+        json parameters
+        text remarks
+        datetime created_at
+        datetime updated_at
+        int checked_by_id "nullable"
+        bigint production_run_id FK UK
+    }
+
+    production_execution_inprocessqccheck {
+        bigint id PK
+        datetime checked_at
+        varchar parameter
+        decimal acceptable_min "nullable"
+        decimal acceptable_max "nullable"
+        decimal actual_value "nullable"
+        varchar result
+        text remarks
+        datetime created_at
+        datetime updated_at
+        int checked_by_id "nullable"
+        bigint production_run_id FK
+    }
+
+    production_execution_lineclearance {
+        bigint id PK
+        date date
+        varchar document_id
+        boolean qa_approved
+        datetime qa_approved_at "nullable"
+        varchar production_supervisor_sign
+        varchar status
+        datetime created_at
+        datetime updated_at
+        int company_id FK
+        int created_by_id "nullable"
+        int qa_approved_by_id "nullable"
+        int verified_by_id "nullable"
+        bigint line_id FK
+        bigint production_run_id FK "nullable"
+        boolean all_checks_passed
+    }
+
+    production_execution_lineclearanceitem {
+        bigint id PK
+        varchar checkpoint
+        int sort_order
+        varchar result
+        text remarks
+        bigint clearance_id FK
+    }
+
+    production_execution_lineskuconfig {
+        bigint id PK
+        varchar sku_code
+        varchar sku_name
+        decimal rated_speed "nullable"
+        int labour_count
+        int other_manpower_count
+        varchar supervisor
+        varchar operators
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        bigint company_id FK
+        bigint line_id FK
+        varchar config_name
+        decimal electricity_cost_per_unit "nullable"
+        decimal labour_cost_per_hour "nullable"
+    }
+
+    production_execution_machine {
+        bigint id PK
+        varchar name
+        varchar machine_type
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        int company_id FK
+        bigint line_id FK
+    }
+
+    production_execution_machinebreakdown {
+        bigint id PK
+        datetime start_time
+        datetime end_time "nullable"
+        int breakdown_minutes
+        boolean is_unrecovered
+        varchar reason
+        text remarks
+        datetime created_at
+        datetime updated_at
+        bigint machine_id FK "nullable"
+        bigint production_run_id FK
+        boolean is_active
+        bigint breakdown_category_id FK "nullable"
+    }
+
+    production_execution_machinechecklistentry {
+        bigint id PK
+        varchar machine_type
+        date date
+        int month
+        int year
+        varchar task_description
+        varchar frequency
+        varchar status
+        varchar operator
+        varchar shift_incharge
+        text remarks
+        datetime created_at
+        datetime updated_at
+        int company_id FK
+        bigint machine_id FK
+        bigint template_id FK
+    }
+
+    production_execution_machinechecklisttemplate {
+        bigint id PK
+        varchar machine_type
+        varchar task
+        varchar frequency
+        int sort_order
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        int company_id FK
+    }
+
+    production_execution_machineruntime {
+        bigint id PK
+        varchar machine_type
+        int runtime_minutes
+        int downtime_minutes
+        text remarks
+        datetime created_at
+        datetime updated_at
+        bigint machine_id FK "nullable"
+        bigint production_run_id FK
+    }
+
+    production_execution_productionline {
+        bigint id PK
+        varchar name
+        text description
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        int company_id FK
+    }
+
+    production_execution_productionmanpower {
+        bigint id PK
+        varchar shift
+        int worker_count
+        varchar supervisor
+        varchar engineer
+        text remarks
+        datetime created_at
+        datetime updated_at
+        bigint production_run_id FK
+    }
+
+    production_execution_productionmaterialusage {
+        bigint id PK
+        varchar material_code
+        varchar material_name
+        decimal opening_qty
+        decimal issued_qty
+        decimal closing_qty
+        decimal wastage_qty
+        varchar uom
+        datetime created_at
+        datetime updated_at
+        bigint production_run_id FK
+    }
+
+    production_execution_productionrun {
+        bigint id PK
+        int run_number
+        date date
+        decimal rated_speed "nullable"
+        decimal total_production
+        int total_breakdown_time
+        varchar status
+        datetime created_at
+        datetime updated_at
+        int company_id FK
+        int created_by_id "nullable"
+        bigint line_id FK
+        int sap_doc_entry "nullable"
+        int total_running_minutes
+        int labour_count
+        varchar operators
+        int other_manpower_count
+        varchar product
+        varchar supervisor
+        decimal rejected_qty
+        decimal reworked_qty
+        int sap_receipt_doc_entry "nullable"
+        text sap_sync_error
+        varchar sap_sync_status
+        decimal required_qty "nullable"
+        varchar warehouse_approval_status
+        decimal electricity_cost_per_unit "nullable"
+        decimal labour_cost_per_hour "nullable"
+    }
+
+    production_execution_productionrun_machines {
+        bigint id PK
+        bigint productionrun_id FK
+        bigint machine_id FK
+    }
+
+    production_execution_productionruncost {
+        bigint id PK
+        decimal raw_material_cost
+        decimal labour_cost
+        decimal machine_cost
+        decimal electricity_cost
+        decimal water_cost
+        decimal gas_cost
+        decimal compressed_air_cost
+        decimal overhead_cost
+        decimal total_cost
+        decimal produced_qty
+        decimal per_unit_cost
+        datetime calculated_at
+        bigint production_run_id FK UK
+    }
+
+    production_execution_productionsegment {
+        bigint id PK
+        datetime start_time
+        datetime end_time "nullable"
+        decimal produced_cases
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        bigint production_run_id FK
+        text remarks
+    }
+
+    production_execution_resourcecompressedair {
+        bigint id PK
+        varchar description
+        decimal units_consumed
+        decimal rate_per_unit
+        decimal total_cost
+        datetime created_at
+        datetime updated_at
+        int created_by_id "nullable"
+        bigint production_run_id FK
+    }
+
+    production_execution_resourceelectricity {
+        bigint id PK
+        varchar description
+        decimal units_consumed
+        decimal rate_per_unit
+        decimal total_cost
+        datetime created_at
+        datetime updated_at
+        int created_by_id "nullable"
+        bigint production_run_id FK
+    }
+
+    production_execution_resourcegas {
+        bigint id PK
+        varchar description
+        decimal qty_consumed
+        decimal rate_per_unit
+        decimal total_cost
+        datetime created_at
+        datetime updated_at
+        int created_by_id "nullable"
+        bigint production_run_id FK
+    }
+
+    production_execution_resourcelabour {
+        bigint id PK
+        decimal hours_worked
+        decimal rate_per_hour
+        decimal total_cost
+        datetime created_at
+        datetime updated_at
+        int created_by_id "nullable"
+        bigint production_run_id FK
+        varchar description
+        int worker_count
+    }
+
+    production_execution_resourcemachinecost {
+        bigint id PK
+        varchar machine_name
+        decimal hours_used
+        decimal rate_per_hour
+        decimal total_cost
+        datetime created_at
+        datetime updated_at
+        int created_by_id "nullable"
+        bigint production_run_id FK
+    }
+
+    production_execution_resourceoverhead {
+        bigint id PK
+        varchar expense_name
+        decimal amount
+        datetime created_at
+        datetime updated_at
+        int created_by_id "nullable"
+        bigint production_run_id FK
+    }
+
+    production_execution_resourcewater {
+        bigint id PK
+        varchar description
+        decimal volume_consumed
+        decimal rate_per_unit
+        decimal total_cost
+        datetime created_at
+        datetime updated_at
+        int created_by_id "nullable"
+        bigint production_run_id FK
+    }
+
+    production_execution_wastelog {
+        bigint id PK
+        varchar material_code
+        varchar material_name
+        decimal wastage_qty
+        varchar uom
+        text reason
+        varchar engineer_sign
+        datetime engineer_signed_at "nullable"
+        varchar am_sign
+        datetime am_signed_at "nullable"
+        varchar store_sign
+        datetime store_signed_at "nullable"
+        varchar hod_sign
+        datetime hod_signed_at "nullable"
+        varchar wastage_approval_status
+        datetime created_at
+        datetime updated_at
+        int am_signed_by_id "nullable"
+        int engineer_signed_by_id "nullable"
+        int hod_signed_by_id "nullable"
+        bigint production_run_id FK
+        int store_signed_by_id "nullable"
+    }
+
+    production_planning_dailyproductionentry {
+        bigint id PK
+        date production_date
+        decimal produced_qty
+        varchar shift "nullable"
+        text remarks
+        datetime created_at
+        datetime updated_at
+        bigint weekly_plan_id FK
+        bigint recorded_by_id "nullable"
+    }
+
+    production_planning_planmaterialrequirement {
+        bigint id PK
+        varchar component_code
+        varchar component_name
+        decimal required_qty
+        varchar uom
+        bigint production_plan_id FK
+        varchar warehouse_code
+    }
+
+    production_planning_productionplan {
+        bigint id PK
+        int sap_doc_entry "nullable"
+        int sap_doc_num "nullable"
+        varchar item_code
+        varchar item_name
+        decimal planned_qty
+        decimal completed_qty
+        date target_start_date
+        date due_date
+        varchar sap_status "nullable"
+        varchar status
+        int branch_id "nullable"
+        text remarks
+        datetime closed_at "nullable"
+        datetime created_at
+        datetime updated_at
+        bigint company_id FK
+        bigint closed_by_id "nullable"
+        varchar sap_posting_status
+        text sap_error_message "nullable"
+        varchar uom
+        varchar warehouse_code
+        bigint created_by_id "nullable"
+    }
+
+    production_planning_weeklyplan {
+        bigint id PK
+        int week_number
+        varchar week_label
+        date start_date
+        date end_date
+        decimal target_qty
+        decimal produced_qty
+        varchar status
+        datetime created_at
+        datetime updated_at
+        bigint production_plan_id FK
+        bigint created_by_id "nullable"
+    }
+
+    quality_control_arrivalslipattachment {
+        int id PK
+        varchar file
+        varchar attachment_type
+        datetime uploaded_at
+        int arrival_slip_id FK
+    }
+
+    quality_control_inspectionparameterresult {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar parameter_name
+        varchar standard_value
+        varchar result_value
+        decimal result_numeric "nullable"
+        boolean is_within_spec "nullable"
+        text remarks
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+        int parameter_master_id FK
+        int inspection_id FK
+    }
+
+    quality_control_materialarrivalslip {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        text particulars
+        datetime arrival_datetime
+        boolean weighing_required
+        varchar party_name
+        decimal billing_qty
+        varchar billing_uom
+        datetime in_time_to_qa "nullable"
+        varchar truck_no_as_per_bill
+        varchar commercial_invoice_no
+        varchar eway_bill_no
+        varchar bilty_no
+        boolean has_certificate_of_analysis
+        boolean has_certificate_of_quantity
+        varchar status
+        boolean is_submitted
+        datetime submitted_at "nullable"
+        text remarks
+        int created_by_id "nullable"
+        int submitted_by_id "nullable"
+        int updated_by_id "nullable"
+        int po_item_receipt_id FK UK "nullable"
+        datetime sent_back_at "nullable"
+        int sent_back_by_id "nullable"
+    }
+
+    quality_control_materialtype {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar code
+        varchar name
+        text description
+        int company_id FK
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+    }
+
+    quality_control_productionqcresult {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar parameter_name
+        varchar standard_value
+        varchar result_value
+        decimal result_numeric "nullable"
+        boolean is_within_spec "nullable"
+        text remarks
+        int created_by_id "nullable"
+        int parameter_master_id FK
+        int updated_by_id "nullable"
+        int session_id FK
+    }
+
+    quality_control_productionqcsession {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        int session_number
+        varchar session_type
+        datetime checked_at
+        varchar overall_result
+        varchar workflow_status
+        text remarks
+        int checked_by_id "nullable"
+        int created_by_id "nullable"
+        int material_type_id FK "nullable"
+        bigint production_run_id FK
+        int updated_by_id "nullable"
+        datetime submitted_at "nullable"
+        int submitted_by_id "nullable"
+        text approval_remarks
+        datetime approved_at "nullable"
+        bigint approved_by_id FK "nullable"
+        datetime rejected_at "nullable"
+        bigint rejected_by_id FK "nullable"
+        text rejection_remarks
+    }
+
+    quality_control_qcparametermaster {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar parameter_name
+        varchar parameter_code
+        varchar standard_value
+        varchar parameter_type
+        decimal min_value "nullable"
+        decimal max_value "nullable"
+        varchar uom
+        int sequence
+        boolean is_mandatory
+        int created_by_id "nullable"
+        int material_type_id FK
+        int updated_by_id "nullable"
+    }
+
+    quality_control_rawmaterialinspection {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar report_no UK
+        varchar internal_lot_no
+        date inspection_date
+        text description_of_material
+        varchar sap_code
+        varchar supplier_name
+        varchar manufacturer_name
+        varchar supplier_batch_lot_no
+        varchar unit_packing
+        varchar purchase_order_no
+        varchar invoice_bill_no
+        varchar vehicle_no
+        varchar final_status
+        datetime qa_chemist_approved_at "nullable"
+        text qa_chemist_remarks
+        datetime qam_approved_at "nullable"
+        text qam_remarks
+        varchar workflow_status
+        boolean is_locked
+        text remarks
+        int created_by_id "nullable"
+        int material_type_id FK "nullable"
+        int qa_chemist_id "nullable"
+        int qam_id "nullable"
+        int updated_by_id "nullable"
+        int arrival_slip_id FK UK "nullable"
+        datetime rejected_at "nullable"
+        int rejected_by_id "nullable"
+        varchar internal_report_no
+        bigint factory_head_id FK "nullable"
+        datetime factory_head_decided_at "nullable"
+        varchar factory_head_decision
+        text factory_head_remarks
+    }
+
+    raw_material_gatein_poitemreceipt {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar po_item_code
+        varchar item_name
+        decimal ordered_qty
+        decimal received_qty
+        decimal accepted_qty
+        decimal rejected_qty
+        decimal short_qty
+        varchar uom
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+        int po_receipt_id FK
+        int line_num "nullable"
+        varchar gl_account
+        varchar tax_code
+        decimal unit_price "nullable"
+        varchar warehouse_code
+        int sap_line_num "nullable"
+        varchar variety "nullable"
+    }
+
+    raw_material_gatein_poreceipt {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar po_number
+        varchar supplier_code
+        varchar supplier_name
+        varchar invoice_no
+        date invoice_date "nullable"
+        varchar challan_no
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+        int vehicle_entry_id FK
+        int sap_doc_entry "nullable"
+        int branch_id "nullable"
+        varchar vendor_ref
+        date po_date "nullable"
+    }
+
+    security_checks_securitycheck {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        boolean vehicle_condition_ok
+        boolean tyre_condition_ok
+        boolean fire_extinguisher_available
+        varchar seal_no_before
+        varchar seal_no_after
+        boolean alcohol_test_done
+        boolean alcohol_test_passed
+        varchar inspected_by_name
+        datetime inspection_time
+        text remarks
+        boolean is_submitted
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+        int vehicle_entry_id FK UK
+    }
+
+    stock_dashboard_stockalertlog {
+        bigint id PK
+        varchar company_code
+        varchar item_code
+        varchar warehouse
+        varchar stock_status
+        float on_hand
+        float min_stock
+        datetime notified_at
+        datetime cooldown_until
+    }
+
+    token_blacklist_blacklistedtoken {
+        bigint id PK
+        datetime blacklisted_at
+        bigint token_id FK UK
+    }
+
+    token_blacklist_outstandingtoken {
+        bigint id PK
+        text token
+        datetime created_at "nullable"
+        datetime expires_at
+        int user_id "nullable"
+        varchar jti UK
+    }
+
+    vehicle_management_transporter {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar name UK
+        varchar contact_person
+        varchar mobile_no
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+        varchar gstin
+    }
+
+    vehicle_management_vehicle {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar vehicle_number UK
+        int vehicle_type_id FK "nullable"
+        decimal capacity_ton "nullable"
+        int created_by_id "nullable"
+        int transporter_id FK "nullable"
+        int updated_by_id "nullable"
+    }
+
+    vehicle_management_vehicletype {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        varchar name UK
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+    }
+
+    warehouse_bomrequest {
+        bigint id PK
+        int sap_doc_entry "nullable"
+        decimal required_qty
+        varchar status
+        text remarks
+        text rejection_reason
+        varchar material_issue_status
+        json sap_issue_doc_entries
+        datetime reviewed_at "nullable"
+        datetime created_at
+        datetime updated_at
+        bigint company_id FK
+        bigint production_run_id FK
+        bigint requested_by_id "nullable"
+        bigint reviewed_by_id "nullable"
+    }
+
+    warehouse_bomrequestline {
+        bigint id PK
+        varchar item_code
+        varchar item_name
+        decimal per_unit_qty
+        decimal required_qty
+        decimal available_stock
+        decimal approved_qty
+        decimal issued_qty
+        varchar warehouse
+        varchar uom
+        int base_line
+        varchar status
+        text remarks
+        datetime created_at
+        datetime updated_at
+        bigint bom_request_id FK
+    }
+
+    warehouse_finishedgoodsreceipt {
+        bigint id PK
+        int sap_doc_entry "nullable"
+        varchar item_code
+        varchar item_name
+        decimal produced_qty
+        decimal good_qty
+        decimal rejected_qty
+        varchar warehouse
+        varchar uom
+        date posting_date
+        varchar status
+        int sap_receipt_doc_entry "nullable"
+        text sap_error
+        datetime received_at "nullable"
+        datetime created_at
+        datetime updated_at
+        bigint company_id FK
+        bigint production_run_id FK
+        bigint received_by_id "nullable"
+    }
+
+    weighment_weighment {
+        int id PK
+        datetime created_at
+        datetime updated_at
+        boolean is_active
+        decimal gross_weight "nullable"
+        decimal tare_weight "nullable"
+        decimal net_weight
+        varchar weighbridge_slip_no
+        datetime first_weighment_time "nullable"
+        datetime second_weighment_time "nullable"
+        text remarks
+        int created_by_id "nullable"
+        int updated_by_id "nullable"
+        int vehicle_entry_id FK UK
+    }
+
+    accounts_user ||--o{ accounts_user_groups : "user_id"
+    accounts_user ||--o{ accounts_user_user_permissions : "user_id"
+    accounts_user ||--o{ barcode_box : "created_by_id"
+    accounts_user ||--o{ dispatch_plans_dispatchplan : "created_by_id"
+    accounts_user ||--o{ dispatch_plans_dispatchplan : "updated_by_id"
+    accounts_user ||--o{ dispatch_plans_transporterapinvoiceattachment : "uploaded_by_id"
+    accounts_user ||--o{ dispatch_plans_transporterapinvoiceposting : "created_by_id"
+    accounts_user ||--o{ dispatch_plans_transporterapinvoiceposting : "posted_by_id"
+    accounts_user ||--o{ dispatch_plans_transporterapinvoiceposting : "updated_by_id"
+    accounts_user ||--o{ gate_core_bstgatein : "created_by_id"
+    accounts_user ||--o{ gate_core_bstgatein : "updated_by_id"
+    accounts_user ||--o{ gate_core_bstgateinitem : "created_by_id"
+    accounts_user ||--o{ gate_core_bstgateinitem : "updated_by_id"
+    accounts_user ||--o{ gate_core_bstgateout : "cancelled_by_id"
+    accounts_user ||--o{ gate_core_bstgateout : "created_by_id"
+    accounts_user ||--o{ gate_core_bstgateout : "updated_by_id"
+    accounts_user ||--o{ gate_core_bstgateoutitem : "created_by_id"
+    accounts_user ||--o{ gate_core_bstgateoutitem : "updated_by_id"
+    accounts_user ||--o{ gate_core_bstgatereturn : "created_by_id"
+    accounts_user ||--o{ gate_core_bstgatereturn : "updated_by_id"
+    accounts_user ||--o{ gate_core_dispatchgatelock : "changed_by_id"
+    accounts_user ||--o{ gate_core_dispatchgatelock : "created_by_id"
+    accounts_user ||--o{ gate_core_dispatchgatelock : "updated_by_id"
+    accounts_user ||--o{ gate_core_dispatchgateout : "created_by_id"
+    accounts_user ||--o{ gate_core_dispatchgateout : "updated_by_id"
+    accounts_user ||--o{ gate_core_dispatchgateoutline : "created_by_id"
+    accounts_user ||--o{ gate_core_dispatchgateoutline : "updated_by_id"
+    accounts_user ||--o{ gate_core_emptyvehiclegatein : "created_by_id"
+    accounts_user ||--o{ gate_core_emptyvehiclegatein : "updated_by_id"
+    accounts_user ||--o{ gate_core_emptyvehiclegateinitem : "created_by_id"
+    accounts_user ||--o{ gate_core_emptyvehiclegateinitem : "updated_by_id"
+    accounts_user ||--o{ gate_core_emptyvehiclegateout : "cancelled_by_id"
+    accounts_user ||--o{ gate_core_emptyvehiclegateout : "created_by_id"
+    accounts_user ||--o{ gate_core_emptyvehiclegateout : "updated_by_id"
+    accounts_user ||--o{ gate_core_jobworkgatein : "created_by_id"
+    accounts_user ||--o{ gate_core_jobworkgatein : "updated_by_id"
+    accounts_user ||--o{ gate_core_jobworkgateinitem : "created_by_id"
+    accounts_user ||--o{ gate_core_jobworkgateinitem : "updated_by_id"
+    accounts_user ||--o{ gate_core_rejectedqcreturnentry : "created_by_id"
+    accounts_user ||--o{ gate_core_rejectedqcreturnentry : "updated_by_id"
+    accounts_user ||--o{ gate_core_rejectedqcreturnitem : "created_by_id"
+    accounts_user ||--o{ gate_core_rejectedqcreturnitem : "updated_by_id"
+    accounts_user ||--o{ grpo_servicegrpoattachment : "uploaded_by_id"
+    accounts_user ||--o{ grpo_servicegrpoposting : "posted_by_id"
+    accounts_user ||--o{ quality_control_productionqcsession : "approved_by_id"
+    accounts_user ||--o{ quality_control_productionqcsession : "rejected_by_id"
+    accounts_user ||--o{ quality_control_rawmaterialinspection : "factory_head_id"
+    auth_group ||--o{ accounts_user_groups : "group_id"
+    auth_group ||--o{ auth_group_permissions : "group_id"
+    auth_permission ||--o{ accounts_user_user_permissions : "permission_id"
+    auth_permission ||--o{ auth_group_permissions : "permission_id"
+    barcode_box ||--o{ barcode_boxmovement : "box_id"
+    barcode_box ||--o{ barcode_loosestock : "repacked_into_box_id"
+    barcode_box ||--o{ barcode_loosestock : "source_box_id"
+    barcode_pallet ||--o{ barcode_box : "pallet_id"
+    barcode_pallet ||--o{ barcode_boxmovement : "from_pallet_id"
+    barcode_pallet ||--o{ barcode_boxmovement : "to_pallet_id"
+    barcode_pallet ||--o{ barcode_loosestock : "source_pallet_id"
+    barcode_pallet ||--o{ barcode_palletmovement : "pallet_id"
+    company_company ||--o{ barcode_barcodesequence : "company_id"
+    company_company ||--o{ barcode_box : "company_id"
+    company_company ||--o{ barcode_boxmovement : "company_id"
+    company_company ||--o{ barcode_labelprintlog : "company_id"
+    company_company ||--o{ barcode_loosestock : "company_id"
+    company_company ||--o{ barcode_pallet : "company_id"
+    company_company ||--o{ barcode_palletmovement : "company_id"
+    company_company ||--o{ barcode_scanlog : "company_id"
+    company_company ||--o{ company_usercompany : "company_id"
+    company_company ||--o{ dispatch_plans_dispatchplan : "company_id"
+    company_company ||--o{ dispatch_plans_transporterapinvoiceposting : "company_id"
+    company_company ||--o{ driver_management_vehicleentry : "company_id"
+    company_company ||--o{ gate_core_bstgatein : "company_id"
+    company_company ||--o{ gate_core_bstgateout : "company_id"
+    company_company ||--o{ gate_core_bstgatereturn : "company_id"
+    company_company ||--o{ gate_core_dispatchgatelock : "company_id"
+    company_company ||--o{ gate_core_dispatchgateout : "company_id"
+    company_company ||--o{ gate_core_emptyvehiclegatein : "company_id"
+    company_company ||--o{ gate_core_emptyvehiclegateout : "company_id"
+    company_company ||--o{ gate_core_jobworkgatein : "company_id"
+    company_company ||--o{ gate_core_rejectedqcreturnentry : "company_id"
+    company_company ||--o{ mail_emaillog : "company_id"
+    company_company ||--o{ notifications_notification : "company_id"
+    company_company ||--o{ outbound_dispatch_shipmentorder : "company_id"
+    company_company ||--o{ production_execution_breakdowncategory : "company_id"
+    company_company ||--o{ production_execution_lineclearance : "company_id"
+    company_company ||--o{ production_execution_lineskuconfig : "company_id"
+    company_company ||--o{ production_execution_machine : "company_id"
+    company_company ||--o{ production_execution_machinechecklistentry : "company_id"
+    company_company ||--o{ production_execution_machinechecklisttemplate : "company_id"
+    company_company ||--o{ production_execution_productionline : "company_id"
+    company_company ||--o{ production_execution_productionrun : "company_id"
+    company_company ||--o{ production_planning_productionplan : "company_id"
+    company_company ||--o{ quality_control_materialtype : "company_id"
+    company_company ||--o{ warehouse_bomrequest : "company_id"
+    company_company ||--o{ warehouse_finishedgoodsreceipt : "company_id"
+    company_userrole ||--o{ company_usercompany : "role_id"
+    construction_gatein_constructionmaterialcategory ||--o{ construction_gatein_constructiongateentry : "material_category_id"
+    daily_needs_gatein_categorylist ||--o{ daily_needs_gatein_dailyneedgateentry : "item_category_id"
+    daily_needs_gatein_dailyneedgateentry ||--o{ daily_needs_gatein_dailyneedgateentryitem : "daily_need_entry_id"
+    dispatch_plans_dispatchplan ||--o{ dispatch_plans_transporterapinvoiceline : "dispatch_plan_id"
+    dispatch_plans_dispatchplan ||--o{ gate_core_dispatchgateout : "dispatch_plan_id"
+    dispatch_plans_dispatchplan ||--o{ grpo_servicegrpoposting : "dispatch_plan_id"
+    dispatch_plans_transporterapinvoiceposting ||--o{ dispatch_plans_transporterapinvoiceattachment : "transporter_ap_invoice_id"
+    dispatch_plans_transporterapinvoiceposting ||--o{ dispatch_plans_transporterapinvoiceline : "transporter_ap_invoice_id"
+    django_apscheduler_djangojob ||--o{ django_apscheduler_djangojobexecution : "job_id"
+    django_content_type ||--o{ auth_permission : "content_type_id"
+    django_content_type ||--o{ django_admin_log : "content_type_id"
+    driver_management_driver ||--o{ dispatch_plans_dispatchplan : "driver_id"
+    driver_management_driver ||--o{ driver_management_vehicleentry : "driver_id"
+    driver_management_driver ||--o{ gate_core_bstgatein : "driver_id"
+    driver_management_driver ||--o{ gate_core_bstgateout : "driver_id"
+    driver_management_driver ||--o{ gate_core_bstgatereturn : "driver_id"
+    driver_management_driver ||--o{ gate_core_dispatchgateout : "driver_id"
+    driver_management_driver ||--o{ gate_core_emptyvehiclegatein : "driver_id"
+    driver_management_driver ||--o{ gate_core_emptyvehiclegateout : "driver_id"
+    driver_management_driver ||--o{ gate_core_jobworkgatein : "driver_id"
+    driver_management_driver ||--o{ gate_core_rejectedqcreturnentry : "driver_id"
+    driver_management_vehicleentry ||--o{ construction_gatein_constructiongateentry : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ daily_needs_gatein_dailyneedgateentry : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ dispatch_plans_dispatchplan : "linked_vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ gate_core_bstgatein : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ gate_core_bstgateout : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ gate_core_bstgatereturn : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ gate_core_dispatchgateout : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ gate_core_emptyvehiclegatein : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ gate_core_emptyvehiclegateout : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ gate_core_gateattachment : "gate_entry_id"
+    driver_management_vehicleentry ||--o{ gate_core_jobworkgatein : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ grpo_grpoposting : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ maintenance_gatein_maintenancegateentry : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ outbound_dispatch_shipmentorder : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ outbound_gatein_outboundgateentry : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ raw_material_gatein_poreceipt : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ security_checks_securitycheck : "vehicle_entry_id"
+    driver_management_vehicleentry ||--o{ weighment_weighment : "vehicle_entry_id"
+    gate_core_bstgatein ||--o{ gate_core_bstgateinitem : "bst_gate_in_id"
+    gate_core_bstgateout ||--o{ gate_core_bstgatein : "bst_gate_out_id"
+    gate_core_bstgateout ||--o{ gate_core_bstgateoutitem : "bst_gate_out_id"
+    gate_core_bstgateout ||--o{ gate_core_bstgatereturn : "bst_gate_out_id"
+    gate_core_bstgateoutitem ||--o{ gate_core_bstgateinitem : "bst_gate_out_item_id"
+    gate_core_dispatchgateout ||--o{ gate_core_dispatchgateoutline : "entry_id"
+    gate_core_emptyvehiclegatein ||--o{ gate_core_bstgateout : "empty_vehicle_gate_in_id"
+    gate_core_emptyvehiclegatein ||--o{ gate_core_emptyvehiclegateinitem : "empty_vehicle_gate_in_id"
+    gate_core_jobworkgatein ||--o{ gate_core_jobworkgateinitem : "job_work_gate_in_id"
+    gate_core_rejectedqcreturnentry ||--o{ gate_core_rejectedqcreturnitem : "entry_id"
+    gate_core_unitchoice ||--o{ construction_gatein_constructiongateentry : "unit_id"
+    gate_core_unitchoice ||--o{ daily_needs_gatein_dailyneedgateentry : "unit_id"
+    gate_core_unitchoice ||--o{ daily_needs_gatein_dailyneedgateentryitem : "unit_id"
+    gate_core_unitchoice ||--o{ maintenance_gatein_maintenancegateentry : "unit_id"
+    grpo_grpoposting ||--o{ grpo_grpoattachment : "grpo_posting_id"
+    grpo_grpoposting ||--o{ grpo_grpolineposting : "grpo_posting_id"
+    grpo_grpoposting ||--o{ grpo_grpoposting_po_receipts : "grpoposting_id"
+    grpo_servicegrpolineposting ||--o{ dispatch_plans_transporterapinvoiceline : "service_grpo_line_id"
+    grpo_servicegrpoposting ||--o{ dispatch_plans_transporterapinvoiceline : "service_grpo_posting_id"
+    grpo_servicegrpoposting ||--o{ grpo_servicegrpoattachment : "service_grpo_posting_id"
+    grpo_servicegrpoposting ||--o{ grpo_servicegrpolineposting : "service_grpo_posting_id"
+    inventory_sapcompany ||--o{ inventory_sapbatchstock : "company_id"
+    inventory_sapcompany ||--o{ inventory_sapinventoryagingsnapshot : "company_id"
+    inventory_sapcompany ||--o{ inventory_sapinventorymovement : "company_id"
+    inventory_sapcompany ||--o{ inventory_sapinventoryvaluation : "company_id"
+    inventory_sapcompany ||--o{ inventory_sapitem : "company_id"
+    inventory_sapcompany ||--o{ inventory_sapitemgroup : "company_id"
+    inventory_sapcompany ||--o{ inventory_sapitemwarehousestock : "company_id"
+    inventory_sapcompany ||--o{ inventory_sapsyncrun : "company_id"
+    inventory_sapcompany ||--o{ inventory_sapwarehouse : "company_id"
+    labour_verification_labourverificationrequest ||--o{ labour_verification_departmentlabourresponse : "verification_request_id"
+    maintenance_gatein_maintenancetype ||--o{ maintenance_gatein_maintenancegateentry : "maintenance_type_id"
+    outbound_dispatch_shipmentorder ||--o{ outbound_dispatch_goodsissueposting : "shipment_order_id"
+    outbound_dispatch_shipmentorder ||--o{ outbound_dispatch_outboundloadrecord : "shipment_order_id"
+    outbound_dispatch_shipmentorder ||--o{ outbound_dispatch_shipmentorderitem : "shipment_order_id"
+    outbound_dispatch_shipmentorderitem ||--o{ outbound_dispatch_picktask : "shipment_item_id"
+    outbound_gatein_outboundpurpose ||--o{ outbound_gatein_outboundgateentry : "purpose_id"
+    person_gatein_contractor ||--o{ person_gatein_labour : "contractor_id"
+    person_gatein_gate ||--o{ person_gatein_entrylog : "gate_in_id"
+    person_gatein_gate ||--o{ person_gatein_entrylog : "gate_out_id"
+    person_gatein_labour ||--o{ person_gatein_entrylog : "labour_id"
+    person_gatein_persontype ||--o{ person_gatein_entrylog : "person_type_id"
+    person_gatein_visitor ||--o{ person_gatein_entrylog : "visitor_id"
+    production_execution_breakdowncategory ||--o{ production_execution_machinebreakdown : "breakdown_category_id"
+    production_execution_lineclearance ||--o{ production_execution_lineclearanceitem : "clearance_id"
+    production_execution_machine ||--o{ production_execution_machinebreakdown : "machine_id"
+    production_execution_machine ||--o{ production_execution_machinechecklistentry : "machine_id"
+    production_execution_machine ||--o{ production_execution_machineruntime : "machine_id"
+    production_execution_machine ||--o{ production_execution_productionrun_machines : "machine_id"
+    production_execution_machinechecklisttemplate ||--o{ production_execution_machinechecklistentry : "template_id"
+    production_execution_productionline ||--o{ production_execution_lineclearance : "line_id"
+    production_execution_productionline ||--o{ production_execution_lineskuconfig : "line_id"
+    production_execution_productionline ||--o{ production_execution_machine : "line_id"
+    production_execution_productionline ||--o{ production_execution_productionrun : "line_id"
+    production_execution_productionrun ||--o{ barcode_box : "production_run_id"
+    production_execution_productionrun ||--o{ barcode_pallet : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_finalqccheck : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_inprocessqccheck : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_lineclearance : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_machinebreakdown : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_machineruntime : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_productionmanpower : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_productionmaterialusage : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_productionrun_machines : "productionrun_id"
+    production_execution_productionrun ||--o{ production_execution_productionruncost : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_productionsegment : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_resourcecompressedair : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_resourceelectricity : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_resourcegas : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_resourcelabour : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_resourcemachinecost : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_resourceoverhead : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_resourcewater : "production_run_id"
+    production_execution_productionrun ||--o{ production_execution_wastelog : "production_run_id"
+    production_execution_productionrun ||--o{ quality_control_productionqcsession : "production_run_id"
+    production_execution_productionrun ||--o{ warehouse_bomrequest : "production_run_id"
+    production_execution_productionrun ||--o{ warehouse_finishedgoodsreceipt : "production_run_id"
+    production_planning_productionplan ||--o{ production_planning_planmaterialrequirement : "production_plan_id"
+    production_planning_productionplan ||--o{ production_planning_weeklyplan : "production_plan_id"
+    production_planning_weeklyplan ||--o{ production_planning_dailyproductionentry : "weekly_plan_id"
+    quality_control_materialarrivalslip ||--o{ quality_control_arrivalslipattachment : "arrival_slip_id"
+    quality_control_materialarrivalslip ||--o{ quality_control_rawmaterialinspection : "arrival_slip_id"
+    quality_control_materialtype ||--o{ quality_control_productionqcsession : "material_type_id"
+    quality_control_materialtype ||--o{ quality_control_qcparametermaster : "material_type_id"
+    quality_control_materialtype ||--o{ quality_control_rawmaterialinspection : "material_type_id"
+    quality_control_productionqcsession ||--o{ quality_control_productionqcresult : "session_id"
+    quality_control_qcparametermaster ||--o{ quality_control_inspectionparameterresult : "parameter_master_id"
+    quality_control_qcparametermaster ||--o{ quality_control_productionqcresult : "parameter_master_id"
+    quality_control_rawmaterialinspection ||--o{ gate_core_rejectedqcreturnitem : "inspection_id"
+    quality_control_rawmaterialinspection ||--o{ quality_control_inspectionparameterresult : "inspection_id"
+    raw_material_gatein_poitemreceipt ||--o{ grpo_grpolineposting : "po_item_receipt_id"
+    raw_material_gatein_poitemreceipt ||--o{ quality_control_materialarrivalslip : "po_item_receipt_id"
+    raw_material_gatein_poreceipt ||--o{ grpo_grpoposting : "po_receipt_id"
+    raw_material_gatein_poreceipt ||--o{ grpo_grpoposting_po_receipts : "poreceipt_id"
+    raw_material_gatein_poreceipt ||--o{ raw_material_gatein_poitemreceipt : "po_receipt_id"
+    token_blacklist_outstandingtoken ||--o{ token_blacklist_blacklistedtoken : "token_id"
+    vehicle_management_transporter ||--o{ dispatch_plans_dispatchplan : "transporter_id"
+    vehicle_management_transporter ||--o{ vehicle_management_vehicle : "transporter_id"
+    vehicle_management_vehicle ||--o{ dispatch_plans_dispatchplan : "vehicle_id"
+    vehicle_management_vehicle ||--o{ driver_management_vehicleentry : "vehicle_id"
+    vehicle_management_vehicle ||--o{ gate_core_bstgatein : "vehicle_id"
+    vehicle_management_vehicle ||--o{ gate_core_bstgateout : "vehicle_id"
+    vehicle_management_vehicle ||--o{ gate_core_bstgatereturn : "vehicle_id"
+    vehicle_management_vehicle ||--o{ gate_core_dispatchgateout : "vehicle_id"
+    vehicle_management_vehicle ||--o{ gate_core_emptyvehiclegatein : "vehicle_id"
+    vehicle_management_vehicle ||--o{ gate_core_emptyvehiclegateout : "vehicle_id"
+    vehicle_management_vehicle ||--o{ gate_core_jobworkgatein : "vehicle_id"
+    vehicle_management_vehicle ||--o{ gate_core_rejectedqcreturnentry : "vehicle_id"
+    vehicle_management_vehicletype ||--o{ vehicle_management_vehicle : "vehicle_type_id"
+    warehouse_bomrequest ||--o{ warehouse_bomrequestline : "bom_request_id"

@@ -1,0 +1,398 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1351" height="2232" viewBox="0 0 1351 2232">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">Grpo ER Slice</text>
+  <text x="60" y="80" class="subtitle">7 local tables, 6 linked external tables, 5 local relationships, 9 external relationships</text>
+  <text x="990" y="112" class="section">Linked external tables</text>
+  <g class="relation" data-src="grpo_grpoposting" data-dst="grpo_grpoattachment" data-label="grpo_posting_id">
+    <title>grpo_grpoposting to grpo_grpoattachment via grpo_posting_id</title>
+    <path class="edge-hit" d="M 230 338 L 198 338 L 198 330 L 122 330 L 122 2034 L 210 2034 L 210 2042 L 230 2042"/>
+    <path class="edge" d="M 230 338 L 198 338 L 198 330 L 122 330 L 122 2034 L 210 2034 L 210 2042 L 230 2042"/>
+    <rect class="edge-label-bg" x="71.0" y="1174.0" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="122.0" y="1186.0" text-anchor="middle">grpo_posting_id</text>
+  </g>
+  <g class="relation" data-src="grpo_grpoposting" data-dst="grpo_grpolineposting" data-label="grpo_posting_id">
+    <title>grpo_grpoposting to grpo_grpolineposting via grpo_posting_id</title>
+    <path class="edge-hit" d="M 230 200 L 210 200 L 210 196 L 190 196 L 190 1027 L 210 1027 L 210 1031 L 230 1031"/>
+    <path class="edge" d="M 230 200 L 210 200 L 210 196 L 190 196 L 190 1027 L 210 1027 L 210 1031 L 230 1031"/>
+    <rect class="edge-label-bg" x="139.0" y="603.5" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="190.0" y="615.5" text-anchor="middle">grpo_posting_id</text>
+  </g>
+  <g class="relation" data-src="grpo_grpoposting" data-dst="grpo_grpoposting_po_receipts" data-label="grpoposting_id">
+    <title>grpo_grpoposting to grpo_grpoposting_po_receipts via grpoposting_id</title>
+    <path class="edge-hit" d="M 230 269 L 168 269 L 168 1214 L 230 1214"/>
+    <path class="edge" d="M 230 269 L 168 269 L 168 1214 L 230 1214"/>
+    <rect class="edge-label-bg" x="120.0" y="733.5" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="168.0" y="745.5" text-anchor="middle">grpoposting_id</text>
+  </g>
+  <g class="relation" data-src="grpo_servicegrpoposting" data-dst="grpo_servicegrpoattachment" data-label="service_grpo_posting_id">
+    <title>grpo_servicegrpoposting to grpo_servicegrpoattachment via service_grpo_posting_id</title>
+    <path class="edge-hit" d="M 230 601 L 210 601 L 210 605 L 145 605 L 145 1428 L 210 1428 L 210 1424 L 230 1424"/>
+    <path class="edge" d="M 230 601 L 210 601 L 210 605 L 145 605 L 145 1428 L 210 1428 L 210 1424 L 230 1424"/>
+    <rect class="edge-label-bg" x="70.0" y="1008.5" width="150" height="16" rx="4"/>
+    <text class="edge-label" x="145.0" y="1020.5" text-anchor="middle">service_grpo_posting_id</text>
+  </g>
+  <g class="relation" data-src="grpo_servicegrpoposting" data-dst="grpo_servicegrpolineposting" data-label="service_grpo_posting_id">
+    <title>grpo_servicegrpoposting to grpo_servicegrpolineposting via service_grpo_posting_id</title>
+    <path class="edge-hit" d="M 230 753 L 204 753 L 204 761 L 100 761 L 100 1741 L 210 1741 L 210 1733 L 230 1733"/>
+    <path class="edge" d="M 230 753 L 204 753 L 204 761 L 100 761 L 100 1741 L 210 1741 L 210 1733 L 230 1733"/>
+    <rect class="edge-label-bg" x="25.0" y="1243.0" width="150" height="16" rx="4"/>
+    <text class="edge-label" x="100.0" y="1255.0" text-anchor="middle">service_grpo_posting_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="grpo_servicegrpoattachment" data-label="uploaded_by_id">
+    <title>accounts_user to grpo_servicegrpoattachment via uploaded_by_id</title>
+    <path class="edge-hit" d="M 990 279 L 964 279 L 964 263 L 770 263 L 770 1408 L 570 1408 L 570 1424 L 550 1424"/>
+    <path class="edge external-edge" d="M 990 279 L 964 279 L 964 263 L 770 263 L 770 1408 L 570 1408 L 570 1424 L 550 1424"/>
+    <rect class="edge-label-bg" x="722.0" y="827.5" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="770.0" y="839.5" text-anchor="middle">uploaded_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="grpo_servicegrpoposting" data-label="posted_by_id">
+    <title>accounts_user to grpo_servicegrpoposting via posted_by_id</title>
+    <path class="edge-hit" d="M 990 205 L 970 205 L 970 193 L 590 193 L 590 552 L 570 552 L 570 564 L 550 564"/>
+    <path class="edge external-edge" d="M 990 205 L 970 205 L 970 193 L 590 193 L 590 552 L 570 552 L 570 564 L 550 564"/>
+    <rect class="edge-label-bg" x="548.5" y="185.0" width="84" height="16" rx="4"/>
+    <text class="edge-label" x="590.5" y="197.0" text-anchor="middle">posted_by_id</text>
+  </g>
+  <g class="relation" data-src="dispatch_plans_dispatchplan" data-dst="grpo_servicegrpoposting" data-label="dispatch_plan_id">
+    <title>dispatch_plans_dispatchplan to grpo_servicegrpoposting via dispatch_plan_id</title>
+    <path class="edge-hit" d="M 990 506 L 970 506 L 970 498 L 635 498 L 635 669 L 576 669 L 576 677 L 550 677"/>
+    <path class="edge external-edge" d="M 990 506 L 970 506 L 970 498 L 635 498 L 635 669 L 576 669 L 576 677 L 550 677"/>
+    <rect class="edge-label-bg" x="630.5" y="490.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="684.5" y="502.0" text-anchor="middle">dispatch_plan_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_vehicleentry" data-dst="grpo_grpoposting" data-label="vehicle_entry_id">
+    <title>driver_management_vehicleentry to grpo_grpoposting via vehicle_entry_id</title>
+    <path class="edge-hit" d="M 990 1034 L 970 1034 L 970 1030 L 680 1030 L 680 219 L 570 219 L 570 223 L 550 223"/>
+    <path class="edge external-edge" d="M 990 1034 L 970 1034 L 970 1030 L 680 1030 L 680 219 L 570 219 L 570 223 L 550 223"/>
+    <rect class="edge-label-bg" x="626.0" y="706.5" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="680.0" y="718.5" text-anchor="middle">vehicle_entry_id</text>
+  </g>
+  <g class="relation" data-src="grpo_servicegrpolineposting" data-dst="dispatch_plans_transporterapinvoiceline" data-label="service_grpo_line_id">
+    <title>grpo_servicegrpolineposting to dispatch_plans_transporterapinvoiceline via service_grpo_line_id</title>
+    <path class="edge-hit" d="M 550 1733 L 905 1733 L 905 807 L 990 807"/>
+    <path class="edge external-edge" d="M 550 1733 L 905 1733 L 905 807 L 990 807"/>
+    <rect class="edge-label-bg" x="839.0" y="1397.0" width="132" height="16" rx="4"/>
+    <text class="edge-label" x="905.0" y="1409.0" text-anchor="middle">service_grpo_line_id</text>
+  </g>
+  <g class="relation" data-src="grpo_servicegrpoposting" data-dst="dispatch_plans_transporterapinvoiceline" data-label="service_grpo_posting_id">
+    <title>grpo_servicegrpoposting to dispatch_plans_transporterapinvoiceline via service_grpo_posting_id</title>
+    <path class="edge-hit" d="M 550 790 L 582 790 L 582 794 L 725 794 L 725 737 L 970 737 L 970 733 L 990 733"/>
+    <path class="edge external-edge" d="M 550 790 L 582 790 L 582 794 L 725 794 L 725 737 L 970 737 L 970 733 L 990 733"/>
+    <rect class="edge-label-bg" x="666.5" y="729.0" width="150" height="16" rx="4"/>
+    <text class="edge-label" x="741.5" y="741.0" text-anchor="middle">service_grpo_posting_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poitemreceipt" data-dst="grpo_grpolineposting" data-label="po_item_receipt_id">
+    <title>raw_material_gatein_poitemreceipt to grpo_grpolineposting via po_item_receipt_id</title>
+    <path class="edge-hit" d="M 990 1298 L 970 1298 L 970 1306 L 860 1306 L 860 1039 L 570 1039 L 570 1031 L 550 1031"/>
+    <path class="edge external-edge" d="M 990 1298 L 970 1298 L 970 1306 L 860 1306 L 860 1039 L 570 1039 L 570 1031 L 550 1031"/>
+    <rect class="edge-label-bg" x="800.0" y="1074.5" width="120" height="16" rx="4"/>
+    <text class="edge-label" x="860.0" y="1086.5" text-anchor="middle">po_item_receipt_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poreceipt" data-dst="grpo_grpoposting" data-label="po_receipt_id">
+    <title>raw_material_gatein_poreceipt to grpo_grpoposting via po_receipt_id</title>
+    <path class="edge-hit" d="M 990 1525 L 970 1525 L 970 1537 L 815 1537 L 815 327 L 576 327 L 576 315 L 550 315"/>
+    <path class="edge external-edge" d="M 990 1525 L 970 1525 L 970 1537 L 815 1537 L 815 327 L 576 327 L 576 315 L 550 315"/>
+    <rect class="edge-label-bg" x="770.0" y="879.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="815.0" y="891.0" text-anchor="middle">po_receipt_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poreceipt" data-dst="grpo_grpoposting_po_receipts" data-label="poreceipt_id">
+    <title>raw_material_gatein_poreceipt to grpo_grpoposting_po_receipts via poreceipt_id</title>
+    <path class="edge-hit" d="M 990 1599 L 964 1599 L 964 1615 L 950 1615 L 950 1230 L 570 1230 L 570 1214 L 550 1214"/>
+    <path class="edge external-edge" d="M 990 1599 L 964 1599 L 964 1615 L 950 1615 L 950 1230 L 570 1230 L 570 1214 L 550 1214"/>
+    <rect class="edge-label-bg" x="908.0" y="1234.5" width="84" height="16" rx="4"/>
+    <text class="edge-label" x="950.0" y="1246.5" text-anchor="middle">poreceipt_id</text>
+  </g>
+  <g id="grpo_grpoposting" class="card" data-table="grpo_grpoposting">
+    <title>grpo_grpoposting</title>
+    <rect class="card-outline" x="230" y="132" width="320" height="274" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+    <rect x="230" y="132" width="320" height="34" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="230" y="158" width="320" height="8" fill="#d1fae5"/>
+    <text x="244" y="154" class="card-title" fill="#059669">grpo_grpoposting</text>
+    <text x="244" y="190" class="field">PK    id : bigint</text>
+    <text x="244" y="208" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="244" y="226" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="244" y="244" class="field">      sap_doc_total : decimal (nullable)</text>
+    <text x="244" y="262" class="field">      status : varchar</text>
+    <text x="244" y="280" class="field">      error_message : text (nullable)</text>
+    <text x="244" y="298" class="field">      posted_at : datetime (nullable)</text>
+    <text x="244" y="316" class="field">      created_at : datetime</text>
+    <text x="244" y="334" class="field">      updated_at : datetime</text>
+    <text x="244" y="352" class="field">FK    po_receipt_id : int (nullable)</text>
+    <text x="244" y="370" class="field">      posted_by_id : int (nullable)</text>
+    <text x="244" y="388" class="field">FK    vehicle_entry_id : int</text>
+  </g>
+  <g id="grpo_servicegrpoposting" class="card" data-table="grpo_servicegrpoposting">
+    <title>grpo_servicegrpoposting</title>
+    <rect class="card-outline" x="230" y="450" width="320" height="454" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+    <rect x="230" y="450" width="320" height="34" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="230" y="476" width="320" height="8" fill="#d1fae5"/>
+    <text x="244" y="472" class="card-title" fill="#059669">grpo_servicegrpoposting</text>
+    <text x="244" y="508" class="field">PK    id : bigint</text>
+    <text x="244" y="526" class="field">      vendor_code : varchar</text>
+    <text x="244" y="544" class="field">      vendor_name : varchar</text>
+    <text x="244" y="562" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="244" y="580" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="244" y="598" class="field">      sap_doc_total : decimal (nullable)</text>
+    <text x="244" y="616" class="field">      status : varchar</text>
+    <text x="244" y="634" class="field">      error_message : text (nullable)</text>
+    <text x="244" y="652" class="field">      posted_at : datetime (nullable)</text>
+    <text x="244" y="670" class="field">      created_at : datetime</text>
+    <text x="244" y="688" class="field">      updated_at : datetime</text>
+    <text x="244" y="706" class="field">FK    dispatch_plan_id : bigint</text>
+    <text x="244" y="724" class="field">FK    posted_by_id : bigint (nullable)</text>
+    <text x="244" y="742" class="field">      budget_delivery_point : varchar</text>
+    <text x="244" y="760" class="field">      effective_month : date (nullable)</text>
+    <text x="244" y="778" class="field">      location_code : int (nullable)</text>
+    <text x="244" y="796" class="field">      location_name : varchar</text>
+    <text x="244" y="814" class="field">      place_of_supply : varchar</text>
+    <text x="244" y="832" class="field">      product_variety : varchar</text>
+    <text x="244" y="850" class="field">      sac_code : varchar</text>
+    <text x="244" y="868" class="field">      sac_entry : int (nullable)</text>
+    <text x="244" y="886" class="field">      total_litres : decimal (nullable)</text>
+  </g>
+  <g id="grpo_grpolineposting" class="card" data-table="grpo_grpolineposting">
+    <title>grpo_grpolineposting</title>
+    <rect class="card-outline" x="230" y="948" width="320" height="166" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+    <rect x="230" y="948" width="320" height="34" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="230" y="974" width="320" height="8" fill="#d1fae5"/>
+    <text x="244" y="970" class="card-title" fill="#059669">grpo_grpolineposting</text>
+    <text x="244" y="1006" class="field">PK    id : bigint</text>
+    <text x="244" y="1024" class="field">      quantity_posted : decimal</text>
+    <text x="244" y="1042" class="field">      base_entry : int (nullable)</text>
+    <text x="244" y="1060" class="field">      base_line : int (nullable)</text>
+    <text x="244" y="1078" class="field">FK    po_item_receipt_id : int</text>
+    <text x="244" y="1096" class="field">FK    grpo_posting_id : bigint</text>
+  </g>
+  <g id="grpo_grpoposting_po_receipts" class="card" data-table="grpo_grpoposting_po_receipts">
+    <title>grpo_grpoposting_po_receipts</title>
+    <rect class="card-outline" x="230" y="1158" width="320" height="112" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+    <rect x="230" y="1158" width="320" height="34" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="230" y="1184" width="320" height="8" fill="#d1fae5"/>
+    <text x="244" y="1180" class="card-title" fill="#059669">grpo_grpoposting_po_receipts</text>
+    <text x="244" y="1216" class="field">PK    id : bigint</text>
+    <text x="244" y="1234" class="field">FK    grpoposting_id : bigint</text>
+    <text x="244" y="1252" class="field">FK    poreceipt_id : int</text>
+  </g>
+  <g id="grpo_servicegrpoattachment" class="card" data-table="grpo_servicegrpoattachment">
+    <title>grpo_servicegrpoattachment</title>
+    <rect class="card-outline" x="230" y="1314" width="320" height="220" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+    <rect x="230" y="1314" width="320" height="34" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="230" y="1340" width="320" height="8" fill="#d1fae5"/>
+    <text x="244" y="1336" class="card-title" fill="#059669">grpo_servicegrpoattachment</text>
+    <text x="244" y="1372" class="field">PK    id : bigint</text>
+    <text x="244" y="1390" class="field">      file : varchar</text>
+    <text x="244" y="1408" class="field">      original_filename : varchar</text>
+    <text x="244" y="1426" class="field">      sap_attachment_status : varchar</text>
+    <text x="244" y="1444" class="field">      sap_absolute_entry : int (nullable)</text>
+    <text x="244" y="1462" class="field">      sap_error_message : text (nullable)</text>
+    <text x="244" y="1480" class="field">      uploaded_at : datetime</text>
+    <text x="244" y="1498" class="field">FK    uploaded_by_id : bigint (nullable)</text>
+    <text x="244" y="1516" class="field">FK    service_grpo_posting_id : bigint</text>
+  </g>
+  <g id="grpo_servicegrpolineposting" class="card" data-table="grpo_servicegrpolineposting">
+    <title>grpo_servicegrpolineposting</title>
+    <rect class="card-outline" x="230" y="1578" width="320" height="310" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+    <rect x="230" y="1578" width="320" height="34" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="230" y="1604" width="320" height="8" fill="#d1fae5"/>
+    <text x="244" y="1600" class="card-title" fill="#059669">grpo_servicegrpolineposting</text>
+    <text x="244" y="1636" class="field">PK    id : bigint</text>
+    <text x="244" y="1654" class="field">      service_description : varchar</text>
+    <text x="244" y="1672" class="field">      amount : decimal</text>
+    <text x="244" y="1690" class="field">      tax_code : varchar</text>
+    <text x="244" y="1708" class="field">      gl_account : varchar</text>
+    <text x="244" y="1726" class="field">FK    service_grpo_posting_id : bigint</text>
+    <text x="244" y="1744" class="field">      location_code : int (nullable)</text>
+    <text x="244" y="1762" class="field">      location_name : varchar</text>
+    <text x="244" y="1780" class="field">      product_variety : varchar</text>
+    <text x="244" y="1798" class="field">      project_code : varchar</text>
+    <text x="244" y="1816" class="field">      sac_code : varchar</text>
+    <text x="244" y="1834" class="field">      sac_entry : int (nullable)</text>
+    <text x="244" y="1852" class="field">      total_litres : decimal (nullable)</text>
+    <text x="244" y="1870" class="field">      unit_price : decimal (nullable)</text>
+  </g>
+  <g id="grpo_grpoattachment" class="card" data-table="grpo_grpoattachment">
+    <title>grpo_grpoattachment</title>
+    <rect class="card-outline" x="230" y="1932" width="320" height="220" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+    <rect x="230" y="1932" width="320" height="34" rx="8" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+    <rect x="230" y="1958" width="320" height="8" fill="#d1fae5"/>
+    <text x="244" y="1954" class="card-title" fill="#059669">grpo_grpoattachment</text>
+    <text x="244" y="1990" class="field">PK    id : bigint</text>
+    <text x="244" y="2008" class="field">      file : varchar</text>
+    <text x="244" y="2026" class="field">      original_filename : varchar</text>
+    <text x="244" y="2044" class="field">      sap_attachment_status : varchar</text>
+    <text x="244" y="2062" class="field">      sap_absolute_entry : int (nullable)</text>
+    <text x="244" y="2080" class="field">      sap_error_message : text (nullable)</text>
+    <text x="244" y="2098" class="field">      uploaded_at : datetime</text>
+    <text x="244" y="2116" class="field">FK    grpo_posting_id : bigint</text>
+    <text x="244" y="2134" class="field">      uploaded_by_id : int (nullable)</text>
+  </g>
+  <g id="accounts_user" class="card" data-table="accounts_user">
+    <title>accounts_user</title>
+    <rect class="card-outline" x="990" y="132" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="990" y="132" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="990" y="158" width="294" height="8" fill="#e2e8f0"/>
+    <text x="1004" y="154" class="card-title" fill="#94a3b8">accounts_user</text>
+    <text x="1270" y="154" class="meta" text-anchor="end">accounts</text>
+    <text x="1004" y="190" class="field">PK    id : bigint</text>
+    <text x="1004" y="208" class="field">      password : varchar</text>
+    <text x="1004" y="226" class="field">      last_login : datetime (nullable)</text>
+    <text x="1004" y="244" class="field">      is_superuser : boolean</text>
+    <text x="1004" y="262" class="field">UK    email : varchar</text>
+    <text x="1004" y="280" class="field">      full_name : varchar</text>
+    <text x="1004" y="298" class="field">UK    employee_code : varchar</text>
+    <text x="1004" y="316" class="field">      is_active : boolean</text>
+    <text x="1004" y="334" class="field">... 2 more fields</text>
+  </g>
+  <g id="dispatch_plans_dispatchplan" class="card" data-table="dispatch_plans_dispatchplan">
+    <title>dispatch_plans_dispatchplan</title>
+    <rect class="card-outline" x="990" y="396" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="990" y="396" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="990" y="422" width="287" height="8" fill="#e2e8f0"/>
+    <text x="1004" y="418" class="card-title" fill="#94a3b8">dispatch_plans_dispatchplan</text>
+    <text x="1263" y="418" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="1004" y="454" class="field">PK    id : bigint</text>
+    <text x="1004" y="472" class="field">      created_at : datetime</text>
+    <text x="1004" y="490" class="field">      updated_at : datetime</text>
+    <text x="1004" y="508" class="field">      is_active : boolean</text>
+    <text x="1004" y="526" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="1004" y="544" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="1004" y="562" class="field">      booking_status : varchar</text>
+    <text x="1004" y="580" class="field">      dispatch_date : date (nullable)</text>
+    <text x="1004" y="598" class="field">... 39 more fields</text>
+  </g>
+  <g id="dispatch_plans_transporterapinvoiceline" class="card" data-table="dispatch_plans_transporterapinvoiceline">
+    <title>dispatch_plans_transporterapinvoiceline</title>
+    <rect class="card-outline" x="990" y="660" width="301" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="990" y="660" width="301" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="990" y="686" width="301" height="8" fill="#e2e8f0"/>
+    <text x="1004" y="682" class="card-title" fill="#94a3b8">dispatch_plans_transporterapinvoiceline</text>
+    <text x="1277" y="682" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="1004" y="718" class="field">PK    id : bigint</text>
+    <text x="1004" y="736" class="field">      base_entry : int</text>
+    <text x="1004" y="754" class="field">      base_line : int</text>
+    <text x="1004" y="772" class="field">      base_doc_num : int (nullable)</text>
+    <text x="1004" y="790" class="field">      bilty_no : varchar</text>
+    <text x="1004" y="808" class="field">      service_description : varchar</text>
+    <text x="1004" y="826" class="field">      line_total : decimal</text>
+    <text x="1004" y="844" class="field">      tax_code : varchar</text>
+    <text x="1004" y="862" class="field">... 5 more fields</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="990" y="924" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="990" y="924" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="990" y="950" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1004" y="946" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="1236" y="946" class="meta" text-anchor="end">driver_management</text>
+    <text x="1004" y="982" class="field">PK    id : int</text>
+    <text x="1004" y="1000" class="field">      created_at : datetime</text>
+    <text x="1004" y="1018" class="field">      updated_at : datetime</text>
+    <text x="1004" y="1036" class="field">      is_active : boolean</text>
+    <text x="1004" y="1054" class="field">UK    entry_no : varchar</text>
+    <text x="1004" y="1072" class="field">      status : varchar</text>
+    <text x="1004" y="1090" class="field">      is_locked : boolean</text>
+    <text x="1004" y="1108" class="field">      entry_time : datetime</text>
+    <text x="1004" y="1126" class="field">... 7 more fields</text>
+  </g>
+  <g id="raw_material_gatein_poitemreceipt" class="card" data-table="raw_material_gatein_poitemreceipt">
+    <title>raw_material_gatein_poitemreceipt</title>
+    <rect class="card-outline" x="990" y="1188" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="990" y="1188" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="990" y="1214" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1004" y="1210" class="card-title" fill="#94a3b8">raw_material_gatein_poitemreceipt</text>
+    <text x="1236" y="1210" class="meta" text-anchor="end">raw_material_gatein</text>
+    <text x="1004" y="1246" class="field">PK    id : int</text>
+    <text x="1004" y="1264" class="field">      created_at : datetime</text>
+    <text x="1004" y="1282" class="field">      updated_at : datetime</text>
+    <text x="1004" y="1300" class="field">      is_active : boolean</text>
+    <text x="1004" y="1318" class="field">      po_item_code : varchar</text>
+    <text x="1004" y="1336" class="field">      item_name : varchar</text>
+    <text x="1004" y="1354" class="field">      ordered_qty : decimal</text>
+    <text x="1004" y="1372" class="field">      received_qty : decimal</text>
+    <text x="1004" y="1390" class="field">... 14 more fields</text>
+  </g>
+  <g id="raw_material_gatein_poreceipt" class="card" data-table="raw_material_gatein_poreceipt">
+    <title>raw_material_gatein_poreceipt</title>
+    <rect class="card-outline" x="990" y="1452" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="990" y="1452" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="990" y="1478" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1004" y="1474" class="card-title" fill="#94a3b8">raw_material_gatein_poreceipt</text>
+    <text x="1236" y="1474" class="meta" text-anchor="end">raw_material_gatein</text>
+    <text x="1004" y="1510" class="field">PK    id : int</text>
+    <text x="1004" y="1528" class="field">      created_at : datetime</text>
+    <text x="1004" y="1546" class="field">      updated_at : datetime</text>
+    <text x="1004" y="1564" class="field">      is_active : boolean</text>
+    <text x="1004" y="1582" class="field">      po_number : varchar</text>
+    <text x="1004" y="1600" class="field">      supplier_code : varchar</text>
+    <text x="1004" y="1618" class="field">      supplier_name : varchar</text>
+    <text x="1004" y="1636" class="field">      invoice_no : varchar</text>
+    <text x="1004" y="1654" class="field">... 9 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

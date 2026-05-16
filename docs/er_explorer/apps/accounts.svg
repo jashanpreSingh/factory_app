@@ -1,0 +1,877 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="6552" viewBox="0 0 1664 6552">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">Accounts ER Slice</text>
+  <text x="60" y="80" class="subtitle">4 local tables, 25 linked external tables, 2 local relationships, 47 external relationships</text>
+  <text x="1261" y="112" class="section">Linked external tables</text>
+  <g class="relation" data-src="accounts_user" data-dst="accounts_user_groups" data-label="user_id">
+    <title>accounts_user to accounts_user_groups via user_id</title>
+    <path class="edge-hit" d="M 230 211 L 210 211 L 210 209 L 190 209 L 190 468 L 210 468 L 210 470 L 230 470"/>
+    <path class="edge" d="M 230 211 L 210 211 L 210 209 L 190 209 L 190 468 L 210 468 L 210 470 L 230 470"/>
+    <rect class="edge-label-bg" x="163.0" y="330.5" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="190.0" y="342.5" text-anchor="middle">user_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="accounts_user_user_permissions" data-label="user_id">
+    <title>accounts_user to accounts_user_user_permissions via user_id</title>
+    <path class="edge-hit" d="M 230 291 L 204 291 L 204 293 L 100 293 L 100 628 L 210 628 L 210 626 L 230 626"/>
+    <path class="edge" d="M 230 291 L 204 291 L 204 293 L 100 293 L 100 628 L 210 628 L 210 626 L 230 626"/>
+    <rect class="edge-label-bg" x="73.0" y="452.5" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="100.0" y="464.5" text-anchor="middle">user_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="barcode_box" data-label="created_by_id">
+    <title>accounts_user to barcode_box via created_by_id</title>
+    <path class="edge-hit" d="M 550 137 L 570 137 L 570 45 L 604 45 L 604 462 L 1241 462 L 1241 554 L 1261 554"/>
+    <path class="edge external-edge" d="M 550 137 L 570 137 L 570 45 L 604 45 L 604 462 L 1241 462 L 1241 554 L 1261 554"/>
+    <rect class="edge-label-bg" x="652.0" y="454.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="697.0" y="466.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="dispatch_plans_dispatchplan" data-label="created_by_id">
+    <title>accounts_user to dispatch_plans_dispatchplan via created_by_id</title>
+    <path class="edge-hit" d="M 550 142 L 576 142 L 576 54 L 631 54 L 631 693 L 1241 693 L 1241 781 L 1261 781"/>
+    <path class="edge external-edge" d="M 550 142 L 576 142 L 576 54 L 631 54 L 631 693 L 1241 693 L 1241 781 L 1261 781"/>
+    <rect class="edge-label-bg" x="586.0" y="640.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="631.0" y="652.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="dispatch_plans_dispatchplan" data-label="updated_by_id">
+    <title>accounts_user to dispatch_plans_dispatchplan via updated_by_id</title>
+    <path class="edge-hit" d="M 550 148 L 582 148 L 582 64 L 645 64 L 645 771 L 1235 771 L 1235 855 L 1261 855"/>
+    <path class="edge external-edge" d="M 550 148 L 582 148 L 582 64 L 645 64 L 645 771 L 1235 771 L 1235 855 L 1261 855"/>
+    <rect class="edge-label-bg" x="600.0" y="670.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="645.0" y="682.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="dispatch_plans_transporterapinvoiceattachment" data-label="uploaded_by_id">
+    <title>accounts_user to dispatch_plans_transporterapinvoiceattachment via uploaded_by_id</title>
+    <path class="edge-hit" d="M 550 153 L 588 153 L 588 73 L 659 73 L 659 1002 L 1241 1002 L 1241 1082 L 1261 1082"/>
+    <path class="edge external-edge" d="M 550 153 L 588 153 L 588 73 L 659 73 L 659 1002 L 1241 1002 L 1241 1082 L 1261 1082"/>
+    <rect class="edge-label-bg" x="611.0" y="776.0" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="659.0" y="788.0" text-anchor="middle">uploaded_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="dispatch_plans_transporterapinvoiceposting" data-label="created_by_id">
+    <title>accounts_user to dispatch_plans_transporterapinvoiceposting via created_by_id</title>
+    <path class="edge-hit" d="M 550 158 L 594 158 L 594 82 L 672 82 L 672 1215 L 1241 1215 L 1241 1291 L 1261 1291"/>
+    <path class="edge external-edge" d="M 550 158 L 594 158 L 594 82 L 672 82 L 672 1215 L 1241 1215 L 1241 1291 L 1261 1291"/>
+    <rect class="edge-label-bg" x="627.0" y="874.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="672.0" y="886.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="dispatch_plans_transporterapinvoiceposting" data-label="posted_by_id">
+    <title>accounts_user to dispatch_plans_transporterapinvoiceposting via posted_by_id</title>
+    <path class="edge-hit" d="M 550 163 L 600 163 L 600 91 L 686 91 L 686 1274 L 1235 1274 L 1235 1346 L 1261 1346"/>
+    <path class="edge external-edge" d="M 550 163 L 600 163 L 600 91 L 686 91 L 686 1274 L 1235 1274 L 1235 1346 L 1261 1346"/>
+    <rect class="edge-label-bg" x="644.0" y="894.0" width="84" height="16" rx="4"/>
+    <text class="edge-label" x="686.0" y="906.0" text-anchor="middle">posted_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="dispatch_plans_transporterapinvoiceposting" data-label="updated_by_id">
+    <title>accounts_user to dispatch_plans_transporterapinvoiceposting via updated_by_id</title>
+    <path class="edge-hit" d="M 550 168 L 606 168 L 606 100 L 700 100 L 700 1333 L 1229 1333 L 1229 1401 L 1261 1401"/>
+    <path class="edge external-edge" d="M 550 168 L 606 168 L 606 100 L 700 100 L 700 1333 L 1229 1333 L 1229 1401 L 1261 1401"/>
+    <rect class="edge-label-bg" x="655.0" y="914.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="700.0" y="926.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgatein" data-label="created_by_id">
+    <title>accounts_user to gate_core_bstgatein via created_by_id</title>
+    <path class="edge-hit" d="M 550 173 L 612 173 L 612 109 L 713 109 L 713 1509 L 1241 1509 L 1241 1573 L 1261 1573"/>
+    <path class="edge external-edge" d="M 550 173 L 612 173 L 612 109 L 713 109 L 713 1509 L 1241 1509 L 1241 1573 L 1261 1573"/>
+    <rect class="edge-label-bg" x="668.0" y="993.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="713.0" y="1005.5" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgatein" data-label="updated_by_id">
+    <title>accounts_user to gate_core_bstgatein via updated_by_id</title>
+    <path class="edge-hit" d="M 550 179 L 618 179 L 618 119 L 727 119 L 727 1587 L 1235 1587 L 1235 1647 L 1261 1647"/>
+    <path class="edge external-edge" d="M 550 179 L 618 179 L 618 119 L 727 119 L 727 1587 L 1235 1587 L 1235 1647 L 1261 1647"/>
+    <rect class="edge-label-bg" x="682.0" y="1023.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="727.0" y="1035.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgateinitem" data-label="created_by_id">
+    <title>accounts_user to gate_core_bstgateinitem via created_by_id</title>
+    <path class="edge-hit" d="M 550 184 L 624 184 L 624 128 L 741 128 L 741 1781 L 1241 1781 L 1241 1837 L 1261 1837"/>
+    <path class="edge external-edge" d="M 550 184 L 624 184 L 624 128 L 741 128 L 741 1781 L 1241 1781 L 1241 1837 L 1261 1837"/>
+    <rect class="edge-label-bg" x="696.0" y="1111.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="741.0" y="1123.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgateinitem" data-label="updated_by_id">
+    <title>accounts_user to gate_core_bstgateinitem via updated_by_id</title>
+    <path class="edge-hit" d="M 550 189 L 630 189 L 630 137 L 755 137 L 755 1859 L 1235 1859 L 1235 1911 L 1261 1911"/>
+    <path class="edge external-edge" d="M 550 189 L 630 189 L 630 137 L 755 137 L 755 1859 L 1235 1859 L 1235 1911 L 1261 1911"/>
+    <rect class="edge-label-bg" x="710.0" y="1140.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="755.0" y="1152.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgateout" data-label="cancelled_by_id">
+    <title>accounts_user to gate_core_bstgateout via cancelled_by_id</title>
+    <path class="edge-hit" d="M 550 194 L 636 194 L 636 146 L 768 146 L 768 2035 L 1241 2035 L 1241 2083 L 1261 2083"/>
+    <path class="edge external-edge" d="M 550 194 L 636 194 L 636 146 L 768 146 L 768 2035 L 1241 2035 L 1241 2083 L 1261 2083"/>
+    <rect class="edge-label-bg" x="717.0" y="1220.0" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="768.0" y="1232.0" text-anchor="middle">cancelled_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgateout" data-label="created_by_id">
+    <title>accounts_user to gate_core_bstgateout via created_by_id</title>
+    <path class="edge-hit" d="M 550 199 L 642 199 L 642 155 L 782 155 L 782 2094 L 1235 2094 L 1235 2138 L 1261 2138"/>
+    <path class="edge external-edge" d="M 550 199 L 642 199 L 642 155 L 782 155 L 782 2094 L 1235 2094 L 1235 2138 L 1261 2138"/>
+    <rect class="edge-label-bg" x="737.0" y="1240.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="782.0" y="1252.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgateout" data-label="updated_by_id">
+    <title>accounts_user to gate_core_bstgateout via updated_by_id</title>
+    <path class="edge-hit" d="M 550 204 L 648 204 L 648 164 L 796 164 L 796 2153 L 1229 2153 L 1229 2193 L 1261 2193"/>
+    <path class="edge external-edge" d="M 550 204 L 648 204 L 648 164 L 796 164 L 796 2153 L 1229 2153 L 1229 2193 L 1261 2193"/>
+    <rect class="edge-label-bg" x="751.0" y="1260.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="796.0" y="1272.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgateoutitem" data-label="created_by_id">
+    <title>accounts_user to gate_core_bstgateoutitem via created_by_id</title>
+    <path class="edge-hit" d="M 550 210 L 654 210 L 654 174 L 809 174 L 809 2329 L 1241 2329 L 1241 2365 L 1261 2365"/>
+    <path class="edge external-edge" d="M 550 210 L 654 210 L 654 174 L 809 174 L 809 2329 L 1241 2329 L 1241 2365 L 1261 2365"/>
+    <rect class="edge-label-bg" x="764.0" y="1340.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="809.0" y="1352.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgateoutitem" data-label="updated_by_id">
+    <title>accounts_user to gate_core_bstgateoutitem via updated_by_id</title>
+    <path class="edge-hit" d="M 550 215 L 660 215 L 660 183 L 823 183 L 823 2407 L 1235 2407 L 1235 2439 L 1261 2439"/>
+    <path class="edge external-edge" d="M 550 215 L 660 215 L 660 183 L 823 183 L 823 2407 L 1235 2407 L 1235 2439 L 1261 2439"/>
+    <rect class="edge-label-bg" x="778.0" y="1369.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="823.0" y="1381.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgatereturn" data-label="created_by_id">
+    <title>accounts_user to gate_core_bstgatereturn via created_by_id</title>
+    <path class="edge-hit" d="M 550 220 L 666 220 L 666 192 L 837 192 L 837 2601 L 1241 2601 L 1241 2629 L 1261 2629"/>
+    <path class="edge external-edge" d="M 550 220 L 666 220 L 666 192 L 837 192 L 837 2601 L 1241 2601 L 1241 2629 L 1261 2629"/>
+    <rect class="edge-label-bg" x="792.0" y="1457.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="837.0" y="1469.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_bstgatereturn" data-label="updated_by_id">
+    <title>accounts_user to gate_core_bstgatereturn via updated_by_id</title>
+    <path class="edge-hit" d="M 550 225 L 672 225 L 672 201 L 851 201 L 851 2679 L 1235 2679 L 1235 2703 L 1261 2703"/>
+    <path class="edge external-edge" d="M 550 225 L 672 225 L 672 201 L 851 201 L 851 2679 L 1235 2679 L 1235 2703 L 1261 2703"/>
+    <rect class="edge-label-bg" x="806.0" y="1486.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="851.0" y="1498.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgatelock" data-label="changed_by_id">
+    <title>accounts_user to gate_core_dispatchgatelock via changed_by_id</title>
+    <path class="edge-hit" d="M 550 230 L 678 230 L 678 210 L 864 210 L 864 2855 L 1241 2855 L 1241 2875 L 1261 2875"/>
+    <path class="edge external-edge" d="M 550 230 L 678 230 L 678 210 L 864 210 L 864 2855 L 1241 2855 L 1241 2875 L 1261 2875"/>
+    <rect class="edge-label-bg" x="819.0" y="1566.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="864.0" y="1578.0" text-anchor="middle">changed_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgatelock" data-label="created_by_id">
+    <title>accounts_user to gate_core_dispatchgatelock via created_by_id</title>
+    <path class="edge-hit" d="M 550 235 L 684 235 L 684 219 L 878 219 L 878 2914 L 1235 2914 L 1235 2930 L 1261 2930"/>
+    <path class="edge external-edge" d="M 550 235 L 684 235 L 684 219 L 878 219 L 878 2914 L 1235 2914 L 1235 2930 L 1261 2930"/>
+    <rect class="edge-label-bg" x="833.0" y="1586.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="878.0" y="1598.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgatelock" data-label="updated_by_id">
+    <title>accounts_user to gate_core_dispatchgatelock via updated_by_id</title>
+    <path class="edge-hit" d="M 550 241 L 690 241 L 690 229 L 892 229 L 892 2973 L 1229 2973 L 1229 2985 L 1261 2985"/>
+    <path class="edge external-edge" d="M 550 241 L 690 241 L 690 229 L 892 229 L 892 2973 L 1229 2973 L 1229 2985 L 1261 2985"/>
+    <rect class="edge-label-bg" x="847.0" y="1606.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="892.0" y="1618.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgateout" data-label="created_by_id">
+    <title>accounts_user to gate_core_dispatchgateout via created_by_id</title>
+    <path class="edge-hit" d="M 550 246 L 696 246 L 696 238 L 906 238 L 906 3149 L 1241 3149 L 1241 3157 L 1261 3157"/>
+    <path class="edge external-edge" d="M 550 246 L 696 246 L 696 238 L 906 238 L 906 3149 L 1241 3149 L 1241 3157 L 1261 3157"/>
+    <rect class="edge-label-bg" x="861.0" y="1685.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="906.0" y="1697.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgateout" data-label="updated_by_id">
+    <title>accounts_user to gate_core_dispatchgateout via updated_by_id</title>
+    <path class="edge-hit" d="M 550 251 L 702 251 L 702 247 L 919 247 L 919 3227 L 1235 3227 L 1235 3231 L 1261 3231"/>
+    <path class="edge external-edge" d="M 550 251 L 702 251 L 702 247 L 919 247 L 919 3227 L 1235 3227 L 1235 3231 L 1261 3231"/>
+    <rect class="edge-label-bg" x="874.0" y="1715.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="919.0" y="1727.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgateoutline" data-label="created_by_id">
+    <title>accounts_user to gate_core_dispatchgateoutline via created_by_id</title>
+    <path class="edge-hit" d="M 550 256 L 933 256 L 933 3421 L 1261 3421"/>
+    <path class="edge external-edge" d="M 550 256 L 933 256 L 933 3421 L 1261 3421"/>
+    <rect class="edge-label-bg" x="888.0" y="1803.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="933.0" y="1815.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_dispatchgateoutline" data-label="updated_by_id">
+    <title>accounts_user to gate_core_dispatchgateoutline via updated_by_id</title>
+    <path class="edge-hit" d="M 550 261 L 714 261 L 714 265 L 947 265 L 947 3499 L 1235 3499 L 1235 3495 L 1261 3495"/>
+    <path class="edge external-edge" d="M 550 261 L 714 261 L 714 265 L 947 265 L 947 3499 L 1235 3499 L 1235 3495 L 1261 3495"/>
+    <rect class="edge-label-bg" x="902.0" y="1832.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="947.0" y="1844.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_emptyvehiclegatein" data-label="created_by_id">
+    <title>accounts_user to gate_core_emptyvehiclegatein via created_by_id</title>
+    <path class="edge-hit" d="M 550 267 L 720 267 L 720 275 L 960 275 L 960 3693 L 1241 3693 L 1241 3685 L 1261 3685"/>
+    <path class="edge external-edge" d="M 550 267 L 720 267 L 720 275 L 960 275 L 960 3693 L 1241 3693 L 1241 3685 L 1261 3685"/>
+    <rect class="edge-label-bg" x="915.0" y="1921.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="960.0" y="1933.5" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_emptyvehiclegatein" data-label="updated_by_id">
+    <title>accounts_user to gate_core_emptyvehiclegatein via updated_by_id</title>
+    <path class="edge-hit" d="M 550 272 L 726 272 L 726 284 L 974 284 L 974 3771 L 1235 3771 L 1235 3759 L 1261 3759"/>
+    <path class="edge external-edge" d="M 550 272 L 726 272 L 726 284 L 974 284 L 974 3771 L 1235 3771 L 1235 3759 L 1261 3759"/>
+    <rect class="edge-label-bg" x="929.0" y="1951.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="974.0" y="1963.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_emptyvehiclegateinitem" data-label="created_by_id">
+    <title>accounts_user to gate_core_emptyvehiclegateinitem via created_by_id</title>
+    <path class="edge-hit" d="M 550 277 L 732 277 L 732 293 L 988 293 L 988 3965 L 1241 3965 L 1241 3949 L 1261 3949"/>
+    <path class="edge external-edge" d="M 550 277 L 732 277 L 732 293 L 988 293 L 988 3965 L 1241 3965 L 1241 3949 L 1261 3949"/>
+    <rect class="edge-label-bg" x="943.0" y="2038.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="988.0" y="2050.5" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_emptyvehiclegateinitem" data-label="updated_by_id">
+    <title>accounts_user to gate_core_emptyvehiclegateinitem via updated_by_id</title>
+    <path class="edge-hit" d="M 550 282 L 738 282 L 738 302 L 1002 302 L 1002 4043 L 1235 4043 L 1235 4023 L 1261 4023"/>
+    <path class="edge external-edge" d="M 550 282 L 738 282 L 738 302 L 1002 302 L 1002 4043 L 1235 4043 L 1235 4023 L 1261 4023"/>
+    <rect class="edge-label-bg" x="957.0" y="2068.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1002.0" y="2080.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_emptyvehiclegateout" data-label="cancelled_by_id">
+    <title>accounts_user to gate_core_emptyvehiclegateout via cancelled_by_id</title>
+    <path class="edge-hit" d="M 550 287 L 744 287 L 744 311 L 1015 311 L 1015 4219 L 1241 4219 L 1241 4195 L 1261 4195"/>
+    <path class="edge external-edge" d="M 550 287 L 744 287 L 744 311 L 1015 311 L 1015 4219 L 1241 4219 L 1241 4195 L 1261 4195"/>
+    <rect class="edge-label-bg" x="964.0" y="2147.5" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="1015.0" y="2159.5" text-anchor="middle">cancelled_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_emptyvehiclegateout" data-label="created_by_id">
+    <title>accounts_user to gate_core_emptyvehiclegateout via created_by_id</title>
+    <path class="edge-hit" d="M 550 292 L 750 292 L 750 320 L 1029 320 L 1029 4278 L 1235 4278 L 1235 4250 L 1261 4250"/>
+    <path class="edge external-edge" d="M 550 292 L 750 292 L 750 320 L 1029 320 L 1029 4278 L 1235 4278 L 1235 4250 L 1261 4250"/>
+    <rect class="edge-label-bg" x="984.0" y="2167.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1029.0" y="2179.5" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_emptyvehiclegateout" data-label="updated_by_id">
+    <title>accounts_user to gate_core_emptyvehiclegateout via updated_by_id</title>
+    <path class="edge-hit" d="M 550 298 L 756 298 L 756 330 L 1043 330 L 1043 4337 L 1229 4337 L 1229 4305 L 1261 4305"/>
+    <path class="edge external-edge" d="M 550 298 L 756 298 L 756 330 L 1043 330 L 1043 4337 L 1229 4337 L 1229 4305 L 1261 4305"/>
+    <rect class="edge-label-bg" x="998.0" y="2188.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1043.0" y="2200.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_jobworkgatein" data-label="created_by_id">
+    <title>accounts_user to gate_core_jobworkgatein via created_by_id</title>
+    <path class="edge-hit" d="M 550 303 L 762 303 L 762 339 L 1056 339 L 1056 4513 L 1241 4513 L 1241 4477 L 1261 4477"/>
+    <path class="edge external-edge" d="M 550 303 L 762 303 L 762 339 L 1056 339 L 1056 4513 L 1241 4513 L 1241 4477 L 1261 4477"/>
+    <rect class="edge-label-bg" x="1011.0" y="2267.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1056.0" y="2279.5" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_jobworkgatein" data-label="updated_by_id">
+    <title>accounts_user to gate_core_jobworkgatein via updated_by_id</title>
+    <path class="edge-hit" d="M 550 308 L 768 308 L 768 348 L 1070 348 L 1070 4591 L 1235 4591 L 1235 4551 L 1261 4551"/>
+    <path class="edge external-edge" d="M 550 308 L 768 308 L 768 348 L 1070 348 L 1070 4591 L 1235 4591 L 1235 4551 L 1261 4551"/>
+    <rect class="edge-label-bg" x="1025.0" y="2297.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1070.0" y="2309.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_jobworkgateinitem" data-label="created_by_id">
+    <title>accounts_user to gate_core_jobworkgateinitem via created_by_id</title>
+    <path class="edge-hit" d="M 550 313 L 774 313 L 774 357 L 1084 357 L 1084 4785 L 1241 4785 L 1241 4741 L 1261 4741"/>
+    <path class="edge external-edge" d="M 550 313 L 774 313 L 774 357 L 1084 357 L 1084 4785 L 1241 4785 L 1241 4741 L 1261 4741"/>
+    <rect class="edge-label-bg" x="1039.0" y="2384.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1084.0" y="2396.5" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_jobworkgateinitem" data-label="updated_by_id">
+    <title>accounts_user to gate_core_jobworkgateinitem via updated_by_id</title>
+    <path class="edge-hit" d="M 550 318 L 780 318 L 780 366 L 1098 366 L 1098 4863 L 1235 4863 L 1235 4815 L 1261 4815"/>
+    <path class="edge external-edge" d="M 550 318 L 780 318 L 780 366 L 1098 366 L 1098 4863 L 1235 4863 L 1235 4815 L 1261 4815"/>
+    <rect class="edge-label-bg" x="1053.0" y="2414.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1098.0" y="2426.0" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_rejectedqcreturnentry" data-label="created_by_id">
+    <title>accounts_user to gate_core_rejectedqcreturnentry via created_by_id</title>
+    <path class="edge-hit" d="M 550 323 L 786 323 L 786 375 L 1111 375 L 1111 5057 L 1241 5057 L 1241 5005 L 1261 5005"/>
+    <path class="edge external-edge" d="M 550 323 L 786 323 L 786 375 L 1111 375 L 1111 5057 L 1241 5057 L 1241 5005 L 1261 5005"/>
+    <rect class="edge-label-bg" x="1066.0" y="2502.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1111.0" y="2514.5" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_rejectedqcreturnentry" data-label="updated_by_id">
+    <title>accounts_user to gate_core_rejectedqcreturnentry via updated_by_id</title>
+    <path class="edge-hit" d="M 550 329 L 792 329 L 792 385 L 1125 385 L 1125 5135 L 1235 5135 L 1235 5079 L 1261 5079"/>
+    <path class="edge external-edge" d="M 550 329 L 792 329 L 792 385 L 1125 385 L 1125 5135 L 1235 5135 L 1235 5079 L 1261 5079"/>
+    <rect class="edge-label-bg" x="1080.0" y="2532.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1125.0" y="2544.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_rejectedqcreturnitem" data-label="created_by_id">
+    <title>accounts_user to gate_core_rejectedqcreturnitem via created_by_id</title>
+    <path class="edge-hit" d="M 550 334 L 798 334 L 798 394 L 1139 394 L 1139 5329 L 1241 5329 L 1241 5269 L 1261 5269"/>
+    <path class="edge external-edge" d="M 550 334 L 798 334 L 798 394 L 1139 394 L 1139 5329 L 1241 5329 L 1241 5269 L 1261 5269"/>
+    <rect class="edge-label-bg" x="1094.0" y="2620.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1139.0" y="2632.0" text-anchor="middle">created_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="gate_core_rejectedqcreturnitem" data-label="updated_by_id">
+    <title>accounts_user to gate_core_rejectedqcreturnitem via updated_by_id</title>
+    <path class="edge-hit" d="M 550 339 L 804 339 L 804 403 L 1152 403 L 1152 5407 L 1235 5407 L 1235 5343 L 1261 5343"/>
+    <path class="edge external-edge" d="M 550 339 L 804 339 L 804 403 L 1152 403 L 1152 5407 L 1235 5407 L 1235 5343 L 1261 5343"/>
+    <rect class="edge-label-bg" x="1107.0" y="2650.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="1152.0" y="2662.5" text-anchor="middle">updated_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="grpo_servicegrpoattachment" data-label="uploaded_by_id">
+    <title>accounts_user to grpo_servicegrpoattachment via uploaded_by_id</title>
+    <path class="edge-hit" d="M 550 344 L 810 344 L 810 412 L 1166 412 L 1166 5638 L 1241 5638 L 1241 5570 L 1261 5570"/>
+    <path class="edge external-edge" d="M 550 344 L 810 344 L 810 412 L 1166 412 L 1166 5638 L 1241 5638 L 1241 5570 L 1261 5570"/>
+    <rect class="edge-label-bg" x="1118.0" y="2756.5" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="1166.0" y="2768.5" text-anchor="middle">uploaded_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="grpo_servicegrpoposting" data-label="posted_by_id">
+    <title>accounts_user to grpo_servicegrpoposting via posted_by_id</title>
+    <path class="edge-hit" d="M 550 349 L 816 349 L 816 421 L 1180 421 L 1180 5906 L 1241 5906 L 1241 5834 L 1261 5834"/>
+    <path class="edge external-edge" d="M 550 349 L 816 349 L 816 421 L 1180 421 L 1180 5906 L 1241 5906 L 1241 5834 L 1261 5834"/>
+    <rect class="edge-label-bg" x="1138.0" y="2881.0" width="84" height="16" rx="4"/>
+    <text class="edge-label" x="1180.0" y="2893.0" text-anchor="middle">posted_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="quality_control_productionqcsession" data-label="approved_by_id">
+    <title>accounts_user to quality_control_productionqcsession via approved_by_id</title>
+    <path class="edge-hit" d="M 550 354 L 822 354 L 822 430 L 1194 430 L 1194 6137 L 1241 6137 L 1241 6061 L 1261 6061"/>
+    <path class="edge external-edge" d="M 550 354 L 822 354 L 822 430 L 1194 430 L 1194 6137 L 1241 6137 L 1241 6061 L 1261 6061"/>
+    <rect class="edge-label-bg" x="1146.0" y="2987.0" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="1194.0" y="2999.0" text-anchor="middle">approved_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="quality_control_productionqcsession" data-label="rejected_by_id">
+    <title>accounts_user to quality_control_productionqcsession via rejected_by_id</title>
+    <path class="edge-hit" d="M 550 360 L 828 360 L 828 440 L 1207 440 L 1207 6215 L 1235 6215 L 1235 6135 L 1261 6135"/>
+    <path class="edge external-edge" d="M 550 360 L 828 360 L 828 440 L 1207 440 L 1207 6215 L 1235 6215 L 1235 6135 L 1261 6135"/>
+    <rect class="edge-label-bg" x="1159.0" y="3018.0" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="1207.0" y="3030.0" text-anchor="middle">rejected_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="quality_control_rawmaterialinspection" data-label="factory_head_id">
+    <title>accounts_user to quality_control_rawmaterialinspection via factory_head_id</title>
+    <path class="edge-hit" d="M 550 365 L 834 365 L 834 449 L 1221 449 L 1221 6446 L 1241 6446 L 1241 6362 L 1261 6362"/>
+    <path class="edge external-edge" d="M 550 365 L 834 365 L 834 449 L 1221 449 L 1221 6446 L 1241 6446 L 1241 6362 L 1261 6362"/>
+    <rect class="edge-label-bg" x="1170.0" y="3124.0" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="1221.0" y="3136.0" text-anchor="middle">factory_head_id</text>
+  </g>
+  <g class="relation" data-src="auth_group" data-dst="accounts_user_groups" data-label="group_id">
+    <title>auth_group to accounts_user_groups via group_id</title>
+    <path class="edge-hit" d="M 1261 179 L 1241 179 L 1241 267 L 590 267 L 590 558 L 570 558 L 570 470 L 550 470"/>
+    <path class="edge external-edge" d="M 1261 179 L 1241 179 L 1241 267 L 590 267 L 590 558 L 570 558 L 570 470 L 550 470"/>
+    <rect class="edge-label-bg" x="730.0" y="259.0" width="60" height="16" rx="4"/>
+    <text class="edge-label" x="760.0" y="271.0" text-anchor="middle">group_id</text>
+  </g>
+  <g class="relation" data-src="auth_permission" data-dst="accounts_user_user_permissions" data-label="permission_id">
+    <title>auth_permission to accounts_user_user_permissions via permission_id</title>
+    <path class="edge-hit" d="M 1261 335 L 1241 335 L 1241 427 L 617 427 L 617 718 L 570 718 L 570 626 L 550 626"/>
+    <path class="edge external-edge" d="M 1261 335 L 1241 335 L 1241 427 L 617 427 L 617 718 L 570 718 L 570 626 L 550 626"/>
+    <rect class="edge-label-bg" x="715.0" y="419.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="760.0" y="431.0" text-anchor="middle">permission_id</text>
+  </g>
+  <g id="accounts_user" class="card" data-table="accounts_user">
+    <title>accounts_user</title>
+    <rect class="card-outline" x="230" y="132" width="320" height="238" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="1.5"/>
+    <rect x="230" y="132" width="320" height="34" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="230" y="158" width="320" height="8" fill="#fee2e2"/>
+    <text x="244" y="154" class="card-title" fill="#dc2626">accounts_user</text>
+    <text x="244" y="190" class="field">PK    id : bigint</text>
+    <text x="244" y="208" class="field">      password : varchar</text>
+    <text x="244" y="226" class="field">      last_login : datetime (nullable)</text>
+    <text x="244" y="244" class="field">      is_superuser : boolean</text>
+    <text x="244" y="262" class="field">UK    email : varchar</text>
+    <text x="244" y="280" class="field">      full_name : varchar</text>
+    <text x="244" y="298" class="field">UK    employee_code : varchar</text>
+    <text x="244" y="316" class="field">      is_active : boolean</text>
+    <text x="244" y="334" class="field">      is_staff : boolean</text>
+    <text x="244" y="352" class="field">      date_joined : datetime</text>
+  </g>
+  <g id="accounts_user_groups" class="card" data-table="accounts_user_groups">
+    <title>accounts_user_groups</title>
+    <rect class="card-outline" x="230" y="414" width="320" height="112" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="1.5"/>
+    <rect x="230" y="414" width="320" height="34" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="230" y="440" width="320" height="8" fill="#fee2e2"/>
+    <text x="244" y="436" class="card-title" fill="#dc2626">accounts_user_groups</text>
+    <text x="244" y="472" class="field">PK    id : bigint</text>
+    <text x="244" y="490" class="field">FK    user_id : bigint</text>
+    <text x="244" y="508" class="field">FK    group_id : int</text>
+  </g>
+  <g id="accounts_user_user_permissions" class="card" data-table="accounts_user_user_permissions">
+    <title>accounts_user_user_permissions</title>
+    <rect class="card-outline" x="230" y="570" width="320" height="112" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="1.5"/>
+    <rect x="230" y="570" width="320" height="34" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="230" y="596" width="320" height="8" fill="#fee2e2"/>
+    <text x="244" y="592" class="card-title" fill="#dc2626">accounts_user_user_permissions</text>
+    <text x="244" y="628" class="field">PK    id : bigint</text>
+    <text x="244" y="646" class="field">FK    user_id : bigint</text>
+    <text x="244" y="664" class="field">FK    permission_id : int</text>
+  </g>
+  <g id="accounts_department" class="card" data-table="accounts_department">
+    <title>accounts_department</title>
+    <rect class="card-outline" x="230" y="726" width="320" height="112" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="1.5"/>
+    <rect x="230" y="726" width="320" height="34" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+    <rect x="230" y="752" width="320" height="8" fill="#fee2e2"/>
+    <text x="244" y="748" class="card-title" fill="#dc2626">accounts_department</text>
+    <text x="244" y="784" class="field">PK    id : bigint</text>
+    <text x="244" y="802" class="field">      name : varchar</text>
+    <text x="244" y="820" class="field">      description : text</text>
+  </g>
+  <g id="auth_group" class="card" data-table="auth_group">
+    <title>auth_group</title>
+    <rect class="card-outline" x="1261" y="132" width="260" height="94" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="132" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="158" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="154" class="card-title" fill="#94a3b8">auth_group</text>
+    <text x="1507" y="154" class="meta" text-anchor="end">auth</text>
+    <text x="1275" y="190" class="field">PK    id : int</text>
+    <text x="1275" y="208" class="field">UK    name : varchar</text>
+  </g>
+  <g id="auth_permission" class="card" data-table="auth_permission">
+    <title>auth_permission</title>
+    <rect class="card-outline" x="1261" y="270" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="270" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="296" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="292" class="card-title" fill="#94a3b8">auth_permission</text>
+    <text x="1507" y="292" class="meta" text-anchor="end">auth</text>
+    <text x="1275" y="328" class="field">PK    id : int</text>
+    <text x="1275" y="346" class="field">      name : varchar</text>
+    <text x="1275" y="364" class="field">FK    content_type_id : int</text>
+    <text x="1275" y="382" class="field">      codename : varchar</text>
+  </g>
+  <g id="barcode_box" class="card" data-table="barcode_box">
+    <title>barcode_box</title>
+    <rect class="card-outline" x="1261" y="444" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="444" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="470" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="466" class="card-title" fill="#94a3b8">barcode_box</text>
+    <text x="1507" y="466" class="meta" text-anchor="end">barcode</text>
+    <text x="1275" y="502" class="field">PK    id : bigint</text>
+    <text x="1275" y="520" class="field">FK    company_id : bigint</text>
+    <text x="1275" y="538" class="field">UK    box_barcode : varchar</text>
+    <text x="1275" y="556" class="field">      barcode_data : json</text>
+    <text x="1275" y="574" class="field">      item_code : varchar</text>
+    <text x="1275" y="592" class="field">      item_name : varchar</text>
+    <text x="1275" y="610" class="field">      batch_number : varchar</text>
+    <text x="1275" y="628" class="field">      qty : decimal</text>
+    <text x="1275" y="646" class="field">... 14 more fields</text>
+  </g>
+  <g id="dispatch_plans_dispatchplan" class="card" data-table="dispatch_plans_dispatchplan">
+    <title>dispatch_plans_dispatchplan</title>
+    <rect class="card-outline" x="1261" y="708" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="708" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="734" width="287" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="730" class="card-title" fill="#94a3b8">dispatch_plans_dispatchplan</text>
+    <text x="1534" y="730" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="1275" y="766" class="field">PK    id : bigint</text>
+    <text x="1275" y="784" class="field">      created_at : datetime</text>
+    <text x="1275" y="802" class="field">      updated_at : datetime</text>
+    <text x="1275" y="820" class="field">      is_active : boolean</text>
+    <text x="1275" y="838" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="1275" y="856" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="1275" y="874" class="field">      booking_status : varchar</text>
+    <text x="1275" y="892" class="field">      dispatch_date : date (nullable)</text>
+    <text x="1275" y="910" class="field">... 39 more fields</text>
+  </g>
+  <g id="dispatch_plans_transporterapinvoiceattachment" class="card" data-table="dispatch_plans_transporterapinvoiceattachment">
+    <title>dispatch_plans_transporterapinvoiceattachment</title>
+    <rect class="card-outline" x="1261" y="972" width="343" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="972" width="343" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="998" width="343" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="994" class="card-title" fill="#94a3b8">dispatch_plans_transporterapinvoiceattachment</text>
+    <text x="1590" y="994" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="1275" y="1030" class="field">PK    id : bigint</text>
+    <text x="1275" y="1048" class="field">      file : varchar</text>
+    <text x="1275" y="1066" class="field">      original_filename : varchar</text>
+    <text x="1275" y="1084" class="field">      sap_attachment_status : varchar</text>
+    <text x="1275" y="1102" class="field">      sap_absolute_entry : int (nullable)</text>
+    <text x="1275" y="1120" class="field">      sap_error_message : text (nullable)</text>
+    <text x="1275" y="1138" class="field">      uploaded_at : datetime</text>
+    <text x="1275" y="1156" class="field">FK    uploaded_by_id : bigint (nullable)</text>
+    <text x="1275" y="1174" class="field">... 1 more fields</text>
+  </g>
+  <g id="dispatch_plans_transporterapinvoiceposting" class="card" data-table="dispatch_plans_transporterapinvoiceposting">
+    <title>dispatch_plans_transporterapinvoiceposting</title>
+    <rect class="card-outline" x="1261" y="1236" width="322" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="1236" width="322" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="1262" width="322" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="1258" class="card-title" fill="#94a3b8">dispatch_plans_transporterapinvoiceposting</text>
+    <text x="1569" y="1258" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="1275" y="1294" class="field">PK    id : bigint</text>
+    <text x="1275" y="1312" class="field">      created_at : datetime</text>
+    <text x="1275" y="1330" class="field">      updated_at : datetime</text>
+    <text x="1275" y="1348" class="field">      is_active : boolean</text>
+    <text x="1275" y="1366" class="field">      vendor_code : varchar</text>
+    <text x="1275" y="1384" class="field">      vendor_name : varchar</text>
+    <text x="1275" y="1402" class="field">      invoice_number : varchar</text>
+    <text x="1275" y="1420" class="field">      invoice_date : date (nullable)</text>
+    <text x="1275" y="1438" class="field">... 15 more fields</text>
+  </g>
+  <g id="gate_core_bstgatein" class="card" data-table="gate_core_bstgatein">
+    <title>gate_core_bstgatein</title>
+    <rect class="card-outline" x="1261" y="1500" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="1500" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="1526" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="1522" class="card-title" fill="#94a3b8">gate_core_bstgatein</text>
+    <text x="1507" y="1522" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="1558" class="field">PK    id : bigint</text>
+    <text x="1275" y="1576" class="field">      created_at : datetime</text>
+    <text x="1275" y="1594" class="field">      updated_at : datetime</text>
+    <text x="1275" y="1612" class="field">      is_active : boolean</text>
+    <text x="1275" y="1630" class="field">UK    entry_no : varchar</text>
+    <text x="1275" y="1648" class="field">      gate_in_date : date</text>
+    <text x="1275" y="1666" class="field">      in_time : time</text>
+    <text x="1275" y="1684" class="field">      security_name : varchar</text>
+    <text x="1275" y="1702" class="field">... 12 more fields</text>
+  </g>
+  <g id="gate_core_bstgateinitem" class="card" data-table="gate_core_bstgateinitem">
+    <title>gate_core_bstgateinitem</title>
+    <rect class="card-outline" x="1261" y="1764" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="1764" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="1790" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="1786" class="card-title" fill="#94a3b8">gate_core_bstgateinitem</text>
+    <text x="1507" y="1786" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="1822" class="field">PK    id : bigint</text>
+    <text x="1275" y="1840" class="field">      created_at : datetime</text>
+    <text x="1275" y="1858" class="field">      updated_at : datetime</text>
+    <text x="1275" y="1876" class="field">      is_active : boolean</text>
+    <text x="1275" y="1894" class="field">      line_num : int</text>
+    <text x="1275" y="1912" class="field">      item_code : varchar</text>
+    <text x="1275" y="1930" class="field">      item_name : varchar</text>
+    <text x="1275" y="1948" class="field">      quantity : decimal</text>
+    <text x="1275" y="1966" class="field">... 9 more fields</text>
+  </g>
+  <g id="gate_core_bstgateout" class="card" data-table="gate_core_bstgateout">
+    <title>gate_core_bstgateout</title>
+    <rect class="card-outline" x="1261" y="2028" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="2028" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="2054" width="280" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="2050" class="card-title" fill="#94a3b8">gate_core_bstgateout</text>
+    <text x="1527" y="2050" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="2086" class="field">PK    id : bigint</text>
+    <text x="1275" y="2104" class="field">      created_at : datetime</text>
+    <text x="1275" y="2122" class="field">      updated_at : datetime</text>
+    <text x="1275" y="2140" class="field">      is_active : boolean</text>
+    <text x="1275" y="2158" class="field">UK    entry_no : varchar</text>
+    <text x="1275" y="2176" class="field">      sap_doc_entry : int</text>
+    <text x="1275" y="2194" class="field">      sap_doc_num : varchar</text>
+    <text x="1275" y="2212" class="field">      sap_doc_date : date (nullable)</text>
+    <text x="1275" y="2230" class="field">... 19 more fields</text>
+  </g>
+  <g id="gate_core_bstgateoutitem" class="card" data-table="gate_core_bstgateoutitem">
+    <title>gate_core_bstgateoutitem</title>
+    <rect class="card-outline" x="1261" y="2292" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="2292" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="2318" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="2314" class="card-title" fill="#94a3b8">gate_core_bstgateoutitem</text>
+    <text x="1507" y="2314" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="2350" class="field">PK    id : bigint</text>
+    <text x="1275" y="2368" class="field">      created_at : datetime</text>
+    <text x="1275" y="2386" class="field">      updated_at : datetime</text>
+    <text x="1275" y="2404" class="field">      is_active : boolean</text>
+    <text x="1275" y="2422" class="field">      line_num : int</text>
+    <text x="1275" y="2440" class="field">      item_code : varchar</text>
+    <text x="1275" y="2458" class="field">      item_name : varchar</text>
+    <text x="1275" y="2476" class="field">      quantity : decimal</text>
+    <text x="1275" y="2494" class="field">... 7 more fields</text>
+  </g>
+  <g id="gate_core_bstgatereturn" class="card" data-table="gate_core_bstgatereturn">
+    <title>gate_core_bstgatereturn</title>
+    <rect class="card-outline" x="1261" y="2556" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="2556" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="2582" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="2578" class="card-title" fill="#94a3b8">gate_core_bstgatereturn</text>
+    <text x="1507" y="2578" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="2614" class="field">PK    id : bigint</text>
+    <text x="1275" y="2632" class="field">      created_at : datetime</text>
+    <text x="1275" y="2650" class="field">      updated_at : datetime</text>
+    <text x="1275" y="2668" class="field">      is_active : boolean</text>
+    <text x="1275" y="2686" class="field">UK    entry_no : varchar</text>
+    <text x="1275" y="2704" class="field">      gate_in_date : date</text>
+    <text x="1275" y="2722" class="field">      in_time : time</text>
+    <text x="1275" y="2740" class="field">      security_name : varchar</text>
+    <text x="1275" y="2758" class="field">... 12 more fields</text>
+  </g>
+  <g id="gate_core_dispatchgatelock" class="card" data-table="gate_core_dispatchgatelock">
+    <title>gate_core_dispatchgatelock</title>
+    <rect class="card-outline" x="1261" y="2820" width="301" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="2820" width="301" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="2846" width="301" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="2842" class="card-title" fill="#94a3b8">gate_core_dispatchgatelock</text>
+    <text x="1548" y="2842" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="2878" class="field">PK    id : bigint</text>
+    <text x="1275" y="2896" class="field">      created_at : datetime</text>
+    <text x="1275" y="2914" class="field">      updated_at : datetime</text>
+    <text x="1275" y="2932" class="field">      is_active : boolean</text>
+    <text x="1275" y="2950" class="field">      locked : boolean</text>
+    <text x="1275" y="2968" class="field">      reason : text</text>
+    <text x="1275" y="2986" class="field">      locked_at : datetime (nullable)</text>
+    <text x="1275" y="3004" class="field">      unlocked_at : datetime (nullable)</text>
+    <text x="1275" y="3022" class="field">... 4 more fields</text>
+  </g>
+  <g id="gate_core_dispatchgateout" class="card" data-table="gate_core_dispatchgateout">
+    <title>gate_core_dispatchgateout</title>
+    <rect class="card-outline" x="1261" y="3084" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="3084" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="3110" width="273" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="3106" class="card-title" fill="#94a3b8">gate_core_dispatchgateout</text>
+    <text x="1520" y="3106" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="3142" class="field">PK    id : bigint</text>
+    <text x="1275" y="3160" class="field">      created_at : datetime</text>
+    <text x="1275" y="3178" class="field">      updated_at : datetime</text>
+    <text x="1275" y="3196" class="field">      is_active : boolean</text>
+    <text x="1275" y="3214" class="field">UK    entry_no : varchar</text>
+    <text x="1275" y="3232" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="1275" y="3250" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="1275" y="3268" class="field">      customer_code : varchar</text>
+    <text x="1275" y="3286" class="field">... 44 more fields</text>
+  </g>
+  <g id="gate_core_dispatchgateoutline" class="card" data-table="gate_core_dispatchgateoutline">
+    <title>gate_core_dispatchgateoutline</title>
+    <rect class="card-outline" x="1261" y="3348" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="3348" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="3374" width="280" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="3370" class="card-title" fill="#94a3b8">gate_core_dispatchgateoutline</text>
+    <text x="1527" y="3370" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="3406" class="field">PK    id : bigint</text>
+    <text x="1275" y="3424" class="field">      created_at : datetime</text>
+    <text x="1275" y="3442" class="field">      updated_at : datetime</text>
+    <text x="1275" y="3460" class="field">      is_active : boolean</text>
+    <text x="1275" y="3478" class="field">      line_num : int</text>
+    <text x="1275" y="3496" class="field">      item_code : varchar</text>
+    <text x="1275" y="3514" class="field">      item_name : varchar</text>
+    <text x="1275" y="3532" class="field">      order_qty : decimal (nullable)</text>
+    <text x="1275" y="3550" class="field">... 6 more fields</text>
+  </g>
+  <g id="gate_core_emptyvehiclegatein" class="card" data-table="gate_core_emptyvehiclegatein">
+    <title>gate_core_emptyvehiclegatein</title>
+    <rect class="card-outline" x="1261" y="3612" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="3612" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="3638" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="3634" class="card-title" fill="#94a3b8">gate_core_emptyvehiclegatein</text>
+    <text x="1507" y="3634" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="3670" class="field">PK    id : bigint</text>
+    <text x="1275" y="3688" class="field">      created_at : datetime</text>
+    <text x="1275" y="3706" class="field">      updated_at : datetime</text>
+    <text x="1275" y="3724" class="field">      is_active : boolean</text>
+    <text x="1275" y="3742" class="field">UK    entry_no : varchar</text>
+    <text x="1275" y="3760" class="field">      reason : varchar</text>
+    <text x="1275" y="3778" class="field">      gate_in_date : date</text>
+    <text x="1275" y="3796" class="field">      in_time : time</text>
+    <text x="1275" y="3814" class="field">... 19 more fields</text>
+  </g>
+  <g id="gate_core_emptyvehiclegateinitem" class="card" data-table="gate_core_emptyvehiclegateinitem">
+    <title>gate_core_emptyvehiclegateinitem</title>
+    <rect class="card-outline" x="1261" y="3876" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="3876" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="3902" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="3898" class="card-title" fill="#94a3b8">gate_core_emptyvehiclegateinitem</text>
+    <text x="1507" y="3898" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="3934" class="field">PK    id : bigint</text>
+    <text x="1275" y="3952" class="field">      created_at : datetime</text>
+    <text x="1275" y="3970" class="field">      updated_at : datetime</text>
+    <text x="1275" y="3988" class="field">      is_active : boolean</text>
+    <text x="1275" y="4006" class="field">      line_num : int</text>
+    <text x="1275" y="4024" class="field">      item_code : varchar</text>
+    <text x="1275" y="4042" class="field">      item_name : varchar</text>
+    <text x="1275" y="4060" class="field">      sap_quantity : decimal</text>
+    <text x="1275" y="4078" class="field">... 7 more fields</text>
+  </g>
+  <g id="gate_core_emptyvehiclegateout" class="card" data-table="gate_core_emptyvehiclegateout">
+    <title>gate_core_emptyvehiclegateout</title>
+    <rect class="card-outline" x="1261" y="4140" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="4140" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="4166" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="4162" class="card-title" fill="#94a3b8">gate_core_emptyvehiclegateout</text>
+    <text x="1507" y="4162" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="4198" class="field">PK    id : bigint</text>
+    <text x="1275" y="4216" class="field">      created_at : datetime</text>
+    <text x="1275" y="4234" class="field">      updated_at : datetime</text>
+    <text x="1275" y="4252" class="field">      is_active : boolean</text>
+    <text x="1275" y="4270" class="field">UK    entry_no : varchar</text>
+    <text x="1275" y="4288" class="field">      gate_out_date : date</text>
+    <text x="1275" y="4306" class="field">      out_time : time</text>
+    <text x="1275" y="4324" class="field">      security_name : varchar</text>
+    <text x="1275" y="4342" class="field">... 11 more fields</text>
+  </g>
+  <g id="gate_core_jobworkgatein" class="card" data-table="gate_core_jobworkgatein">
+    <title>gate_core_jobworkgatein</title>
+    <rect class="card-outline" x="1261" y="4404" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="4404" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="4430" width="280" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="4426" class="card-title" fill="#94a3b8">gate_core_jobworkgatein</text>
+    <text x="1527" y="4426" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="4462" class="field">PK    id : bigint</text>
+    <text x="1275" y="4480" class="field">      created_at : datetime</text>
+    <text x="1275" y="4498" class="field">      updated_at : datetime</text>
+    <text x="1275" y="4516" class="field">      is_active : boolean</text>
+    <text x="1275" y="4534" class="field">UK    entry_no : varchar</text>
+    <text x="1275" y="4552" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="1275" y="4570" class="field">      sap_doc_num : varchar</text>
+    <text x="1275" y="4588" class="field">      sap_doc_date : date (nullable)</text>
+    <text x="1275" y="4606" class="field">... 29 more fields</text>
+  </g>
+  <g id="gate_core_jobworkgateinitem" class="card" data-table="gate_core_jobworkgateinitem">
+    <title>gate_core_jobworkgateinitem</title>
+    <rect class="card-outline" x="1261" y="4668" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="4668" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="4694" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="4690" class="card-title" fill="#94a3b8">gate_core_jobworkgateinitem</text>
+    <text x="1507" y="4690" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="4726" class="field">PK    id : bigint</text>
+    <text x="1275" y="4744" class="field">      created_at : datetime</text>
+    <text x="1275" y="4762" class="field">      updated_at : datetime</text>
+    <text x="1275" y="4780" class="field">      is_active : boolean</text>
+    <text x="1275" y="4798" class="field">      line_num : int</text>
+    <text x="1275" y="4816" class="field">      item_code : varchar</text>
+    <text x="1275" y="4834" class="field">      item_name : varchar</text>
+    <text x="1275" y="4852" class="field">      quantity : decimal</text>
+    <text x="1275" y="4870" class="field">... 8 more fields</text>
+  </g>
+  <g id="gate_core_rejectedqcreturnentry" class="card" data-table="gate_core_rejectedqcreturnentry">
+    <title>gate_core_rejectedqcreturnentry</title>
+    <rect class="card-outline" x="1261" y="4932" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="4932" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="4958" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="4954" class="card-title" fill="#94a3b8">gate_core_rejectedqcreturnentry</text>
+    <text x="1507" y="4954" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="4990" class="field">PK    id : bigint</text>
+    <text x="1275" y="5008" class="field">      created_at : datetime</text>
+    <text x="1275" y="5026" class="field">      updated_at : datetime</text>
+    <text x="1275" y="5044" class="field">      is_active : boolean</text>
+    <text x="1275" y="5062" class="field">UK    entry_no : varchar</text>
+    <text x="1275" y="5080" class="field">      gate_out_date : date</text>
+    <text x="1275" y="5098" class="field">      out_time : time (nullable)</text>
+    <text x="1275" y="5116" class="field">      challan_no : varchar</text>
+    <text x="1275" y="5134" class="field">... 17 more fields</text>
+  </g>
+  <g id="gate_core_rejectedqcreturnitem" class="card" data-table="gate_core_rejectedqcreturnitem">
+    <title>gate_core_rejectedqcreturnitem</title>
+    <rect class="card-outline" x="1261" y="5196" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="5196" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="5222" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="5218" class="card-title" fill="#94a3b8">gate_core_rejectedqcreturnitem</text>
+    <text x="1507" y="5218" class="meta" text-anchor="end">gate_core</text>
+    <text x="1275" y="5254" class="field">PK    id : bigint</text>
+    <text x="1275" y="5272" class="field">      created_at : datetime</text>
+    <text x="1275" y="5290" class="field">      updated_at : datetime</text>
+    <text x="1275" y="5308" class="field">      is_active : boolean</text>
+    <text x="1275" y="5326" class="field">      gate_entry_no : varchar</text>
+    <text x="1275" y="5344" class="field">      report_no : varchar</text>
+    <text x="1275" y="5362" class="field">      internal_lot_no : varchar</text>
+    <text x="1275" y="5380" class="field">      item_name : varchar</text>
+    <text x="1275" y="5398" class="field">... 7 more fields</text>
+  </g>
+  <g id="grpo_servicegrpoattachment" class="card" data-table="grpo_servicegrpoattachment">
+    <title>grpo_servicegrpoattachment</title>
+    <rect class="card-outline" x="1261" y="5460" width="315" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="5460" width="315" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="5486" width="315" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="5482" class="card-title" fill="#94a3b8">grpo_servicegrpoattachment</text>
+    <text x="1562" y="5482" class="meta" text-anchor="end">grpo</text>
+    <text x="1275" y="5518" class="field">PK    id : bigint</text>
+    <text x="1275" y="5536" class="field">      file : varchar</text>
+    <text x="1275" y="5554" class="field">      original_filename : varchar</text>
+    <text x="1275" y="5572" class="field">      sap_attachment_status : varchar</text>
+    <text x="1275" y="5590" class="field">      sap_absolute_entry : int (nullable)</text>
+    <text x="1275" y="5608" class="field">      sap_error_message : text (nullable)</text>
+    <text x="1275" y="5626" class="field">      uploaded_at : datetime</text>
+    <text x="1275" y="5644" class="field">FK    uploaded_by_id : bigint (nullable)</text>
+    <text x="1275" y="5662" class="field">... 1 more fields</text>
+  </g>
+  <g id="grpo_servicegrpoposting" class="card" data-table="grpo_servicegrpoposting">
+    <title>grpo_servicegrpoposting</title>
+    <rect class="card-outline" x="1261" y="5724" width="308" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="5724" width="308" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="5750" width="308" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="5746" class="card-title" fill="#94a3b8">grpo_servicegrpoposting</text>
+    <text x="1555" y="5746" class="meta" text-anchor="end">grpo</text>
+    <text x="1275" y="5782" class="field">PK    id : bigint</text>
+    <text x="1275" y="5800" class="field">      vendor_code : varchar</text>
+    <text x="1275" y="5818" class="field">      vendor_name : varchar</text>
+    <text x="1275" y="5836" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="1275" y="5854" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="1275" y="5872" class="field">      sap_doc_total : decimal (nullable)</text>
+    <text x="1275" y="5890" class="field">      status : varchar</text>
+    <text x="1275" y="5908" class="field">      error_message : text (nullable)</text>
+    <text x="1275" y="5926" class="field">... 14 more fields</text>
+  </g>
+  <g id="quality_control_productionqcsession" class="card" data-table="quality_control_productionqcsession">
+    <title>quality_control_productionqcsession</title>
+    <rect class="card-outline" x="1261" y="5988" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="5988" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="6014" width="273" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="6010" class="card-title" fill="#94a3b8">quality_control_productionqcsession</text>
+    <text x="1520" y="6010" class="meta" text-anchor="end">quality_control</text>
+    <text x="1275" y="6046" class="field">PK    id : int</text>
+    <text x="1275" y="6064" class="field">      created_at : datetime</text>
+    <text x="1275" y="6082" class="field">      updated_at : datetime</text>
+    <text x="1275" y="6100" class="field">      is_active : boolean</text>
+    <text x="1275" y="6118" class="field">      session_number : int</text>
+    <text x="1275" y="6136" class="field">      session_type : varchar</text>
+    <text x="1275" y="6154" class="field">      checked_at : datetime</text>
+    <text x="1275" y="6172" class="field">      overall_result : varchar</text>
+    <text x="1275" y="6190" class="field">... 15 more fields</text>
+  </g>
+  <g id="quality_control_rawmaterialinspection" class="card" data-table="quality_control_rawmaterialinspection">
+    <title>quality_control_rawmaterialinspection</title>
+    <rect class="card-outline" x="1261" y="6252" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1261" y="6252" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1261" y="6278" width="287" height="8" fill="#e2e8f0"/>
+    <text x="1275" y="6274" class="card-title" fill="#94a3b8">quality_control_rawmaterialinspection</text>
+    <text x="1534" y="6274" class="meta" text-anchor="end">quality_control</text>
+    <text x="1275" y="6310" class="field">PK    id : int</text>
+    <text x="1275" y="6328" class="field">      created_at : datetime</text>
+    <text x="1275" y="6346" class="field">      updated_at : datetime</text>
+    <text x="1275" y="6364" class="field">      is_active : boolean</text>
+    <text x="1275" y="6382" class="field">UK    report_no : varchar</text>
+    <text x="1275" y="6400" class="field">      internal_lot_no : varchar</text>
+    <text x="1275" y="6418" class="field">      inspection_date : date</text>
+    <text x="1275" y="6436" class="field">      description_of_material : text</text>
+    <text x="1275" y="6454" class="field">... 29 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

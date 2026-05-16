@@ -1,0 +1,468 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1455" height="3612" viewBox="0 0 1455 3612">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">Quality Control ER Slice</text>
+  <text x="60" y="80" class="subtitle">8 local tables, 5 linked external tables, 9 local relationships, 7 external relationships</text>
+  <text x="1101" y="112" class="section">Linked external tables</text>
+  <g class="relation" data-src="quality_control_materialarrivalslip" data-dst="quality_control_arrivalslipattachment" data-label="arrival_slip_id">
+    <title>quality_control_materialarrivalslip to quality_control_arrivalslipattachment via arrival_slip_id</title>
+    <path class="edge-hit" d="M 276 2061 L 250 2061 L 250 2045 L 117 2045 L 117 3442 L 256 3442 L 256 3458 L 276 3458"/>
+    <path class="edge" d="M 276 2061 L 250 2061 L 250 2045 L 117 2045 L 117 3442 L 256 3442 L 256 3458 L 276 3458"/>
+    <rect class="edge-label-bg" x="66.0" y="2735.5" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="117.0" y="2747.5" text-anchor="middle">arrival_slip_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_materialarrivalslip" data-dst="quality_control_rawmaterialinspection" data-label="arrival_slip_id">
+    <title>quality_control_materialarrivalslip to quality_control_rawmaterialinspection via arrival_slip_id</title>
+    <path class="edge-hit" d="M 276 1879 L 256 1879 L 256 1867 L 202 1867 L 202 998 L 250 998 L 250 1010 L 276 1010"/>
+    <path class="edge" d="M 276 1879 L 256 1879 L 256 1867 L 202 1867 L 202 998 L 250 998 L 250 1010 L 276 1010"/>
+    <rect class="edge-label-bg" x="151.0" y="1424.5" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="202.0" y="1436.5" text-anchor="middle">arrival_slip_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_materialtype" data-dst="quality_control_productionqcsession" data-label="material_type_id">
+    <title>quality_control_materialtype to quality_control_productionqcsession via material_type_id</title>
+    <path class="edge-hit" d="M 276 1476 L 256 1476 L 256 1468 L 236 1468 L 236 281 L 256 281 L 256 289 L 276 289"/>
+    <path class="edge" d="M 276 1476 L 256 1476 L 256 1468 L 236 1468 L 236 281 L 256 281 L 256 289 L 276 289"/>
+    <rect class="edge-label-bg" x="182.0" y="866.5" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="236.0" y="878.5" text-anchor="middle">material_type_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_materialtype" data-dst="quality_control_qcparametermaster" data-label="material_type_id">
+    <title>quality_control_materialtype to quality_control_qcparametermaster via material_type_id</title>
+    <path class="edge-hit" d="M 276 1594 L 244 1594 L 244 1590 L 151 1590 L 151 2368 L 256 2368 L 256 2372 L 276 2372"/>
+    <path class="edge" d="M 276 1594 L 244 1594 L 244 1590 L 151 1590 L 151 2368 L 256 2368 L 256 2372 L 276 2372"/>
+    <rect class="edge-label-bg" x="97.0" y="1971.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="151.0" y="1983.0" text-anchor="middle">material_type_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_materialtype" data-dst="quality_control_rawmaterialinspection" data-label="material_type_id">
+    <title>quality_control_materialtype to quality_control_rawmaterialinspection via material_type_id</title>
+    <path class="edge-hit" d="M 276 1535 L 219 1535 L 219 829 L 276 829"/>
+    <path class="edge" d="M 276 1535 L 219 1535 L 219 829 L 276 829"/>
+    <rect class="edge-label-bg" x="165.0" y="1174.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="219.0" y="1186.0" text-anchor="middle">material_type_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_productionqcsession" data-dst="quality_control_productionqcresult" data-label="session_id">
+    <title>quality_control_productionqcsession to quality_control_productionqcresult via session_id</title>
+    <path class="edge-hit" d="M 276 447 L 250 447 L 250 451 L 185 451 L 185 3137 L 256 3137 L 256 3133 L 276 3133"/>
+    <path class="edge" d="M 276 447 L 250 447 L 250 451 L 185 451 L 185 3137 L 256 3137 L 256 3133 L 276 3133"/>
+    <rect class="edge-label-bg" x="149.0" y="1786.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="185.0" y="1798.0" text-anchor="middle">session_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_qcparametermaster" data-dst="quality_control_inspectionparameterresult" data-label="parameter_master_id">
+    <title>quality_control_qcparametermaster to quality_control_inspectionparameterresult via parameter_master_id</title>
+    <path class="edge-hit" d="M 276 2459 L 250 2459 L 250 2467 L 134 2467 L 134 2891 L 250 2891 L 250 2883 L 276 2883"/>
+    <path class="edge" d="M 276 2459 L 250 2459 L 250 2467 L 134 2467 L 134 2891 L 250 2891 L 250 2883 L 276 2883"/>
+    <rect class="edge-label-bg" x="71.0" y="2671.0" width="126" height="16" rx="4"/>
+    <text class="edge-label" x="134.0" y="2683.0" text-anchor="middle">parameter_master_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_qcparametermaster" data-dst="quality_control_productionqcresult" data-label="parameter_master_id">
+    <title>quality_control_qcparametermaster to quality_control_productionqcresult via parameter_master_id</title>
+    <path class="edge-hit" d="M 276 2546 L 244 2546 L 244 2558 L 100 2558 L 100 3249 L 250 3249 L 250 3237 L 276 3237"/>
+    <path class="edge" d="M 276 2546 L 244 2546 L 244 2558 L 100 2558 L 100 3249 L 250 3249 L 250 3237 L 276 3237"/>
+    <rect class="edge-label-bg" x="37.0" y="2895.5" width="126" height="16" rx="4"/>
+    <text class="edge-label" x="100.0" y="2907.5" text-anchor="middle">parameter_master_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_rawmaterialinspection" data-dst="quality_control_inspectionparameterresult" data-label="inspection_id">
+    <title>quality_control_rawmaterialinspection to quality_control_inspectionparameterresult via inspection_id</title>
+    <path class="edge-hit" d="M 276 1191 L 244 1191 L 244 1207 L 168 1207 L 168 2795 L 256 2795 L 256 2779 L 276 2779"/>
+    <path class="edge" d="M 276 1191 L 244 1191 L 244 1207 L 168 1207 L 168 2795 L 256 2795 L 256 2779 L 276 2779"/>
+    <rect class="edge-label-bg" x="123.0" y="1993.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="168.0" y="2005.0" text-anchor="middle">inspection_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="quality_control_productionqcsession" data-label="approved_by_id">
+    <title>accounts_user to quality_control_productionqcsession via approved_by_id</title>
+    <path class="edge-hit" d="M 1101 187 L 1081 187 L 1081 175 L 701 175 L 701 238 L 616 238 L 616 250 L 596 250"/>
+    <path class="edge external-edge" d="M 1101 187 L 1081 187 L 1081 175 L 701 175 L 701 238 L 616 238 L 616 250 L 596 250"/>
+    <rect class="edge-label-bg" x="769.0" y="167.0" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="817.0" y="179.0" text-anchor="middle">approved_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="quality_control_productionqcsession" data-label="rejected_by_id">
+    <title>accounts_user to quality_control_productionqcsession via rejected_by_id</title>
+    <path class="edge-hit" d="M 1101 242 L 1075 242 L 1075 234 L 761 234 L 761 360 L 622 360 L 622 368 L 596 368"/>
+    <path class="edge external-edge" d="M 1101 242 L 1075 242 L 1075 234 L 761 234 L 761 360 L 622 360 L 622 368 L 596 368"/>
+    <rect class="edge-label-bg" x="737.5" y="226.0" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="785.5" y="238.0" text-anchor="middle">rejected_by_id</text>
+  </g>
+  <g class="relation" data-src="accounts_user" data-dst="quality_control_rawmaterialinspection" data-label="factory_head_id">
+    <title>accounts_user to quality_control_rawmaterialinspection via factory_head_id</title>
+    <path class="edge-hit" d="M 1101 297 L 1069 297 L 1069 293 L 821 293 L 821 885 L 681 885 L 681 889 L 661 889"/>
+    <path class="edge external-edge" d="M 1101 297 L 1069 297 L 1069 293 L 821 293 L 821 885 L 681 885 L 681 889 L 661 889"/>
+    <rect class="edge-label-bg" x="770.0" y="521.0" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="821.0" y="533.0" text-anchor="middle">factory_head_id</text>
+  </g>
+  <g class="relation" data-src="company_company" data-dst="quality_control_materialtype" data-label="company_id">
+    <title>company_company to quality_control_materialtype via company_id</title>
+    <path class="edge-hit" d="M 1101 461 L 1001 461 L 1001 1535 L 596 1535"/>
+    <path class="edge external-edge" d="M 1101 461 L 1001 461 L 1001 1535 L 596 1535"/>
+    <rect class="edge-label-bg" x="965.0" y="1142.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1001.0" y="1154.5" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_productionrun" data-dst="quality_control_productionqcsession" data-label="production_run_id">
+    <title>production_execution_productionrun to quality_control_productionqcsession via production_run_id</title>
+    <path class="edge-hit" d="M 1101 944 L 1081 944 L 1081 948 L 881 948 L 881 490 L 628 490 L 628 486 L 596 486"/>
+    <path class="edge external-edge" d="M 1101 944 L 1081 944 L 1081 948 L 881 948 L 881 490 L 628 490 L 628 486 L 596 486"/>
+    <rect class="edge-label-bg" x="824.0" y="678.5" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="881.0" y="690.5" text-anchor="middle">production_run_id</text>
+  </g>
+  <g class="relation" data-src="quality_control_rawmaterialinspection" data-dst="gate_core_rejectedqcreturnitem" data-label="inspection_id">
+    <title>quality_control_rawmaterialinspection to gate_core_rejectedqcreturnitem via inspection_id</title>
+    <path class="edge-hit" d="M 661 1131 L 687 1131 L 687 1139 L 941 1139 L 941 688 L 1081 688 L 1081 680 L 1101 680"/>
+    <path class="edge external-edge" d="M 661 1131 L 687 1131 L 687 1139 L 941 1139 L 941 688 L 1081 688 L 1081 680 L 1101 680"/>
+    <rect class="edge-label-bg" x="896.0" y="965.5" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="941.0" y="977.5" text-anchor="middle">inspection_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poitemreceipt" data-dst="quality_control_materialarrivalslip" data-label="po_item_receipt_id">
+    <title>raw_material_gatein_poitemreceipt to quality_control_materialarrivalslip via po_item_receipt_id</title>
+    <path class="edge-hit" d="M 1101 1208 L 1081 1208 L 1081 1220 L 1061 1220 L 1061 1982 L 625 1982 L 625 1970 L 605 1970"/>
+    <path class="edge external-edge" d="M 1101 1208 L 1081 1208 L 1081 1220 L 1061 1220 L 1061 1982 L 625 1982 L 625 1970 L 605 1970"/>
+    <rect class="edge-label-bg" x="1001.0" y="1801.0" width="120" height="16" rx="4"/>
+    <text class="edge-label" x="1061.0" y="1813.0" text-anchor="middle">po_item_receipt_id</text>
+  </g>
+  <g id="quality_control_productionqcsession" class="card" data-table="quality_control_productionqcsession">
+    <title>quality_control_productionqcsession</title>
+    <rect class="card-outline" x="276" y="132" width="320" height="472" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="276" y="132" width="320" height="34" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="276" y="158" width="320" height="8" fill="#ccfbf1"/>
+    <text x="290" y="154" class="card-title" fill="#0f766e">quality_control_productionqcsession</text>
+    <text x="290" y="190" class="field">PK    id : int</text>
+    <text x="290" y="208" class="field">      created_at : datetime</text>
+    <text x="290" y="226" class="field">      updated_at : datetime</text>
+    <text x="290" y="244" class="field">      is_active : boolean</text>
+    <text x="290" y="262" class="field">      session_number : int</text>
+    <text x="290" y="280" class="field">      session_type : varchar</text>
+    <text x="290" y="298" class="field">      checked_at : datetime</text>
+    <text x="290" y="316" class="field">      overall_result : varchar</text>
+    <text x="290" y="334" class="field">      workflow_status : varchar</text>
+    <text x="290" y="352" class="field">      remarks : text</text>
+    <text x="290" y="370" class="field">      checked_by_id : int (nullable)</text>
+    <text x="290" y="388" class="field">      created_by_id : int (nullable)</text>
+    <text x="290" y="406" class="field">FK    material_type_id : int (nullable)</text>
+    <text x="290" y="424" class="field">FK    production_run_id : bigint</text>
+    <text x="290" y="442" class="field">      updated_by_id : int (nullable)</text>
+    <text x="290" y="460" class="field">      submitted_at : datetime (nullable)</text>
+    <text x="290" y="478" class="field">      submitted_by_id : int (nullable)</text>
+    <text x="290" y="496" class="field">      approval_remarks : text</text>
+    <text x="290" y="514" class="field">      approved_at : datetime (nullable)</text>
+    <text x="290" y="532" class="field">FK    approved_by_id : bigint (nullable)</text>
+    <text x="290" y="550" class="field">      rejected_at : datetime (nullable)</text>
+    <text x="290" y="568" class="field">FK    rejected_by_id : bigint (nullable)</text>
+    <text x="290" y="586" class="field">      rejection_remarks : text</text>
+  </g>
+  <g id="quality_control_rawmaterialinspection" class="card" data-table="quality_control_rawmaterialinspection">
+    <title>quality_control_rawmaterialinspection</title>
+    <rect class="card-outline" x="276" y="648" width="385" height="724" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="276" y="648" width="385" height="34" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="276" y="674" width="385" height="8" fill="#ccfbf1"/>
+    <text x="290" y="670" class="card-title" fill="#0f766e">quality_control_rawmaterialinspection</text>
+    <text x="290" y="706" class="field">PK    id : int</text>
+    <text x="290" y="724" class="field">      created_at : datetime</text>
+    <text x="290" y="742" class="field">      updated_at : datetime</text>
+    <text x="290" y="760" class="field">      is_active : boolean</text>
+    <text x="290" y="778" class="field">UK    report_no : varchar</text>
+    <text x="290" y="796" class="field">      internal_lot_no : varchar</text>
+    <text x="290" y="814" class="field">      inspection_date : date</text>
+    <text x="290" y="832" class="field">      description_of_material : text</text>
+    <text x="290" y="850" class="field">      sap_code : varchar</text>
+    <text x="290" y="868" class="field">      supplier_name : varchar</text>
+    <text x="290" y="886" class="field">      manufacturer_name : varchar</text>
+    <text x="290" y="904" class="field">      supplier_batch_lot_no : varchar</text>
+    <text x="290" y="922" class="field">      unit_packing : varchar</text>
+    <text x="290" y="940" class="field">      purchase_order_no : varchar</text>
+    <text x="290" y="958" class="field">      invoice_bill_no : varchar</text>
+    <text x="290" y="976" class="field">      vehicle_no : varchar</text>
+    <text x="290" y="994" class="field">      final_status : varchar</text>
+    <text x="290" y="1012" class="field">      qa_chemist_approved_at : datetime (nullable)</text>
+    <text x="290" y="1030" class="field">      qa_chemist_remarks : text</text>
+    <text x="290" y="1048" class="field">      qam_approved_at : datetime (nullable)</text>
+    <text x="290" y="1066" class="field">      qam_remarks : text</text>
+    <text x="290" y="1084" class="field">      workflow_status : varchar</text>
+    <text x="290" y="1102" class="field">      is_locked : boolean</text>
+    <text x="290" y="1120" class="field">      remarks : text</text>
+    <text x="290" y="1138" class="field">      created_by_id : int (nullable)</text>
+    <text x="290" y="1156" class="field">FK    material_type_id : int (nullable)</text>
+    <text x="290" y="1174" class="field">      qa_chemist_id : int (nullable)</text>
+    <text x="290" y="1192" class="field">      qam_id : int (nullable)</text>
+    <text x="290" y="1210" class="field">      updated_by_id : int (nullable)</text>
+    <text x="290" y="1228" class="field">FK/UK arrival_slip_id : int (nullable)</text>
+    <text x="290" y="1246" class="field">      rejected_at : datetime (nullable)</text>
+    <text x="290" y="1264" class="field">      rejected_by_id : int (nullable)</text>
+    <text x="290" y="1282" class="field">      internal_report_no : varchar</text>
+    <text x="290" y="1300" class="field">FK    factory_head_id : bigint (nullable)</text>
+    <text x="290" y="1318" class="field">      factory_head_decided_at : datetime (nullable)</text>
+    <text x="290" y="1336" class="field">      factory_head_decision : varchar</text>
+    <text x="290" y="1354" class="field">      factory_head_remarks : text</text>
+  </g>
+  <g id="quality_control_materialtype" class="card" data-table="quality_control_materialtype">
+    <title>quality_control_materialtype</title>
+    <rect class="card-outline" x="276" y="1416" width="320" height="238" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="276" y="1416" width="320" height="34" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="276" y="1442" width="320" height="8" fill="#ccfbf1"/>
+    <text x="290" y="1438" class="card-title" fill="#0f766e">quality_control_materialtype</text>
+    <text x="290" y="1474" class="field">PK    id : int</text>
+    <text x="290" y="1492" class="field">      created_at : datetime</text>
+    <text x="290" y="1510" class="field">      updated_at : datetime</text>
+    <text x="290" y="1528" class="field">      is_active : boolean</text>
+    <text x="290" y="1546" class="field">      code : varchar</text>
+    <text x="290" y="1564" class="field">      name : varchar</text>
+    <text x="290" y="1582" class="field">      description : text</text>
+    <text x="290" y="1600" class="field">FK    company_id : int</text>
+    <text x="290" y="1618" class="field">      created_by_id : int (nullable)</text>
+    <text x="290" y="1636" class="field">      updated_by_id : int (nullable)</text>
+  </g>
+  <g id="quality_control_materialarrivalslip" class="card" data-table="quality_control_materialarrivalslip">
+    <title>quality_control_materialarrivalslip</title>
+    <rect class="card-outline" x="276" y="1698" width="329" height="544" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="276" y="1698" width="329" height="34" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="276" y="1724" width="329" height="8" fill="#ccfbf1"/>
+    <text x="290" y="1720" class="card-title" fill="#0f766e">quality_control_materialarrivalslip</text>
+    <text x="290" y="1756" class="field">PK    id : int</text>
+    <text x="290" y="1774" class="field">      created_at : datetime</text>
+    <text x="290" y="1792" class="field">      updated_at : datetime</text>
+    <text x="290" y="1810" class="field">      is_active : boolean</text>
+    <text x="290" y="1828" class="field">      particulars : text</text>
+    <text x="290" y="1846" class="field">      arrival_datetime : datetime</text>
+    <text x="290" y="1864" class="field">      weighing_required : boolean</text>
+    <text x="290" y="1882" class="field">      party_name : varchar</text>
+    <text x="290" y="1900" class="field">      billing_qty : decimal</text>
+    <text x="290" y="1918" class="field">      billing_uom : varchar</text>
+    <text x="290" y="1936" class="field">      in_time_to_qa : datetime (nullable)</text>
+    <text x="290" y="1954" class="field">      truck_no_as_per_bill : varchar</text>
+    <text x="290" y="1972" class="field">      commercial_invoice_no : varchar</text>
+    <text x="290" y="1990" class="field">      eway_bill_no : varchar</text>
+    <text x="290" y="2008" class="field">      bilty_no : varchar</text>
+    <text x="290" y="2026" class="field">      has_certificate_of_analysis : boolean</text>
+    <text x="290" y="2044" class="field">      has_certificate_of_quantity : boolean</text>
+    <text x="290" y="2062" class="field">      status : varchar</text>
+    <text x="290" y="2080" class="field">      is_submitted : boolean</text>
+    <text x="290" y="2098" class="field">      submitted_at : datetime (nullable)</text>
+    <text x="290" y="2116" class="field">      remarks : text</text>
+    <text x="290" y="2134" class="field">      created_by_id : int (nullable)</text>
+    <text x="290" y="2152" class="field">      submitted_by_id : int (nullable)</text>
+    <text x="290" y="2170" class="field">      updated_by_id : int (nullable)</text>
+    <text x="290" y="2188" class="field">FK/UK po_item_receipt_id : int (nullable)</text>
+    <text x="290" y="2206" class="field">      sent_back_at : datetime (nullable)</text>
+    <text x="290" y="2224" class="field">      sent_back_by_id : int (nullable)</text>
+  </g>
+  <g id="quality_control_qcparametermaster" class="card" data-table="quality_control_qcparametermaster">
+    <title>quality_control_qcparametermaster</title>
+    <rect class="card-outline" x="276" y="2286" width="320" height="346" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="276" y="2286" width="320" height="34" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="276" y="2312" width="320" height="8" fill="#ccfbf1"/>
+    <text x="290" y="2308" class="card-title" fill="#0f766e">quality_control_qcparametermaster</text>
+    <text x="290" y="2344" class="field">PK    id : int</text>
+    <text x="290" y="2362" class="field">      created_at : datetime</text>
+    <text x="290" y="2380" class="field">      updated_at : datetime</text>
+    <text x="290" y="2398" class="field">      is_active : boolean</text>
+    <text x="290" y="2416" class="field">      parameter_name : varchar</text>
+    <text x="290" y="2434" class="field">      parameter_code : varchar</text>
+    <text x="290" y="2452" class="field">      standard_value : varchar</text>
+    <text x="290" y="2470" class="field">      parameter_type : varchar</text>
+    <text x="290" y="2488" class="field">      min_value : decimal (nullable)</text>
+    <text x="290" y="2506" class="field">      max_value : decimal (nullable)</text>
+    <text x="290" y="2524" class="field">      uom : varchar</text>
+    <text x="290" y="2542" class="field">      sequence : int</text>
+    <text x="290" y="2560" class="field">      is_mandatory : boolean</text>
+    <text x="290" y="2578" class="field">      created_by_id : int (nullable)</text>
+    <text x="290" y="2596" class="field">FK    material_type_id : int</text>
+    <text x="290" y="2614" class="field">      updated_by_id : int (nullable)</text>
+  </g>
+  <g id="quality_control_inspectionparameterresult" class="card" data-table="quality_control_inspectionparameterresult">
+    <title>quality_control_inspectionparameterresult</title>
+    <rect class="card-outline" x="276" y="2676" width="320" height="310" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="276" y="2676" width="320" height="34" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="276" y="2702" width="320" height="8" fill="#ccfbf1"/>
+    <text x="290" y="2698" class="card-title" fill="#0f766e">quality_control_inspectionparameterresult</text>
+    <text x="290" y="2734" class="field">PK    id : int</text>
+    <text x="290" y="2752" class="field">      created_at : datetime</text>
+    <text x="290" y="2770" class="field">      updated_at : datetime</text>
+    <text x="290" y="2788" class="field">      is_active : boolean</text>
+    <text x="290" y="2806" class="field">      parameter_name : varchar</text>
+    <text x="290" y="2824" class="field">      standard_value : varchar</text>
+    <text x="290" y="2842" class="field">      result_value : varchar</text>
+    <text x="290" y="2860" class="field">      result_numeric : decimal (nullable)</text>
+    <text x="290" y="2878" class="field">      is_within_spec : boolean (nullable)</text>
+    <text x="290" y="2896" class="field">      remarks : text</text>
+    <text x="290" y="2914" class="field">      created_by_id : int (nullable)</text>
+    <text x="290" y="2932" class="field">      updated_by_id : int (nullable)</text>
+    <text x="290" y="2950" class="field">FK    parameter_master_id : int</text>
+    <text x="290" y="2968" class="field">FK    inspection_id : int</text>
+  </g>
+  <g id="quality_control_productionqcresult" class="card" data-table="quality_control_productionqcresult">
+    <title>quality_control_productionqcresult</title>
+    <rect class="card-outline" x="276" y="3030" width="320" height="310" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="276" y="3030" width="320" height="34" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="276" y="3056" width="320" height="8" fill="#ccfbf1"/>
+    <text x="290" y="3052" class="card-title" fill="#0f766e">quality_control_productionqcresult</text>
+    <text x="290" y="3088" class="field">PK    id : int</text>
+    <text x="290" y="3106" class="field">      created_at : datetime</text>
+    <text x="290" y="3124" class="field">      updated_at : datetime</text>
+    <text x="290" y="3142" class="field">      is_active : boolean</text>
+    <text x="290" y="3160" class="field">      parameter_name : varchar</text>
+    <text x="290" y="3178" class="field">      standard_value : varchar</text>
+    <text x="290" y="3196" class="field">      result_value : varchar</text>
+    <text x="290" y="3214" class="field">      result_numeric : decimal (nullable)</text>
+    <text x="290" y="3232" class="field">      is_within_spec : boolean (nullable)</text>
+    <text x="290" y="3250" class="field">      remarks : text</text>
+    <text x="290" y="3268" class="field">      created_by_id : int (nullable)</text>
+    <text x="290" y="3286" class="field">FK    parameter_master_id : int</text>
+    <text x="290" y="3304" class="field">      updated_by_id : int (nullable)</text>
+    <text x="290" y="3322" class="field">FK    session_id : int</text>
+  </g>
+  <g id="quality_control_arrivalslipattachment" class="card" data-table="quality_control_arrivalslipattachment">
+    <title>quality_control_arrivalslipattachment</title>
+    <rect class="card-outline" x="276" y="3384" width="320" height="148" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="276" y="3384" width="320" height="34" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="1"/>
+    <rect x="276" y="3410" width="320" height="8" fill="#ccfbf1"/>
+    <text x="290" y="3406" class="card-title" fill="#0f766e">quality_control_arrivalslipattachment</text>
+    <text x="290" y="3442" class="field">PK    id : int</text>
+    <text x="290" y="3460" class="field">      file : varchar</text>
+    <text x="290" y="3478" class="field">      attachment_type : varchar</text>
+    <text x="290" y="3496" class="field">      uploaded_at : datetime</text>
+    <text x="290" y="3514" class="field">FK    arrival_slip_id : int</text>
+  </g>
+  <g id="accounts_user" class="card" data-table="accounts_user">
+    <title>accounts_user</title>
+    <rect class="card-outline" x="1101" y="132" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1101" y="132" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1101" y="158" width="294" height="8" fill="#e2e8f0"/>
+    <text x="1115" y="154" class="card-title" fill="#94a3b8">accounts_user</text>
+    <text x="1381" y="154" class="meta" text-anchor="end">accounts</text>
+    <text x="1115" y="190" class="field">PK    id : bigint</text>
+    <text x="1115" y="208" class="field">      password : varchar</text>
+    <text x="1115" y="226" class="field">      last_login : datetime (nullable)</text>
+    <text x="1115" y="244" class="field">      is_superuser : boolean</text>
+    <text x="1115" y="262" class="field">UK    email : varchar</text>
+    <text x="1115" y="280" class="field">      full_name : varchar</text>
+    <text x="1115" y="298" class="field">UK    employee_code : varchar</text>
+    <text x="1115" y="316" class="field">      is_active : boolean</text>
+    <text x="1115" y="334" class="field">... 2 more fields</text>
+  </g>
+  <g id="company_company" class="card" data-table="company_company">
+    <title>company_company</title>
+    <rect class="card-outline" x="1101" y="396" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1101" y="396" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1101" y="422" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1115" y="418" class="card-title" fill="#94a3b8">company_company</text>
+    <text x="1347" y="418" class="meta" text-anchor="end">company</text>
+    <text x="1115" y="454" class="field">PK    id : int</text>
+    <text x="1115" y="472" class="field">      name : varchar</text>
+    <text x="1115" y="490" class="field">UK    code : varchar</text>
+    <text x="1115" y="508" class="field">      is_active : boolean</text>
+  </g>
+  <g id="gate_core_rejectedqcreturnitem" class="card" data-table="gate_core_rejectedqcreturnitem">
+    <title>gate_core_rejectedqcreturnitem</title>
+    <rect class="card-outline" x="1101" y="570" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1101" y="570" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1101" y="596" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1115" y="592" class="card-title" fill="#94a3b8">gate_core_rejectedqcreturnitem</text>
+    <text x="1347" y="592" class="meta" text-anchor="end">gate_core</text>
+    <text x="1115" y="628" class="field">PK    id : bigint</text>
+    <text x="1115" y="646" class="field">      created_at : datetime</text>
+    <text x="1115" y="664" class="field">      updated_at : datetime</text>
+    <text x="1115" y="682" class="field">      is_active : boolean</text>
+    <text x="1115" y="700" class="field">      gate_entry_no : varchar</text>
+    <text x="1115" y="718" class="field">      report_no : varchar</text>
+    <text x="1115" y="736" class="field">      internal_lot_no : varchar</text>
+    <text x="1115" y="754" class="field">      item_name : varchar</text>
+    <text x="1115" y="772" class="field">... 7 more fields</text>
+  </g>
+  <g id="production_execution_productionrun" class="card" data-table="production_execution_productionrun">
+    <title>production_execution_productionrun</title>
+    <rect class="card-outline" x="1101" y="834" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1101" y="834" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1101" y="860" width="294" height="8" fill="#e2e8f0"/>
+    <text x="1115" y="856" class="card-title" fill="#94a3b8">production_execution_productionrun</text>
+    <text x="1381" y="856" class="meta" text-anchor="end">production_execution</text>
+    <text x="1115" y="892" class="field">PK    id : bigint</text>
+    <text x="1115" y="910" class="field">      run_number : int</text>
+    <text x="1115" y="928" class="field">      date : date</text>
+    <text x="1115" y="946" class="field">      rated_speed : decimal (nullable)</text>
+    <text x="1115" y="964" class="field">      total_production : decimal</text>
+    <text x="1115" y="982" class="field">      total_breakdown_time : int</text>
+    <text x="1115" y="1000" class="field">      status : varchar</text>
+    <text x="1115" y="1018" class="field">      created_at : datetime</text>
+    <text x="1115" y="1036" class="field">... 20 more fields</text>
+  </g>
+  <g id="raw_material_gatein_poitemreceipt" class="card" data-table="raw_material_gatein_poitemreceipt">
+    <title>raw_material_gatein_poitemreceipt</title>
+    <rect class="card-outline" x="1101" y="1098" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1101" y="1098" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1101" y="1124" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1115" y="1120" class="card-title" fill="#94a3b8">raw_material_gatein_poitemreceipt</text>
+    <text x="1347" y="1120" class="meta" text-anchor="end">raw_material_gatein</text>
+    <text x="1115" y="1156" class="field">PK    id : int</text>
+    <text x="1115" y="1174" class="field">      created_at : datetime</text>
+    <text x="1115" y="1192" class="field">      updated_at : datetime</text>
+    <text x="1115" y="1210" class="field">      is_active : boolean</text>
+    <text x="1115" y="1228" class="field">      po_item_code : varchar</text>
+    <text x="1115" y="1246" class="field">      item_name : varchar</text>
+    <text x="1115" y="1264" class="field">      ordered_qty : decimal</text>
+    <text x="1115" y="1282" class="field">      received_qty : decimal</text>
+    <text x="1115" y="1300" class="field">... 14 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

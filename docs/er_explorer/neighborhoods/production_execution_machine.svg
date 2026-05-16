@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1780" height="720" viewBox="0 0 1780 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">production_execution_machine Neighborhood</text>
+  <text x="60" y="80" class="subtitle">2 parent/lookup tables, 4 child tables, 6 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <text x="1013" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="company_company" data-dst="production_execution_machine" data-label="company_id">
+    <title>company_company to production_execution_machine via company_id</title>
+    <path class="edge-hit" d="M 320 215 L 495 215 L 495 326 L 513 326"/>
+    <path class="edge" d="M 320 215 L 495 215 L 495 326 L 513 326"/>
+    <rect class="edge-label-bg" x="436.0" y="207.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="472.0" y="219.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_machine" data-dst="production_execution_machinebreakdown" data-label="machine_id">
+    <title>production_execution_machine to production_execution_machinebreakdown via machine_id</title>
+    <path class="edge-hit" d="M 833 299 L 851 299 L 851 260 L 1013 260"/>
+    <path class="edge" d="M 833 299 L 851 299 L 851 260 L 1013 260"/>
+    <rect class="edge-label-bg" x="867.5" y="252.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="903.5" y="264.0" text-anchor="middle">machine_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_machine" data-dst="production_execution_machinechecklistentry" data-label="machine_id">
+    <title>production_execution_machine to production_execution_machinechecklistentry via machine_id</title>
+    <path class="edge-hit" d="M 833 421 L 869 421 L 869 510 L 1013 510"/>
+    <path class="edge" d="M 833 421 L 869 421 L 869 510 L 1013 510"/>
+    <rect class="edge-label-bg" x="842.5" y="502.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="878.5" y="514.0" text-anchor="middle">machine_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_machine" data-dst="production_execution_machineruntime" data-label="machine_id">
+    <title>production_execution_machine to production_execution_machineruntime via machine_id</title>
+    <path class="edge-hit" d="M 833 340 L 857 340 L 857 384 L 1363 384 L 1363 260 L 1381 260"/>
+    <path class="edge" d="M 833 340 L 857 340 L 857 384 L 1363 384 L 1363 260 L 1381 260"/>
+    <rect class="edge-label-bg" x="1111.0" y="376.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1147.0" y="388.0" text-anchor="middle">machine_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_machine" data-dst="production_execution_productionrun_machines" data-label="machine_id">
+    <title>production_execution_machine to production_execution_productionrun_machines via machine_id</title>
+    <path class="edge-hit" d="M 833 380 L 863 380 L 863 386 L 1358 386 L 1358 456 L 1381 456"/>
+    <path class="edge" d="M 833 380 L 863 380 L 863 386 L 1358 386 L 1358 456 L 1381 456"/>
+    <rect class="edge-label-bg" x="1103.0" y="378.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="1139.0" y="390.0" text-anchor="middle">machine_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_productionline" data-dst="production_execution_machine" data-label="line_id">
+    <title>production_execution_productionline to production_execution_machine via line_id</title>
+    <path class="edge-hit" d="M 333 402 L 351 402 L 351 394 L 513 394"/>
+    <path class="edge" d="M 333 402 L 351 402 L 351 394 L 513 394"/>
+    <rect class="edge-label-bg" x="392.0" y="386.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="419.0" y="398.0" text-anchor="middle">line_id</text>
+  </g>
+  <g id="company_company" class="card" data-table="company_company">
+    <title>company_company</title>
+    <rect class="card-outline" x="60" y="150" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">company_company</text>
+    <text x="306" y="172" class="meta" text-anchor="end">company</text>
+    <text x="74" y="208" class="field">PK    id : int</text>
+    <text x="74" y="226" class="field">      name : varchar</text>
+    <text x="74" y="244" class="field">UK    code : varchar</text>
+    <text x="74" y="262" class="field">      is_active : boolean</text>
+  </g>
+  <g id="production_execution_productionline" class="card" data-table="production_execution_productionline">
+    <title>production_execution_productionline</title>
+    <rect class="card-outline" x="60" y="310" width="273" height="184" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="310" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="336" width="273" height="8" fill="#e2e8f0"/>
+    <text x="74" y="332" class="card-title" fill="#94a3b8">production_execution_productionline</text>
+    <text x="319" y="332" class="meta" text-anchor="end">production_execution</text>
+    <text x="74" y="368" class="field">PK    id : bigint</text>
+    <text x="74" y="386" class="field">      name : varchar</text>
+    <text x="74" y="404" class="field">      description : text</text>
+    <text x="74" y="422" class="field">      is_active : boolean</text>
+    <text x="74" y="440" class="field">      created_at : datetime</text>
+    <text x="74" y="458" class="field">      updated_at : datetime</text>
+    <text x="74" y="476" class="field">FK    company_id : int</text>
+  </g>
+  <g id="production_execution_machine" class="card" data-table="production_execution_machine">
+    <title>production_execution_machine</title>
+    <rect class="card-outline" x="513" y="259" width="320" height="202" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="513" y="259" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="513" y="285" width="320" height="8" fill="#bfdbfe"/>
+    <text x="527" y="281" class="card-title" fill="#0f172a">production_execution_machine</text>
+    <text x="527" y="317" class="field">PK    id : bigint</text>
+    <text x="527" y="335" class="field">      name : varchar</text>
+    <text x="527" y="353" class="field">      machine_type : varchar</text>
+    <text x="527" y="371" class="field">      is_active : boolean</text>
+    <text x="527" y="389" class="field">      created_at : datetime</text>
+    <text x="527" y="407" class="field">      updated_at : datetime</text>
+    <text x="527" y="425" class="field">FK    company_id : int</text>
+    <text x="527" y="443" class="field">FK    line_id : bigint</text>
+  </g>
+  <g id="production_execution_machinebreakdown" class="card" data-table="production_execution_machinebreakdown">
+    <title>production_execution_machinebreakdown</title>
+    <rect class="card-outline" x="1013" y="150" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1013" y="150" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1013" y="176" width="287" height="8" fill="#e2e8f0"/>
+    <text x="1027" y="172" class="card-title" fill="#94a3b8">production_execution_machinebreakdown</text>
+    <text x="1286" y="172" class="meta" text-anchor="end">production_execution</text>
+    <text x="1027" y="208" class="field">PK    id : bigint</text>
+    <text x="1027" y="226" class="field">      start_time : datetime</text>
+    <text x="1027" y="244" class="field">      end_time : datetime (nullable)</text>
+    <text x="1027" y="262" class="field">      breakdown_minutes : int</text>
+    <text x="1027" y="280" class="field">      is_unrecovered : boolean</text>
+    <text x="1027" y="298" class="field">      reason : varchar</text>
+    <text x="1027" y="316" class="field">      remarks : text</text>
+    <text x="1027" y="334" class="field">      created_at : datetime</text>
+    <text x="1027" y="352" class="field">... 5 more fields</text>
+  </g>
+  <g id="production_execution_machinechecklistentry" class="card" data-table="production_execution_machinechecklistentry">
+    <title>production_execution_machinechecklistentry</title>
+    <rect class="card-outline" x="1013" y="400" width="322" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1013" y="400" width="322" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1013" y="426" width="322" height="8" fill="#e2e8f0"/>
+    <text x="1027" y="422" class="card-title" fill="#94a3b8">production_execution_machinechecklistentry</text>
+    <text x="1321" y="422" class="meta" text-anchor="end">production_execution</text>
+    <text x="1027" y="458" class="field">PK    id : bigint</text>
+    <text x="1027" y="476" class="field">      machine_type : varchar</text>
+    <text x="1027" y="494" class="field">      date : date</text>
+    <text x="1027" y="512" class="field">      month : int</text>
+    <text x="1027" y="530" class="field">      year : int</text>
+    <text x="1027" y="548" class="field">      task_description : varchar</text>
+    <text x="1027" y="566" class="field">      frequency : varchar</text>
+    <text x="1027" y="584" class="field">      status : varchar</text>
+    <text x="1027" y="602" class="field">... 8 more fields</text>
+  </g>
+  <g id="production_execution_machineruntime" class="card" data-table="production_execution_machineruntime">
+    <title>production_execution_machineruntime</title>
+    <rect class="card-outline" x="1381" y="150" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1381" y="150" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1381" y="176" width="280" height="8" fill="#e2e8f0"/>
+    <text x="1395" y="172" class="card-title" fill="#94a3b8">production_execution_machineruntime</text>
+    <text x="1647" y="172" class="meta" text-anchor="end">production_execution</text>
+    <text x="1395" y="208" class="field">PK    id : bigint</text>
+    <text x="1395" y="226" class="field">      machine_type : varchar</text>
+    <text x="1395" y="244" class="field">      runtime_minutes : int</text>
+    <text x="1395" y="262" class="field">      downtime_minutes : int</text>
+    <text x="1395" y="280" class="field">      remarks : text</text>
+    <text x="1395" y="298" class="field">      created_at : datetime</text>
+    <text x="1395" y="316" class="field">      updated_at : datetime</text>
+    <text x="1395" y="334" class="field">FK    machine_id : bigint (nullable)</text>
+    <text x="1395" y="352" class="field">... 1 more fields</text>
+  </g>
+  <g id="production_execution_productionrun_machines" class="card" data-table="production_execution_productionrun_machines">
+    <title>production_execution_productionrun_machines</title>
+    <rect class="card-outline" x="1381" y="400" width="329" height="112" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1381" y="400" width="329" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1381" y="426" width="329" height="8" fill="#e2e8f0"/>
+    <text x="1395" y="422" class="card-title" fill="#94a3b8">production_execution_productionrun_machines</text>
+    <text x="1696" y="422" class="meta" text-anchor="end">production_execution</text>
+    <text x="1395" y="458" class="field">PK    id : bigint</text>
+    <text x="1395" y="476" class="field">FK    productionrun_id : bigint</text>
+    <text x="1395" y="494" class="field">FK    machine_id : bigint</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

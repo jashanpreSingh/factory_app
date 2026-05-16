@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1114" height="720" viewBox="0 0 1114 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">outbound_dispatch_outboundloadrecord Neighborhood</text>
+  <text x="60" y="80" class="subtitle">1 parent/lookup tables, 0 child tables, 1 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="outbound_dispatch_shipmentorder" data-dst="outbound_dispatch_outboundloadrecord" data-label="shipment_order_id">
+    <title>outbound_dispatch_shipmentorder to outbound_dispatch_outboundloadrecord via shipment_order_id</title>
+    <path class="edge-hit" d="M 320 260 L 338 260 L 338 360 L 500 360"/>
+    <path class="edge" d="M 320 260 L 338 260 L 338 360 L 500 360"/>
+    <rect class="edge-label-bg" x="303.0" y="352.0" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="360.0" y="364.0" text-anchor="middle">shipment_order_id</text>
+  </g>
+  <g id="outbound_dispatch_shipmentorder" class="card" data-table="outbound_dispatch_shipmentorder">
+    <title>outbound_dispatch_shipmentorder</title>
+    <rect class="card-outline" x="60" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">outbound_dispatch_shipmentorder</text>
+    <text x="306" y="172" class="meta" text-anchor="end">outbound_dispatch</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      created_at : datetime</text>
+    <text x="74" y="244" class="field">      updated_at : datetime</text>
+    <text x="74" y="262" class="field">      is_active : boolean</text>
+    <text x="74" y="280" class="field">      sap_doc_entry : int</text>
+    <text x="74" y="298" class="field">      sap_doc_num : int</text>
+    <text x="74" y="316" class="field">      customer_code : varchar</text>
+    <text x="74" y="334" class="field">      customer_name : varchar</text>
+    <text x="74" y="352" class="field">... 16 more fields</text>
+  </g>
+  <g id="outbound_dispatch_outboundloadrecord" class="card" data-table="outbound_dispatch_outboundloadrecord">
+    <title>outbound_dispatch_outboundloadrecord</title>
+    <rect class="card-outline" x="500" y="169" width="364" height="382" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="169" width="364" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="195" width="364" height="8" fill="#bfdbfe"/>
+    <text x="514" y="191" class="card-title" fill="#0f172a">outbound_dispatch_outboundloadrecord</text>
+    <text x="514" y="227" class="field">PK    id : bigint</text>
+    <text x="514" y="245" class="field">      created_at : datetime</text>
+    <text x="514" y="263" class="field">      updated_at : datetime</text>
+    <text x="514" y="281" class="field">      is_active : boolean</text>
+    <text x="514" y="299" class="field">      trailer_condition : varchar</text>
+    <text x="514" y="317" class="field">      trailer_temp_ok : boolean (nullable)</text>
+    <text x="514" y="335" class="field">      trailer_temp_reading : decimal (nullable)</text>
+    <text x="514" y="353" class="field">      inspected_at : datetime (nullable)</text>
+    <text x="514" y="371" class="field">      loading_started_at : datetime (nullable)</text>
+    <text x="514" y="389" class="field">      loading_completed_at : datetime (nullable)</text>
+    <text x="514" y="407" class="field">      supervisor_confirmed : boolean</text>
+    <text x="514" y="425" class="field">      confirmed_at : datetime (nullable)</text>
+    <text x="514" y="443" class="field">      created_by_id : bigint (nullable)</text>
+    <text x="514" y="461" class="field">      inspected_by_id : bigint (nullable)</text>
+    <text x="514" y="479" class="field">      loaded_by_id : bigint (nullable)</text>
+    <text x="514" y="497" class="field">      supervisor_id : bigint (nullable)</text>
+    <text x="514" y="515" class="field">      updated_by_id : bigint (nullable)</text>
+    <text x="514" y="533" class="field">FK/UK shipment_order_id : bigint</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

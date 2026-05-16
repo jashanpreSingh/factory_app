@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1502" height="762" viewBox="0 0 1502 762">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">person_gatein_entrylog Neighborhood</text>
+  <text x="60" y="80" class="subtitle">4 parent/lookup tables, 0 child tables, 5 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="person_gatein_gate" data-dst="person_gatein_entrylog" data-label="gate_in_id">
+    <title>person_gatein_gate to person_gatein_entrylog via gate_in_id</title>
+    <path class="edge-hit" d="M 333 193 L 351 193 L 351 136 L 891 136 L 891 278 L 909 278"/>
+    <path class="edge" d="M 333 193 L 351 193 L 351 136 L 891 136 L 891 278 L 909 278"/>
+    <rect class="edge-label-bg" x="627.5" y="128.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="663.5" y="140.0" text-anchor="middle">gate_in_id</text>
+  </g>
+  <g class="relation" data-src="person_gatein_gate" data-dst="person_gatein_entrylog" data-label="gate_out_id">
+    <title>person_gatein_gate to person_gatein_entrylog via gate_out_id</title>
+    <path class="edge-hit" d="M 333 237 L 407 237 L 407 384 L 885 384 L 885 344 L 909 344"/>
+    <path class="edge" d="M 333 237 L 407 237 L 407 384 L 885 384 L 885 344 L 909 344"/>
+    <rect class="edge-label-bg" x="528.5" y="376.0" width="78" height="16" rx="4"/>
+    <text class="edge-label" x="567.5" y="388.0" text-anchor="middle">gate_out_id</text>
+  </g>
+  <g class="relation" data-src="person_gatein_labour" data-dst="person_gatein_entrylog" data-label="labour_id">
+    <title>person_gatein_labour to person_gatein_entrylog via labour_id</title>
+    <path class="edge-hit" d="M 375 420 L 393 420 L 393 478 L 909 478"/>
+    <path class="edge" d="M 375 420 L 393 420 L 393 478 L 909 478"/>
+    <rect class="edge-label-bg" x="580.0" y="470.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="613.0" y="482.0" text-anchor="middle">labour_id</text>
+  </g>
+  <g class="relation" data-src="person_gatein_persontype" data-dst="person_gatein_entrylog" data-label="person_type_id">
+    <title>person_gatein_persontype to person_gatein_entrylog via person_type_id</title>
+    <path class="edge-hit" d="M 320 616 L 338 616 L 338 544 L 909 544"/>
+    <path class="edge" d="M 320 616 L 338 616 L 338 544 L 909 544"/>
+    <rect class="edge-label-bg" x="530.5" y="536.0" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="578.5" y="548.0" text-anchor="middle">person_type_id</text>
+  </g>
+  <g class="relation" data-src="person_gatein_visitor" data-dst="person_gatein_entrylog" data-label="visitor_id">
+    <title>person_gatein_visitor to person_gatein_entrylog via visitor_id</title>
+    <path class="edge-hit" d="M 729 260 L 747 260 L 747 411 L 909 411"/>
+    <path class="edge" d="M 729 260 L 747 260 L 747 411 L 909 411"/>
+    <rect class="edge-label-bg" x="711.0" y="399.5" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="747.0" y="411.5" text-anchor="middle">visitor_id</text>
+  </g>
+  <g id="person_gatein_gate" class="card" data-table="person_gatein_gate">
+    <title>person_gatein_gate</title>
+    <rect class="card-outline" x="60" y="150" width="273" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="273" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">person_gatein_gate</text>
+    <text x="319" y="172" class="meta" text-anchor="end">person_gatein</text>
+    <text x="74" y="208" class="field">PK    id : int</text>
+    <text x="74" y="226" class="field">      name : varchar</text>
+    <text x="74" y="244" class="field">      location : varchar (nullable)</text>
+    <text x="74" y="262" class="field">      is_active : boolean</text>
+  </g>
+  <g id="person_gatein_labour" class="card" data-table="person_gatein_labour">
+    <title>person_gatein_labour</title>
+    <rect class="card-outline" x="60" y="310" width="315" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="310" width="315" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="336" width="315" height="8" fill="#e2e8f0"/>
+    <text x="74" y="332" class="card-title" fill="#94a3b8">person_gatein_labour</text>
+    <text x="361" y="332" class="meta" text-anchor="end">person_gatein</text>
+    <text x="74" y="368" class="field">PK    id : int</text>
+    <text x="74" y="386" class="field">      name : varchar</text>
+    <text x="74" y="404" class="field">      mobile : varchar (nullable)</text>
+    <text x="74" y="422" class="field">      id_proof_no : varchar (nullable)</text>
+    <text x="74" y="440" class="field">      photo : varchar (nullable)</text>
+    <text x="74" y="458" class="field">      skill_type : varchar (nullable)</text>
+    <text x="74" y="476" class="field">      permit_valid_till : date (nullable)</text>
+    <text x="74" y="494" class="field">      is_active : boolean</text>
+    <text x="74" y="512" class="field">... 1 more fields</text>
+  </g>
+  <g id="person_gatein_persontype" class="card" data-table="person_gatein_persontype">
+    <title>person_gatein_persontype</title>
+    <rect class="card-outline" x="60" y="560" width="260" height="112" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="560" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="586" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="582" class="card-title" fill="#94a3b8">person_gatein_persontype</text>
+    <text x="306" y="582" class="meta" text-anchor="end">person_gatein</text>
+    <text x="74" y="618" class="field">PK    id : int</text>
+    <text x="74" y="636" class="field">UK    name : varchar</text>
+    <text x="74" y="654" class="field">      is_active : boolean</text>
+  </g>
+  <g id="person_gatein_visitor" class="card" data-table="person_gatein_visitor">
+    <title>person_gatein_visitor</title>
+    <rect class="card-outline" x="421" y="150" width="308" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="421" y="150" width="308" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="421" y="176" width="308" height="8" fill="#e2e8f0"/>
+    <text x="435" y="172" class="card-title" fill="#94a3b8">person_gatein_visitor</text>
+    <text x="715" y="172" class="meta" text-anchor="end">person_gatein</text>
+    <text x="435" y="208" class="field">PK    id : int</text>
+    <text x="435" y="226" class="field">      name : varchar</text>
+    <text x="435" y="244" class="field">      mobile : varchar (nullable)</text>
+    <text x="435" y="262" class="field">      company_name : varchar (nullable)</text>
+    <text x="435" y="280" class="field">      id_proof_type : varchar (nullable)</text>
+    <text x="435" y="298" class="field">      id_proof_no : varchar (nullable)</text>
+    <text x="435" y="316" class="field">      photo : varchar (nullable)</text>
+    <text x="435" y="334" class="field">      blacklisted : boolean</text>
+    <text x="435" y="352" class="field">... 1 more fields</text>
+  </g>
+  <g id="person_gatein_entrylog" class="card" data-table="person_gatein_entrylog">
+    <title>person_gatein_entrylog</title>
+    <rect class="card-outline" x="909" y="211" width="343" height="400" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="909" y="211" width="343" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="909" y="237" width="343" height="8" fill="#bfdbfe"/>
+    <text x="923" y="233" class="card-title" fill="#0f172a">person_gatein_entrylog</text>
+    <text x="923" y="269" class="field">PK    id : int</text>
+    <text x="923" y="287" class="field">      name_snapshot : varchar</text>
+    <text x="923" y="305" class="field">      photo_snapshot : varchar (nullable)</text>
+    <text x="923" y="323" class="field">      entry_time : datetime</text>
+    <text x="923" y="341" class="field">      exit_time : datetime (nullable)</text>
+    <text x="923" y="359" class="field">      purpose : varchar (nullable)</text>
+    <text x="923" y="377" class="field">      vehicle_no : varchar (nullable)</text>
+    <text x="923" y="395" class="field">      remarks : text (nullable)</text>
+    <text x="923" y="413" class="field">      status : varchar</text>
+    <text x="923" y="431" class="field">      created_at : datetime</text>
+    <text x="923" y="449" class="field">      updated_at : datetime</text>
+    <text x="923" y="467" class="field">      approved_by_id : int (nullable)</text>
+    <text x="923" y="485" class="field">      created_by_id : int (nullable)</text>
+    <text x="923" y="503" class="field">FK    gate_in_id : int</text>
+    <text x="923" y="521" class="field">FK    gate_out_id : int (nullable)</text>
+    <text x="923" y="539" class="field">FK    labour_id : int (nullable)</text>
+    <text x="923" y="557" class="field">FK    person_type_id : int</text>
+    <text x="923" y="575" class="field">FK    visitor_id : int (nullable)</text>
+    <text x="923" y="593" class="field">      actual_entry_time : datetime (nullable)</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

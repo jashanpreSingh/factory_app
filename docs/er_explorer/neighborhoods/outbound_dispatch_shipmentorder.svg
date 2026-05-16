@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1769" height="730" viewBox="0 0 1769 730">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">outbound_dispatch_shipmentorder Neighborhood</text>
+  <text x="60" y="80" class="subtitle">2 parent/lookup tables, 3 child tables, 5 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <text x="1009" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="company_company" data-dst="outbound_dispatch_shipmentorder" data-label="company_id">
+    <title>company_company to outbound_dispatch_shipmentorder via company_id</title>
+    <path class="edge-hit" d="M 320 215 L 338 215 L 338 313 L 500 313"/>
+    <path class="edge" d="M 320 215 L 338 215 L 338 313 L 500 313"/>
+    <rect class="edge-label-bg" x="325.0" y="305.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="361.0" y="317.0" text-anchor="middle">company_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_vehicleentry" data-dst="outbound_dispatch_shipmentorder" data-label="vehicle_entry_id">
+    <title>driver_management_vehicleentry to outbound_dispatch_shipmentorder via vehicle_entry_id</title>
+    <path class="edge-hit" d="M 320 420 L 476 420 L 476 477 L 500 477"/>
+    <path class="edge" d="M 320 420 L 476 420 L 476 477 L 500 477"/>
+    <rect class="edge-label-bg" x="384.5" y="412.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="438.5" y="424.0" text-anchor="middle">vehicle_entry_id</text>
+  </g>
+  <g class="relation" data-src="outbound_dispatch_shipmentorder" data-dst="outbound_dispatch_goodsissueposting" data-label="shipment_order_id">
+    <title>outbound_dispatch_shipmentorder to outbound_dispatch_goodsissueposting via shipment_order_id</title>
+    <path class="edge-hit" d="M 829 518 L 859 518 L 859 510 L 1009 510"/>
+    <path class="edge" d="M 829 518 L 859 518 L 859 510 L 1009 510"/>
+    <rect class="edge-label-bg" x="858.0" y="502.0" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="915.0" y="514.0" text-anchor="middle">shipment_order_id</text>
+  </g>
+  <g class="relation" data-src="outbound_dispatch_shipmentorder" data-dst="outbound_dispatch_outboundloadrecord" data-label="shipment_order_id">
+    <title>outbound_dispatch_shipmentorder to outbound_dispatch_outboundloadrecord via shipment_order_id</title>
+    <path class="edge-hit" d="M 829 272 L 847 272 L 847 384 L 1324 384 L 1324 260 L 1342 260"/>
+    <path class="edge" d="M 829 272 L 847 272 L 847 384 L 1324 384 L 1324 260 L 1342 260"/>
+    <rect class="edge-label-bg" x="1034.5" y="376.0" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="1091.5" y="388.0" text-anchor="middle">shipment_order_id</text>
+  </g>
+  <g class="relation" data-src="outbound_dispatch_shipmentorder" data-dst="outbound_dispatch_shipmentorderitem" data-label="shipment_order_id">
+    <title>outbound_dispatch_shipmentorder to outbound_dispatch_shipmentorderitem via shipment_order_id</title>
+    <path class="edge-hit" d="M 829 395 L 991 395 L 991 260 L 1009 260"/>
+    <path class="edge" d="M 829 395 L 991 395 L 991 260 L 1009 260"/>
+    <rect class="edge-label-bg" x="929.5" y="387.0" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="986.5" y="399.0" text-anchor="middle">shipment_order_id</text>
+  </g>
+  <g id="company_company" class="card" data-table="company_company">
+    <title>company_company</title>
+    <rect class="card-outline" x="60" y="150" width="260" height="130" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">company_company</text>
+    <text x="306" y="172" class="meta" text-anchor="end">company</text>
+    <text x="74" y="208" class="field">PK    id : int</text>
+    <text x="74" y="226" class="field">      name : varchar</text>
+    <text x="74" y="244" class="field">UK    code : varchar</text>
+    <text x="74" y="262" class="field">      is_active : boolean</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="60" y="310" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="310" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="336" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="332" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="306" y="332" class="meta" text-anchor="end">driver_management</text>
+    <text x="74" y="368" class="field">PK    id : int</text>
+    <text x="74" y="386" class="field">      created_at : datetime</text>
+    <text x="74" y="404" class="field">      updated_at : datetime</text>
+    <text x="74" y="422" class="field">      is_active : boolean</text>
+    <text x="74" y="440" class="field">UK    entry_no : varchar</text>
+    <text x="74" y="458" class="field">      status : varchar</text>
+    <text x="74" y="476" class="field">      is_locked : boolean</text>
+    <text x="74" y="494" class="field">      entry_time : datetime</text>
+    <text x="74" y="512" class="field">... 7 more fields</text>
+  </g>
+  <g id="outbound_dispatch_shipmentorder" class="card" data-table="outbound_dispatch_shipmentorder">
+    <title>outbound_dispatch_shipmentorder</title>
+    <rect class="card-outline" x="500" y="150" width="329" height="490" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="150" width="329" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="176" width="329" height="8" fill="#bfdbfe"/>
+    <text x="514" y="172" class="card-title" fill="#0f172a">outbound_dispatch_shipmentorder</text>
+    <text x="514" y="208" class="field">PK    id : bigint</text>
+    <text x="514" y="226" class="field">      created_at : datetime</text>
+    <text x="514" y="244" class="field">      updated_at : datetime</text>
+    <text x="514" y="262" class="field">      is_active : boolean</text>
+    <text x="514" y="280" class="field">      sap_doc_entry : int</text>
+    <text x="514" y="298" class="field">      sap_doc_num : int</text>
+    <text x="514" y="316" class="field">      customer_code : varchar</text>
+    <text x="514" y="334" class="field">      customer_name : varchar</text>
+    <text x="514" y="352" class="field">      ship_to_address : text</text>
+    <text x="514" y="370" class="field">      carrier_code : varchar</text>
+    <text x="514" y="388" class="field">      carrier_name : varchar</text>
+    <text x="514" y="406" class="field">      scheduled_date : date</text>
+    <text x="514" y="424" class="field">      dock_bay : varchar</text>
+    <text x="514" y="442" class="field">      dock_slot_start : datetime (nullable)</text>
+    <text x="514" y="460" class="field">      dock_slot_end : datetime (nullable)</text>
+    <text x="514" y="478" class="field">      status : varchar</text>
+    <text x="514" y="496" class="field">      bill_of_lading_no : varchar</text>
+    <text x="514" y="514" class="field">      seal_number : varchar</text>
+    <text x="514" y="532" class="field">      total_weight : decimal (nullable)</text>
+    <text x="514" y="550" class="field">      notes : text</text>
+    <text x="514" y="568" class="field">FK    company_id : bigint</text>
+    <text x="514" y="586" class="field">      created_by_id : bigint (nullable)</text>
+    <text x="514" y="604" class="field">      updated_by_id : bigint (nullable)</text>
+    <text x="514" y="622" class="field">FK    vehicle_entry_id : bigint (nullable)</text>
+  </g>
+  <g id="outbound_dispatch_shipmentorderitem" class="card" data-table="outbound_dispatch_shipmentorderitem">
+    <title>outbound_dispatch_shipmentorderitem</title>
+    <rect class="card-outline" x="1009" y="150" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1009" y="150" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1009" y="176" width="273" height="8" fill="#e2e8f0"/>
+    <text x="1023" y="172" class="card-title" fill="#94a3b8">outbound_dispatch_shipmentorderitem</text>
+    <text x="1268" y="172" class="meta" text-anchor="end">outbound_dispatch</text>
+    <text x="1023" y="208" class="field">PK    id : bigint</text>
+    <text x="1023" y="226" class="field">      created_at : datetime</text>
+    <text x="1023" y="244" class="field">      updated_at : datetime</text>
+    <text x="1023" y="262" class="field">      is_active : boolean</text>
+    <text x="1023" y="280" class="field">      sap_line_num : int</text>
+    <text x="1023" y="298" class="field">      item_code : varchar</text>
+    <text x="1023" y="316" class="field">      item_name : varchar</text>
+    <text x="1023" y="334" class="field">      ordered_qty : decimal</text>
+    <text x="1023" y="352" class="field">... 11 more fields</text>
+  </g>
+  <g id="outbound_dispatch_goodsissueposting" class="card" data-table="outbound_dispatch_goodsissueposting">
+    <title>outbound_dispatch_goodsissueposting</title>
+    <rect class="card-outline" x="1009" y="400" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1009" y="400" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1009" y="426" width="287" height="8" fill="#e2e8f0"/>
+    <text x="1023" y="422" class="card-title" fill="#94a3b8">outbound_dispatch_goodsissueposting</text>
+    <text x="1282" y="422" class="meta" text-anchor="end">outbound_dispatch</text>
+    <text x="1023" y="458" class="field">PK    id : bigint</text>
+    <text x="1023" y="476" class="field">      created_at : datetime</text>
+    <text x="1023" y="494" class="field">      updated_at : datetime</text>
+    <text x="1023" y="512" class="field">      is_active : boolean</text>
+    <text x="1023" y="530" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="1023" y="548" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="1023" y="566" class="field">      status : varchar</text>
+    <text x="1023" y="584" class="field">      posted_at : datetime (nullable)</text>
+    <text x="1023" y="602" class="field">... 6 more fields</text>
+  </g>
+  <g id="outbound_dispatch_outboundloadrecord" class="card" data-table="outbound_dispatch_outboundloadrecord">
+    <title>outbound_dispatch_outboundloadrecord</title>
+    <rect class="card-outline" x="1342" y="150" width="357" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1342" y="150" width="357" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1342" y="176" width="357" height="8" fill="#e2e8f0"/>
+    <text x="1356" y="172" class="card-title" fill="#94a3b8">outbound_dispatch_outboundloadrecord</text>
+    <text x="1685" y="172" class="meta" text-anchor="end">outbound_dispatch</text>
+    <text x="1356" y="208" class="field">PK    id : bigint</text>
+    <text x="1356" y="226" class="field">      created_at : datetime</text>
+    <text x="1356" y="244" class="field">      updated_at : datetime</text>
+    <text x="1356" y="262" class="field">      is_active : boolean</text>
+    <text x="1356" y="280" class="field">      trailer_condition : varchar</text>
+    <text x="1356" y="298" class="field">      trailer_temp_ok : boolean (nullable)</text>
+    <text x="1356" y="316" class="field">      trailer_temp_reading : decimal (nullable)</text>
+    <text x="1356" y="334" class="field">      inspected_at : datetime (nullable)</text>
+    <text x="1356" y="352" class="field">... 10 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

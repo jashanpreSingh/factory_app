@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1398" height="720" viewBox="0 0 1398 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">production_planning_weeklyplan Neighborhood</text>
+  <text x="60" y="80" class="subtitle">1 parent/lookup tables, 1 child tables, 2 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <text x="1020" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="production_planning_productionplan" data-dst="production_planning_weeklyplan" data-label="production_plan_id">
+    <title>production_planning_productionplan to production_planning_weeklyplan via production_plan_id</title>
+    <path class="edge-hit" d="M 340 260 L 358 260 L 358 360 L 520 360"/>
+    <path class="edge" d="M 340 260 L 358 260 L 358 360 L 520 360"/>
+    <rect class="edge-label-bg" x="320.0" y="352.0" width="120" height="16" rx="4"/>
+    <text class="edge-label" x="380.0" y="364.0" text-anchor="middle">production_plan_id</text>
+  </g>
+  <g class="relation" data-src="production_planning_weeklyplan" data-dst="production_planning_dailyproductionentry" data-label="weekly_plan_id">
+    <title>production_planning_weeklyplan to production_planning_dailyproductionentry via weekly_plan_id</title>
+    <path class="edge-hit" d="M 840 360 L 858 360 L 858 276 L 1002 276 L 1002 260 L 1020 260"/>
+    <path class="edge" d="M 840 360 L 858 360 L 858 276 L 1002 276 L 1002 260 L 1020 260"/>
+    <rect class="edge-label-bg" x="848.0" y="268.0" width="96" height="16" rx="4"/>
+    <text class="edge-label" x="896.0" y="280.0" text-anchor="middle">weekly_plan_id</text>
+  </g>
+  <g id="production_planning_productionplan" class="card" data-table="production_planning_productionplan">
+    <title>production_planning_productionplan</title>
+    <rect class="card-outline" x="60" y="150" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="280" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">production_planning_productionplan</text>
+    <text x="326" y="172" class="meta" text-anchor="end">production_planning</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="74" y="244" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="74" y="262" class="field">      item_code : varchar</text>
+    <text x="74" y="280" class="field">      item_name : varchar</text>
+    <text x="74" y="298" class="field">      planned_qty : decimal</text>
+    <text x="74" y="316" class="field">      completed_qty : decimal</text>
+    <text x="74" y="334" class="field">      target_start_date : date</text>
+    <text x="74" y="352" class="field">... 15 more fields</text>
+  </g>
+  <g id="production_planning_weeklyplan" class="card" data-table="production_planning_weeklyplan">
+    <title>production_planning_weeklyplan</title>
+    <rect class="card-outline" x="520" y="223" width="320" height="274" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="520" y="223" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="520" y="249" width="320" height="8" fill="#bfdbfe"/>
+    <text x="534" y="245" class="card-title" fill="#0f172a">production_planning_weeklyplan</text>
+    <text x="534" y="281" class="field">PK    id : bigint</text>
+    <text x="534" y="299" class="field">      week_number : int</text>
+    <text x="534" y="317" class="field">      week_label : varchar</text>
+    <text x="534" y="335" class="field">      start_date : date</text>
+    <text x="534" y="353" class="field">      end_date : date</text>
+    <text x="534" y="371" class="field">      target_qty : decimal</text>
+    <text x="534" y="389" class="field">      produced_qty : decimal</text>
+    <text x="534" y="407" class="field">      status : varchar</text>
+    <text x="534" y="425" class="field">      created_at : datetime</text>
+    <text x="534" y="443" class="field">      updated_at : datetime</text>
+    <text x="534" y="461" class="field">FK    production_plan_id : bigint</text>
+    <text x="534" y="479" class="field">      created_by_id : bigint (nullable)</text>
+  </g>
+  <g id="production_planning_dailyproductionentry" class="card" data-table="production_planning_dailyproductionentry">
+    <title>production_planning_dailyproductionentry</title>
+    <rect class="card-outline" x="1020" y="150" width="308" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1020" y="150" width="308" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1020" y="176" width="308" height="8" fill="#e2e8f0"/>
+    <text x="1034" y="172" class="card-title" fill="#94a3b8">production_planning_dailyproductionentry</text>
+    <text x="1314" y="172" class="meta" text-anchor="end">production_planning</text>
+    <text x="1034" y="208" class="field">PK    id : bigint</text>
+    <text x="1034" y="226" class="field">      production_date : date</text>
+    <text x="1034" y="244" class="field">      produced_qty : decimal</text>
+    <text x="1034" y="262" class="field">      shift : varchar (nullable)</text>
+    <text x="1034" y="280" class="field">      remarks : text</text>
+    <text x="1034" y="298" class="field">      created_at : datetime</text>
+    <text x="1034" y="316" class="field">      updated_at : datetime</text>
+    <text x="1034" y="334" class="field">FK    weekly_plan_id : bigint</text>
+    <text x="1034" y="352" class="field">... 1 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

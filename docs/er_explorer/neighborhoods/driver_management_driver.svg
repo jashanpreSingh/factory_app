@@ -1,0 +1,333 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2634" height="720" viewBox="0 0 2634 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">driver_management_driver Neighborhood</text>
+  <text x="60" y="80" class="subtitle">0 parent/lookup tables, 10 child tables, 10 direct relationships</text>
+  <text x="1000" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="driver_management_driver" data-dst="dispatch_plans_dispatchplan" data-label="driver_id">
+    <title>driver_management_driver to dispatch_plans_dispatchplan via driver_id</title>
+    <path class="edge-hit" d="M 820 248 L 838 248 L 838 136 L 1308 136 L 1308 260 L 1326 260"/>
+    <path class="edge" d="M 820 248 L 838 248 L 838 136 L 1308 136 L 1308 260 L 1326 260"/>
+    <rect class="edge-label-bg" x="1046.0" y="128.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1079.0" y="140.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="driver_management_vehicleentry" data-label="driver_id">
+    <title>driver_management_driver to driver_management_vehicleentry via driver_id</title>
+    <path class="edge-hit" d="M 820 273 L 982 273 L 982 260 L 1000 260"/>
+    <path class="edge" d="M 820 273 L 982 273 L 982 260 L 1000 260"/>
+    <rect class="edge-label-bg" x="883.5" y="265.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="916.5" y="277.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_bstgatein" data-label="driver_id">
+    <title>driver_management_driver to gate_core_bstgatein via driver_id</title>
+    <path class="edge-hit" d="M 820 372 L 868 372 L 868 386 L 1294 386 L 1294 510 L 1326 510"/>
+    <path class="edge" d="M 820 372 L 868 372 L 868 386 L 1294 386 L 1294 510 L 1326 510"/>
+    <rect class="edge-label-bg" x="1095.0" y="378.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1128.0" y="390.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_bstgateout" data-label="driver_id">
+    <title>driver_management_driver to gate_core_bstgateout via driver_id</title>
+    <path class="edge-hit" d="M 820 397 L 944 397 L 944 510 L 1000 510"/>
+    <path class="edge" d="M 820 397 L 944 397 L 944 510 L 1000 510"/>
+    <rect class="edge-label-bg" x="911.0" y="411.5" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="944.0" y="423.5" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_bstgatereturn" data-label="driver_id">
+    <title>driver_management_driver to gate_core_bstgatereturn via driver_id</title>
+    <path class="edge-hit" d="M 820 298 L 850 298 L 850 384 L 1960 384 L 1960 260 L 1978 260"/>
+    <path class="edge" d="M 820 298 L 850 298 L 850 384 L 1960 384 L 1960 260 L 1978 260"/>
+    <rect class="edge-label-bg" x="1385.0" y="376.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1418.0" y="388.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_dispatchgateout" data-label="driver_id">
+    <title>driver_management_driver to gate_core_dispatchgateout via driver_id</title>
+    <path class="edge-hit" d="M 820 323 L 856 323 L 856 132 L 1641 132 L 1641 260 L 1659 260"/>
+    <path class="edge" d="M 820 323 L 856 323 L 856 132 L 1641 132 L 1641 260 L 1659 260"/>
+    <rect class="edge-label-bg" x="1175.0" y="124.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1208.0" y="136.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_emptyvehiclegatein" data-label="driver_id">
+    <title>driver_management_driver to gate_core_emptyvehiclegatein via driver_id</title>
+    <path class="edge-hit" d="M 820 422 L 880 422 L 880 634 L 1634 634 L 1634 528 L 1641 528 L 1641 510 L 1659 510"/>
+    <path class="edge" d="M 820 422 L 880 422 L 880 634 L 1634 634 L 1634 528 L 1641 528 L 1641 510 L 1659 510"/>
+    <rect class="edge-label-bg" x="1162.5" y="626.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1195.5" y="638.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_emptyvehiclegateout" data-label="driver_id">
+    <title>driver_management_driver to gate_core_emptyvehiclegateout via driver_id</title>
+    <path class="edge-hit" d="M 820 447 L 886 447 L 886 636 L 1956 636 L 1956 492 L 1960 492 L 1960 510 L 1978 510"/>
+    <path class="edge" d="M 820 447 L 886 447 L 886 636 L 1956 636 L 1956 492 L 1960 492 L 1960 510 L 1978 510"/>
+    <rect class="edge-label-bg" x="1352.5" y="628.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1385.5" y="640.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_jobworkgatein" data-label="driver_id">
+    <title>driver_management_driver to gate_core_jobworkgatein via driver_id</title>
+    <path class="edge-hit" d="M 820 348 L 862 348 L 862 96 L 2266 96 L 2266 260 L 2284 260"/>
+    <path class="edge" d="M 820 348 L 862 348 L 862 96 L 2266 96 L 2266 260 L 2284 260"/>
+    <rect class="edge-label-bg" x="1475.0" y="88.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1508.0" y="100.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_driver" data-dst="gate_core_rejectedqcreturnentry" data-label="driver_id">
+    <title>driver_management_driver to gate_core_rejectedqcreturnentry via driver_id</title>
+    <path class="edge-hit" d="M 820 472 L 892 472 L 892 672 L 2252 672 L 2252 528 L 2266 528 L 2266 510 L 2284 510"/>
+    <path class="edge" d="M 820 472 L 892 472 L 892 672 L 2252 672 L 2252 528 L 2266 528 L 2266 510 L 2284 510"/>
+    <rect class="edge-label-bg" x="1500.0" y="664.0" width="66" height="16" rx="4"/>
+    <text class="edge-label" x="1533.0" y="676.0" text-anchor="middle">driver_id</text>
+  </g>
+  <g id="driver_management_driver" class="card" data-table="driver_management_driver">
+    <title>driver_management_driver</title>
+    <rect class="card-outline" x="500" y="223" width="320" height="274" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="223" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="249" width="320" height="8" fill="#bfdbfe"/>
+    <text x="514" y="245" class="card-title" fill="#0f172a">driver_management_driver</text>
+    <text x="514" y="281" class="field">PK    id : int</text>
+    <text x="514" y="299" class="field">      created_at : datetime</text>
+    <text x="514" y="317" class="field">      updated_at : datetime</text>
+    <text x="514" y="335" class="field">      is_active : boolean</text>
+    <text x="514" y="353" class="field">      name : varchar</text>
+    <text x="514" y="371" class="field">      mobile_no : varchar</text>
+    <text x="514" y="389" class="field">UK    license_no : varchar</text>
+    <text x="514" y="407" class="field">      id_proof_type : varchar</text>
+    <text x="514" y="425" class="field">      id_proof_number : varchar</text>
+    <text x="514" y="443" class="field">      photo : varchar (nullable)</text>
+    <text x="514" y="461" class="field">      created_by_id : int (nullable)</text>
+    <text x="514" y="479" class="field">      updated_by_id : int (nullable)</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="1000" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="172" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="1246" y="172" class="meta" text-anchor="end">driver_management</text>
+    <text x="1014" y="208" class="field">PK    id : int</text>
+    <text x="1014" y="226" class="field">      created_at : datetime</text>
+    <text x="1014" y="244" class="field">      updated_at : datetime</text>
+    <text x="1014" y="262" class="field">      is_active : boolean</text>
+    <text x="1014" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="1014" y="298" class="field">      status : varchar</text>
+    <text x="1014" y="316" class="field">      is_locked : boolean</text>
+    <text x="1014" y="334" class="field">      entry_time : datetime</text>
+    <text x="1014" y="352" class="field">... 7 more fields</text>
+  </g>
+  <g id="gate_core_bstgateout" class="card" data-table="gate_core_bstgateout">
+    <title>gate_core_bstgateout</title>
+    <rect class="card-outline" x="1000" y="400" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="400" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="426" width="280" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="422" class="card-title" fill="#94a3b8">gate_core_bstgateout</text>
+    <text x="1266" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="1014" y="458" class="field">PK    id : bigint</text>
+    <text x="1014" y="476" class="field">      created_at : datetime</text>
+    <text x="1014" y="494" class="field">      updated_at : datetime</text>
+    <text x="1014" y="512" class="field">      is_active : boolean</text>
+    <text x="1014" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="1014" y="548" class="field">      sap_doc_entry : int</text>
+    <text x="1014" y="566" class="field">      sap_doc_num : varchar</text>
+    <text x="1014" y="584" class="field">      sap_doc_date : date (nullable)</text>
+    <text x="1014" y="602" class="field">... 19 more fields</text>
+  </g>
+  <g id="dispatch_plans_dispatchplan" class="card" data-table="dispatch_plans_dispatchplan">
+    <title>dispatch_plans_dispatchplan</title>
+    <rect class="card-outline" x="1326" y="150" width="287" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1326" y="150" width="287" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1326" y="176" width="287" height="8" fill="#e2e8f0"/>
+    <text x="1340" y="172" class="card-title" fill="#94a3b8">dispatch_plans_dispatchplan</text>
+    <text x="1599" y="172" class="meta" text-anchor="end">dispatch_plans</text>
+    <text x="1340" y="208" class="field">PK    id : bigint</text>
+    <text x="1340" y="226" class="field">      created_at : datetime</text>
+    <text x="1340" y="244" class="field">      updated_at : datetime</text>
+    <text x="1340" y="262" class="field">      is_active : boolean</text>
+    <text x="1340" y="280" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="1340" y="298" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="1340" y="316" class="field">      booking_status : varchar</text>
+    <text x="1340" y="334" class="field">      dispatch_date : date (nullable)</text>
+    <text x="1340" y="352" class="field">... 39 more fields</text>
+  </g>
+  <g id="gate_core_bstgatein" class="card" data-table="gate_core_bstgatein">
+    <title>gate_core_bstgatein</title>
+    <rect class="card-outline" x="1326" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1326" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1326" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1340" y="422" class="card-title" fill="#94a3b8">gate_core_bstgatein</text>
+    <text x="1572" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="1340" y="458" class="field">PK    id : bigint</text>
+    <text x="1340" y="476" class="field">      created_at : datetime</text>
+    <text x="1340" y="494" class="field">      updated_at : datetime</text>
+    <text x="1340" y="512" class="field">      is_active : boolean</text>
+    <text x="1340" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="1340" y="548" class="field">      gate_in_date : date</text>
+    <text x="1340" y="566" class="field">      in_time : time</text>
+    <text x="1340" y="584" class="field">      security_name : varchar</text>
+    <text x="1340" y="602" class="field">... 12 more fields</text>
+  </g>
+  <g id="gate_core_dispatchgateout" class="card" data-table="gate_core_dispatchgateout">
+    <title>gate_core_dispatchgateout</title>
+    <rect class="card-outline" x="1659" y="150" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1659" y="150" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1659" y="176" width="273" height="8" fill="#e2e8f0"/>
+    <text x="1673" y="172" class="card-title" fill="#94a3b8">gate_core_dispatchgateout</text>
+    <text x="1918" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="1673" y="208" class="field">PK    id : bigint</text>
+    <text x="1673" y="226" class="field">      created_at : datetime</text>
+    <text x="1673" y="244" class="field">      updated_at : datetime</text>
+    <text x="1673" y="262" class="field">      is_active : boolean</text>
+    <text x="1673" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="1673" y="298" class="field">      sap_invoice_doc_entry : int</text>
+    <text x="1673" y="316" class="field">      sap_invoice_doc_num : varchar</text>
+    <text x="1673" y="334" class="field">      customer_code : varchar</text>
+    <text x="1673" y="352" class="field">... 44 more fields</text>
+  </g>
+  <g id="gate_core_emptyvehiclegatein" class="card" data-table="gate_core_emptyvehiclegatein">
+    <title>gate_core_emptyvehiclegatein</title>
+    <rect class="card-outline" x="1659" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1659" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1659" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1673" y="422" class="card-title" fill="#94a3b8">gate_core_emptyvehiclegatein</text>
+    <text x="1905" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="1673" y="458" class="field">PK    id : bigint</text>
+    <text x="1673" y="476" class="field">      created_at : datetime</text>
+    <text x="1673" y="494" class="field">      updated_at : datetime</text>
+    <text x="1673" y="512" class="field">      is_active : boolean</text>
+    <text x="1673" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="1673" y="548" class="field">      reason : varchar</text>
+    <text x="1673" y="566" class="field">      gate_in_date : date</text>
+    <text x="1673" y="584" class="field">      in_time : time</text>
+    <text x="1673" y="602" class="field">... 19 more fields</text>
+  </g>
+  <g id="gate_core_bstgatereturn" class="card" data-table="gate_core_bstgatereturn">
+    <title>gate_core_bstgatereturn</title>
+    <rect class="card-outline" x="1978" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1978" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1978" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1992" y="172" class="card-title" fill="#94a3b8">gate_core_bstgatereturn</text>
+    <text x="2224" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="1992" y="208" class="field">PK    id : bigint</text>
+    <text x="1992" y="226" class="field">      created_at : datetime</text>
+    <text x="1992" y="244" class="field">      updated_at : datetime</text>
+    <text x="1992" y="262" class="field">      is_active : boolean</text>
+    <text x="1992" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="1992" y="298" class="field">      gate_in_date : date</text>
+    <text x="1992" y="316" class="field">      in_time : time</text>
+    <text x="1992" y="334" class="field">      security_name : varchar</text>
+    <text x="1992" y="352" class="field">... 12 more fields</text>
+  </g>
+  <g id="gate_core_emptyvehiclegateout" class="card" data-table="gate_core_emptyvehiclegateout">
+    <title>gate_core_emptyvehiclegateout</title>
+    <rect class="card-outline" x="1978" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1978" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1978" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1992" y="422" class="card-title" fill="#94a3b8">gate_core_emptyvehiclegateout</text>
+    <text x="2224" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="1992" y="458" class="field">PK    id : bigint</text>
+    <text x="1992" y="476" class="field">      created_at : datetime</text>
+    <text x="1992" y="494" class="field">      updated_at : datetime</text>
+    <text x="1992" y="512" class="field">      is_active : boolean</text>
+    <text x="1992" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="1992" y="548" class="field">      gate_out_date : date</text>
+    <text x="1992" y="566" class="field">      out_time : time</text>
+    <text x="1992" y="584" class="field">      security_name : varchar</text>
+    <text x="1992" y="602" class="field">... 11 more fields</text>
+  </g>
+  <g id="gate_core_jobworkgatein" class="card" data-table="gate_core_jobworkgatein">
+    <title>gate_core_jobworkgatein</title>
+    <rect class="card-outline" x="2284" y="150" width="280" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2284" y="150" width="280" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2284" y="176" width="280" height="8" fill="#e2e8f0"/>
+    <text x="2298" y="172" class="card-title" fill="#94a3b8">gate_core_jobworkgatein</text>
+    <text x="2550" y="172" class="meta" text-anchor="end">gate_core</text>
+    <text x="2298" y="208" class="field">PK    id : bigint</text>
+    <text x="2298" y="226" class="field">      created_at : datetime</text>
+    <text x="2298" y="244" class="field">      updated_at : datetime</text>
+    <text x="2298" y="262" class="field">      is_active : boolean</text>
+    <text x="2298" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="2298" y="298" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="2298" y="316" class="field">      sap_doc_num : varchar</text>
+    <text x="2298" y="334" class="field">      sap_doc_date : date (nullable)</text>
+    <text x="2298" y="352" class="field">... 29 more fields</text>
+  </g>
+  <g id="gate_core_rejectedqcreturnentry" class="card" data-table="gate_core_rejectedqcreturnentry">
+    <title>gate_core_rejectedqcreturnentry</title>
+    <rect class="card-outline" x="2284" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="2284" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="2284" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="2298" y="422" class="card-title" fill="#94a3b8">gate_core_rejectedqcreturnentry</text>
+    <text x="2530" y="422" class="meta" text-anchor="end">gate_core</text>
+    <text x="2298" y="458" class="field">PK    id : bigint</text>
+    <text x="2298" y="476" class="field">      created_at : datetime</text>
+    <text x="2298" y="494" class="field">      updated_at : datetime</text>
+    <text x="2298" y="512" class="field">      is_active : boolean</text>
+    <text x="2298" y="530" class="field">UK    entry_no : varchar</text>
+    <text x="2298" y="548" class="field">      gate_out_date : date</text>
+    <text x="2298" y="566" class="field">      out_time : time (nullable)</text>
+    <text x="2298" y="584" class="field">      challan_no : varchar</text>
+    <text x="2298" y="602" class="field">... 17 more fields</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

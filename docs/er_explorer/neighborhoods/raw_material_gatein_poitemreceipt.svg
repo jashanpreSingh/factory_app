@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1343" height="720" viewBox="0 0 1343 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">raw_material_gatein_poitemreceipt Neighborhood</text>
+  <text x="60" y="80" class="subtitle">1 parent/lookup tables, 2 child tables, 3 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <text x="1000" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="raw_material_gatein_poitemreceipt" data-dst="grpo_grpolineposting" data-label="po_item_receipt_id">
+    <title>raw_material_gatein_poitemreceipt to grpo_grpolineposting via po_item_receipt_id</title>
+    <path class="edge-hit" d="M 820 453 L 844 453 L 844 483 L 1000 483"/>
+    <path class="edge" d="M 820 453 L 844 453 L 844 483 L 1000 483"/>
+    <rect class="edge-label-bg" x="835.0" y="475.0" width="120" height="16" rx="4"/>
+    <text class="edge-label" x="895.0" y="487.0" text-anchor="middle">po_item_receipt_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poitemreceipt" data-dst="quality_control_materialarrivalslip" data-label="po_item_receipt_id">
+    <title>raw_material_gatein_poitemreceipt to quality_control_materialarrivalslip via po_item_receipt_id</title>
+    <path class="edge-hit" d="M 820 301 L 838 301 L 838 260 L 1000 260"/>
+    <path class="edge" d="M 820 301 L 838 301 L 838 260 L 1000 260"/>
+    <rect class="edge-label-bg" x="829.5" y="252.0" width="120" height="16" rx="4"/>
+    <text class="edge-label" x="889.5" y="264.0" text-anchor="middle">po_item_receipt_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poreceipt" data-dst="raw_material_gatein_poitemreceipt" data-label="po_receipt_id">
+    <title>raw_material_gatein_poreceipt to raw_material_gatein_poitemreceipt via po_receipt_id</title>
+    <path class="edge-hit" d="M 320 260 L 338 260 L 338 377 L 500 377"/>
+    <path class="edge" d="M 320 260 L 338 260 L 338 377 L 500 377"/>
+    <rect class="edge-label-bg" x="306.5" y="369.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="351.5" y="381.0" text-anchor="middle">po_receipt_id</text>
+  </g>
+  <g id="raw_material_gatein_poreceipt" class="card" data-table="raw_material_gatein_poreceipt">
+    <title>raw_material_gatein_poreceipt</title>
+    <rect class="card-outline" x="60" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">raw_material_gatein_poreceipt</text>
+    <text x="306" y="172" class="meta" text-anchor="end">raw_material_gatein</text>
+    <text x="74" y="208" class="field">PK    id : int</text>
+    <text x="74" y="226" class="field">      created_at : datetime</text>
+    <text x="74" y="244" class="field">      updated_at : datetime</text>
+    <text x="74" y="262" class="field">      is_active : boolean</text>
+    <text x="74" y="280" class="field">      po_number : varchar</text>
+    <text x="74" y="298" class="field">      supplier_code : varchar</text>
+    <text x="74" y="316" class="field">      supplier_name : varchar</text>
+    <text x="74" y="334" class="field">      invoice_no : varchar</text>
+    <text x="74" y="352" class="field">... 9 more fields</text>
+  </g>
+  <g id="raw_material_gatein_poitemreceipt" class="card" data-table="raw_material_gatein_poitemreceipt">
+    <title>raw_material_gatein_poitemreceipt</title>
+    <rect class="card-outline" x="500" y="150" width="320" height="454" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="150" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="176" width="320" height="8" fill="#bfdbfe"/>
+    <text x="514" y="172" class="card-title" fill="#0f172a">raw_material_gatein_poitemreceipt</text>
+    <text x="514" y="208" class="field">PK    id : int</text>
+    <text x="514" y="226" class="field">      created_at : datetime</text>
+    <text x="514" y="244" class="field">      updated_at : datetime</text>
+    <text x="514" y="262" class="field">      is_active : boolean</text>
+    <text x="514" y="280" class="field">      po_item_code : varchar</text>
+    <text x="514" y="298" class="field">      item_name : varchar</text>
+    <text x="514" y="316" class="field">      ordered_qty : decimal</text>
+    <text x="514" y="334" class="field">      received_qty : decimal</text>
+    <text x="514" y="352" class="field">      accepted_qty : decimal</text>
+    <text x="514" y="370" class="field">      rejected_qty : decimal</text>
+    <text x="514" y="388" class="field">      short_qty : decimal</text>
+    <text x="514" y="406" class="field">      uom : varchar</text>
+    <text x="514" y="424" class="field">      created_by_id : int (nullable)</text>
+    <text x="514" y="442" class="field">      updated_by_id : int (nullable)</text>
+    <text x="514" y="460" class="field">FK    po_receipt_id : int</text>
+    <text x="514" y="478" class="field">      line_num : int (nullable)</text>
+    <text x="514" y="496" class="field">      gl_account : varchar</text>
+    <text x="514" y="514" class="field">      tax_code : varchar</text>
+    <text x="514" y="532" class="field">      unit_price : decimal (nullable)</text>
+    <text x="514" y="550" class="field">      warehouse_code : varchar</text>
+    <text x="514" y="568" class="field">      sap_line_num : int (nullable)</text>
+    <text x="514" y="586" class="field">      variety : varchar (nullable)</text>
+  </g>
+  <g id="quality_control_materialarrivalslip" class="card" data-table="quality_control_materialarrivalslip">
+    <title>quality_control_materialarrivalslip</title>
+    <rect class="card-outline" x="1000" y="150" width="273" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="150" width="273" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="176" width="273" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="172" class="card-title" fill="#94a3b8">quality_control_materialarrivalslip</text>
+    <text x="1259" y="172" class="meta" text-anchor="end">quality_control</text>
+    <text x="1014" y="208" class="field">PK    id : int</text>
+    <text x="1014" y="226" class="field">      created_at : datetime</text>
+    <text x="1014" y="244" class="field">      updated_at : datetime</text>
+    <text x="1014" y="262" class="field">      is_active : boolean</text>
+    <text x="1014" y="280" class="field">      particulars : text</text>
+    <text x="1014" y="298" class="field">      arrival_datetime : datetime</text>
+    <text x="1014" y="316" class="field">      weighing_required : boolean</text>
+    <text x="1014" y="334" class="field">      party_name : varchar</text>
+    <text x="1014" y="352" class="field">... 19 more fields</text>
+  </g>
+  <g id="grpo_grpolineposting" class="card" data-table="grpo_grpolineposting">
+    <title>grpo_grpolineposting</title>
+    <rect class="card-outline" x="1000" y="400" width="260" height="166" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="422" class="card-title" fill="#94a3b8">grpo_grpolineposting</text>
+    <text x="1246" y="422" class="meta" text-anchor="end">grpo</text>
+    <text x="1014" y="458" class="field">PK    id : bigint</text>
+    <text x="1014" y="476" class="field">      quantity_posted : decimal</text>
+    <text x="1014" y="494" class="field">      base_entry : int (nullable)</text>
+    <text x="1014" y="512" class="field">      base_line : int (nullable)</text>
+    <text x="1014" y="530" class="field">FK    po_item_receipt_id : int</text>
+    <text x="1014" y="548" class="field">FK    grpo_posting_id : bigint</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

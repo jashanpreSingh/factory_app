@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1118" height="720" viewBox="0 0 1118 720">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">grpo_grpolineposting Neighborhood</text>
+  <text x="60" y="80" class="subtitle">2 parent/lookup tables, 0 child tables, 2 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="grpo_grpoposting" data-dst="grpo_grpolineposting" data-label="grpo_posting_id">
+    <title>grpo_grpoposting to grpo_grpolineposting via grpo_posting_id</title>
+    <path class="edge-hit" d="M 368 260 L 386 260 L 386 357 L 548 357"/>
+    <path class="edge" d="M 368 260 L 386 260 L 386 357 L 548 357"/>
+    <rect class="edge-label-bg" x="358.5" y="349.0" width="102" height="16" rx="4"/>
+    <text class="edge-label" x="409.5" y="361.0" text-anchor="middle">grpo_posting_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poitemreceipt" data-dst="grpo_grpolineposting" data-label="po_item_receipt_id">
+    <title>raw_material_gatein_poitemreceipt to grpo_grpolineposting via po_item_receipt_id</title>
+    <path class="edge-hit" d="M 320 510 L 338 510 L 338 413 L 548 413"/>
+    <path class="edge" d="M 320 510 L 338 510 L 338 413 L 548 413"/>
+    <rect class="edge-label-bg" x="325.5" y="405.0" width="120" height="16" rx="4"/>
+    <text class="edge-label" x="385.5" y="417.0" text-anchor="middle">po_item_receipt_id</text>
+  </g>
+  <g id="grpo_grpoposting" class="card" data-table="grpo_grpoposting">
+    <title>grpo_grpoposting</title>
+    <rect class="card-outline" x="60" y="150" width="308" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="308" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="308" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">grpo_grpoposting</text>
+    <text x="354" y="172" class="meta" text-anchor="end">grpo</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="74" y="244" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="74" y="262" class="field">      sap_doc_total : decimal (nullable)</text>
+    <text x="74" y="280" class="field">      status : varchar</text>
+    <text x="74" y="298" class="field">      error_message : text (nullable)</text>
+    <text x="74" y="316" class="field">      posted_at : datetime (nullable)</text>
+    <text x="74" y="334" class="field">      created_at : datetime</text>
+    <text x="74" y="352" class="field">... 4 more fields</text>
+  </g>
+  <g id="raw_material_gatein_poitemreceipt" class="card" data-table="raw_material_gatein_poitemreceipt">
+    <title>raw_material_gatein_poitemreceipt</title>
+    <rect class="card-outline" x="60" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="422" class="card-title" fill="#94a3b8">raw_material_gatein_poitemreceipt</text>
+    <text x="306" y="422" class="meta" text-anchor="end">raw_material_gatein</text>
+    <text x="74" y="458" class="field">PK    id : int</text>
+    <text x="74" y="476" class="field">      created_at : datetime</text>
+    <text x="74" y="494" class="field">      updated_at : datetime</text>
+    <text x="74" y="512" class="field">      is_active : boolean</text>
+    <text x="74" y="530" class="field">      po_item_code : varchar</text>
+    <text x="74" y="548" class="field">      item_name : varchar</text>
+    <text x="74" y="566" class="field">      ordered_qty : decimal</text>
+    <text x="74" y="584" class="field">      received_qty : decimal</text>
+    <text x="74" y="602" class="field">... 14 more fields</text>
+  </g>
+  <g id="grpo_grpolineposting" class="card" data-table="grpo_grpolineposting">
+    <title>grpo_grpolineposting</title>
+    <rect class="card-outline" x="548" y="302" width="320" height="166" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="548" y="302" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="548" y="328" width="320" height="8" fill="#bfdbfe"/>
+    <text x="562" y="324" class="card-title" fill="#0f172a">grpo_grpolineposting</text>
+    <text x="562" y="360" class="field">PK    id : bigint</text>
+    <text x="562" y="378" class="field">      quantity_posted : decimal</text>
+    <text x="562" y="396" class="field">      base_entry : int (nullable)</text>
+    <text x="562" y="414" class="field">      base_line : int (nullable)</text>
+    <text x="562" y="432" class="field">FK    po_item_receipt_id : int</text>
+    <text x="562" y="450" class="field">FK    grpo_posting_id : bigint</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

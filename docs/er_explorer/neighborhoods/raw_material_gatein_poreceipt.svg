@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1378" height="852" viewBox="0 0 1378 852">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">raw_material_gatein_poreceipt Neighborhood</text>
+  <text x="60" y="80" class="subtitle">1 parent/lookup tables, 3 child tables, 4 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <text x="1000" y="126" class="section">Children and dependents</text>
+  <g class="relation" data-src="driver_management_vehicleentry" data-dst="raw_material_gatein_poreceipt" data-label="vehicle_entry_id">
+    <title>driver_management_vehicleentry to raw_material_gatein_poreceipt via vehicle_entry_id</title>
+    <path class="edge-hit" d="M 320 260 L 338 260 L 338 360 L 500 360"/>
+    <path class="edge" d="M 320 260 L 338 260 L 338 360 L 500 360"/>
+    <rect class="edge-label-bg" x="306.0" y="352.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="360.0" y="364.0" text-anchor="middle">vehicle_entry_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poreceipt" data-dst="grpo_grpoposting" data-label="po_receipt_id">
+    <title>raw_material_gatein_poreceipt to grpo_grpoposting via po_receipt_id</title>
+    <path class="edge-hit" d="M 820 269 L 982 269 L 982 260 L 1000 260"/>
+    <path class="edge" d="M 820 269 L 982 269 L 982 260 L 1000 260"/>
+    <rect class="edge-label-bg" x="869.5" y="261.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="914.5" y="273.0" text-anchor="middle">po_receipt_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poreceipt" data-dst="grpo_grpoposting_po_receipts" data-label="poreceipt_id">
+    <title>raw_material_gatein_poreceipt to grpo_grpoposting_po_receipts via poreceipt_id</title>
+    <path class="edge-hit" d="M 820 451 L 850 451 L 850 706 L 1000 706"/>
+    <path class="edge" d="M 820 451 L 850 451 L 850 706 L 1000 706"/>
+    <rect class="edge-label-bg" x="808.0" y="630.5" width="84" height="16" rx="4"/>
+    <text class="edge-label" x="850.0" y="642.5" text-anchor="middle">poreceipt_id</text>
+  </g>
+  <g class="relation" data-src="raw_material_gatein_poreceipt" data-dst="raw_material_gatein_poitemreceipt" data-label="po_receipt_id">
+    <title>raw_material_gatein_poreceipt to raw_material_gatein_poitemreceipt via po_receipt_id</title>
+    <path class="edge-hit" d="M 820 360 L 844 360 L 844 510 L 1000 510"/>
+    <path class="edge" d="M 820 360 L 844 360 L 844 510 L 1000 510"/>
+    <rect class="edge-label-bg" x="799.0" y="493.0" width="90" height="16" rx="4"/>
+    <text class="edge-label" x="844.0" y="505.0" text-anchor="middle">po_receipt_id</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="60" y="150" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="306" y="172" class="meta" text-anchor="end">driver_management</text>
+    <text x="74" y="208" class="field">PK    id : int</text>
+    <text x="74" y="226" class="field">      created_at : datetime</text>
+    <text x="74" y="244" class="field">      updated_at : datetime</text>
+    <text x="74" y="262" class="field">      is_active : boolean</text>
+    <text x="74" y="280" class="field">UK    entry_no : varchar</text>
+    <text x="74" y="298" class="field">      status : varchar</text>
+    <text x="74" y="316" class="field">      is_locked : boolean</text>
+    <text x="74" y="334" class="field">      entry_time : datetime</text>
+    <text x="74" y="352" class="field">... 7 more fields</text>
+  </g>
+  <g id="raw_material_gatein_poreceipt" class="card" data-table="raw_material_gatein_poreceipt">
+    <title>raw_material_gatein_poreceipt</title>
+    <rect class="card-outline" x="500" y="178" width="320" height="364" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="500" y="178" width="320" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="500" y="204" width="320" height="8" fill="#bfdbfe"/>
+    <text x="514" y="200" class="card-title" fill="#0f172a">raw_material_gatein_poreceipt</text>
+    <text x="514" y="236" class="field">PK    id : int</text>
+    <text x="514" y="254" class="field">      created_at : datetime</text>
+    <text x="514" y="272" class="field">      updated_at : datetime</text>
+    <text x="514" y="290" class="field">      is_active : boolean</text>
+    <text x="514" y="308" class="field">      po_number : varchar</text>
+    <text x="514" y="326" class="field">      supplier_code : varchar</text>
+    <text x="514" y="344" class="field">      supplier_name : varchar</text>
+    <text x="514" y="362" class="field">      invoice_no : varchar</text>
+    <text x="514" y="380" class="field">      invoice_date : date (nullable)</text>
+    <text x="514" y="398" class="field">      challan_no : varchar</text>
+    <text x="514" y="416" class="field">      created_by_id : int (nullable)</text>
+    <text x="514" y="434" class="field">      updated_by_id : int (nullable)</text>
+    <text x="514" y="452" class="field">FK    vehicle_entry_id : int</text>
+    <text x="514" y="470" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="514" y="488" class="field">      branch_id : int (nullable)</text>
+    <text x="514" y="506" class="field">      vendor_ref : varchar</text>
+    <text x="514" y="524" class="field">      po_date : date (nullable)</text>
+  </g>
+  <g id="grpo_grpoposting" class="card" data-table="grpo_grpoposting">
+    <title>grpo_grpoposting</title>
+    <rect class="card-outline" x="1000" y="150" width="308" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="150" width="308" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="176" width="308" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="172" class="card-title" fill="#94a3b8">grpo_grpoposting</text>
+    <text x="1294" y="172" class="meta" text-anchor="end">grpo</text>
+    <text x="1014" y="208" class="field">PK    id : bigint</text>
+    <text x="1014" y="226" class="field">      sap_doc_entry : int (nullable)</text>
+    <text x="1014" y="244" class="field">      sap_doc_num : int (nullable)</text>
+    <text x="1014" y="262" class="field">      sap_doc_total : decimal (nullable)</text>
+    <text x="1014" y="280" class="field">      status : varchar</text>
+    <text x="1014" y="298" class="field">      error_message : text (nullable)</text>
+    <text x="1014" y="316" class="field">      posted_at : datetime (nullable)</text>
+    <text x="1014" y="334" class="field">      created_at : datetime</text>
+    <text x="1014" y="352" class="field">... 4 more fields</text>
+  </g>
+  <g id="raw_material_gatein_poitemreceipt" class="card" data-table="raw_material_gatein_poitemreceipt">
+    <title>raw_material_gatein_poitemreceipt</title>
+    <rect class="card-outline" x="1000" y="400" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="422" class="card-title" fill="#94a3b8">raw_material_gatein_poitemreceipt</text>
+    <text x="1246" y="422" class="meta" text-anchor="end">raw_material_gatein</text>
+    <text x="1014" y="458" class="field">PK    id : int</text>
+    <text x="1014" y="476" class="field">      created_at : datetime</text>
+    <text x="1014" y="494" class="field">      updated_at : datetime</text>
+    <text x="1014" y="512" class="field">      is_active : boolean</text>
+    <text x="1014" y="530" class="field">      po_item_code : varchar</text>
+    <text x="1014" y="548" class="field">      item_name : varchar</text>
+    <text x="1014" y="566" class="field">      ordered_qty : decimal</text>
+    <text x="1014" y="584" class="field">      received_qty : decimal</text>
+    <text x="1014" y="602" class="field">... 14 more fields</text>
+  </g>
+  <g id="grpo_grpoposting_po_receipts" class="card" data-table="grpo_grpoposting_po_receipts">
+    <title>grpo_grpoposting_po_receipts</title>
+    <rect class="card-outline" x="1000" y="650" width="260" height="112" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1000" y="650" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1000" y="676" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1014" y="672" class="card-title" fill="#94a3b8">grpo_grpoposting_po_receipts</text>
+    <text x="1246" y="672" class="meta" text-anchor="end">grpo</text>
+    <text x="1014" y="708" class="field">PK    id : bigint</text>
+    <text x="1014" y="726" class="field">FK    grpoposting_id : bigint</text>
+    <text x="1014" y="744" class="field">FK    poreceipt_id : int</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

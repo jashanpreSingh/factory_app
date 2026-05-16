@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1368" height="960" viewBox="0 0 1368 960">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">Daily Needs Gatein ER Slice</text>
+  <text x="60" y="80" class="subtitle">3 local tables, 2 linked external tables, 2 local relationships, 3 external relationships</text>
+  <text x="1048" y="112" class="section">Linked external tables</text>
+  <g class="relation" data-src="daily_needs_gatein_categorylist" data-dst="daily_needs_gatein_dailyneedgateentry" data-label="item_category_id">
+    <title>daily_needs_gatein_categorylist to daily_needs_gatein_dailyneedgateentry via item_category_id</title>
+    <path class="edge-hit" d="M 230 833 L 210 833 L 210 831 L 100 831 L 100 373 L 204 373 L 204 375 L 230 375"/>
+    <path class="edge" d="M 230 833 L 210 833 L 210 831 L 100 831 L 100 373 L 204 373 L 204 375 L 230 375"/>
+    <rect class="edge-label-bg" x="46.0" y="594.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="100.0" y="606.0" text-anchor="middle">item_category_id</text>
+  </g>
+  <g class="relation" data-src="daily_needs_gatein_dailyneedgateentry" data-dst="daily_needs_gatein_dailyneedgateentryitem" data-label="daily_need_entry_id">
+    <title>daily_needs_gatein_dailyneedgateentry to daily_needs_gatein_dailyneedgateentryitem via daily_need_entry_id</title>
+    <path class="edge-hit" d="M 230 253 L 210 253 L 210 255 L 190 255 L 190 643 L 210 643 L 210 641 L 230 641"/>
+    <path class="edge" d="M 230 253 L 210 253 L 210 255 L 190 255 L 190 643 L 210 643 L 210 641 L 230 641"/>
+    <rect class="edge-label-bg" x="127.0" y="441.0" width="126" height="16" rx="4"/>
+    <text class="edge-label" x="190.0" y="453.0" text-anchor="middle">daily_need_entry_id</text>
+  </g>
+  <g class="relation" data-src="driver_management_vehicleentry" data-dst="daily_needs_gatein_dailyneedgateentry" data-label="vehicle_entry_id">
+    <title>driver_management_vehicleentry to daily_needs_gatein_dailyneedgateentry via vehicle_entry_id</title>
+    <path class="edge-hit" d="M 1048 242 L 1028 242 L 1028 238 L 648 238 L 648 249 L 628 249 L 628 253 L 608 253"/>
+    <path class="edge external-edge" d="M 1048 242 L 1028 242 L 1028 238 L 648 238 L 648 249 L 628 249 L 628 253 L 608 253"/>
+    <rect class="edge-label-bg" x="768.5" y="230.0" width="108" height="16" rx="4"/>
+    <text class="edge-label" x="822.5" y="242.0" text-anchor="middle">vehicle_entry_id</text>
+  </g>
+  <g class="relation" data-src="gate_core_unitchoice" data-dst="daily_needs_gatein_dailyneedgateentry" data-label="unit_id">
+    <title>gate_core_unitchoice to daily_needs_gatein_dailyneedgateentry via unit_id</title>
+    <path class="edge-hit" d="M 1048 427 L 828 427 L 828 375 L 608 375"/>
+    <path class="edge external-edge" d="M 1048 427 L 828 427 L 828 375 L 608 375"/>
+    <rect class="edge-label-bg" x="801.0" y="393.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="828.0" y="405.0" text-anchor="middle">unit_id</text>
+  </g>
+  <g class="relation" data-src="gate_core_unitchoice" data-dst="daily_needs_gatein_dailyneedgateentryitem" data-label="unit_id">
+    <title>gate_core_unitchoice to daily_needs_gatein_dailyneedgateentryitem via unit_id</title>
+    <path class="edge-hit" d="M 1048 459 L 1022 459 L 1022 463 L 1008 463 L 1008 645 L 570 645 L 570 641 L 550 641"/>
+    <path class="edge external-edge" d="M 1048 459 L 1022 459 L 1022 463 L 1008 463 L 1008 645 L 570 645 L 570 641 L 550 641"/>
+    <rect class="edge-label-bg" x="863.0" y="637.0" width="54" height="16" rx="4"/>
+    <text class="edge-label" x="890.0" y="649.0" text-anchor="middle">unit_id</text>
+  </g>
+  <g id="daily_needs_gatein_dailyneedgateentry" class="card" data-table="daily_needs_gatein_dailyneedgateentry">
+    <title>daily_needs_gatein_dailyneedgateentry</title>
+    <rect class="card-outline" x="230" y="132" width="378" height="364" rx="8" fill="#ffffff" stroke="#4f46e5" stroke-width="1.5"/>
+    <rect x="230" y="132" width="378" height="34" rx="8" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="230" y="158" width="378" height="8" fill="#e0e7ff"/>
+    <text x="244" y="154" class="card-title" fill="#4f46e5">daily_needs_gatein_dailyneedgateentry</text>
+    <text x="244" y="190" class="field">PK    id : int</text>
+    <text x="244" y="208" class="field">FK    item_category_id : int (nullable)</text>
+    <text x="244" y="226" class="field">      supplier_name : varchar</text>
+    <text x="244" y="244" class="field">      material_name : varchar</text>
+    <text x="244" y="262" class="field">      quantity : decimal</text>
+    <text x="244" y="280" class="field">FK    unit_id : int (nullable)</text>
+    <text x="244" y="298" class="field">      receiving_department_id : int (nullable)</text>
+    <text x="244" y="316" class="field">      bill_number : varchar (nullable)</text>
+    <text x="244" y="334" class="field">      delivery_challan_number : varchar (nullable)</text>
+    <text x="244" y="352" class="field">      canteen_supervisor : varchar (nullable)</text>
+    <text x="244" y="370" class="field">      vehicle_or_person_name : varchar (nullable)</text>
+    <text x="244" y="388" class="field">      contact_number : varchar (nullable)</text>
+    <text x="244" y="406" class="field">      remarks : text (nullable)</text>
+    <text x="244" y="424" class="field">      created_at : datetime</text>
+    <text x="244" y="442" class="field">      created_by_id : int (nullable)</text>
+    <text x="244" y="460" class="field">FK/UK vehicle_entry_id : int</text>
+    <text x="244" y="478" class="field">      updated_at : datetime</text>
+  </g>
+  <g id="daily_needs_gatein_dailyneedgateentryitem" class="card" data-table="daily_needs_gatein_dailyneedgateentryitem">
+    <title>daily_needs_gatein_dailyneedgateentryitem</title>
+    <rect class="card-outline" x="230" y="540" width="320" height="202" rx="8" fill="#ffffff" stroke="#4f46e5" stroke-width="1.5"/>
+    <rect x="230" y="540" width="320" height="34" rx="8" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="230" y="566" width="320" height="8" fill="#e0e7ff"/>
+    <text x="244" y="562" class="card-title" fill="#4f46e5">daily_needs_gatein_dailyneedgateentryitem</text>
+    <text x="244" y="598" class="field">PK    id : bigint</text>
+    <text x="244" y="616" class="field">      line_no : int</text>
+    <text x="244" y="634" class="field">      material_name : varchar</text>
+    <text x="244" y="652" class="field">      quantity : decimal</text>
+    <text x="244" y="670" class="field">      created_at : datetime</text>
+    <text x="244" y="688" class="field">      updated_at : datetime</text>
+    <text x="244" y="706" class="field">FK    daily_need_entry_id : bigint</text>
+    <text x="244" y="724" class="field">FK    unit_id : bigint (nullable)</text>
+  </g>
+  <g id="daily_needs_gatein_categorylist" class="card" data-table="daily_needs_gatein_categorylist">
+    <title>daily_needs_gatein_categorylist</title>
+    <rect class="card-outline" x="230" y="786" width="320" height="94" rx="8" fill="#ffffff" stroke="#4f46e5" stroke-width="1.5"/>
+    <rect x="230" y="786" width="320" height="34" rx="8" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1"/>
+    <rect x="230" y="812" width="320" height="8" fill="#e0e7ff"/>
+    <text x="244" y="808" class="card-title" fill="#4f46e5">daily_needs_gatein_categorylist</text>
+    <text x="244" y="844" class="field">PK    id : int</text>
+    <text x="244" y="862" class="field">UK    category_name : varchar</text>
+  </g>
+  <g id="driver_management_vehicleentry" class="card" data-table="driver_management_vehicleentry">
+    <title>driver_management_vehicleentry</title>
+    <rect class="card-outline" x="1048" y="132" width="260" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1048" y="132" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1048" y="158" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1062" y="154" class="card-title" fill="#94a3b8">driver_management_vehicleentry</text>
+    <text x="1294" y="154" class="meta" text-anchor="end">driver_management</text>
+    <text x="1062" y="190" class="field">PK    id : int</text>
+    <text x="1062" y="208" class="field">      created_at : datetime</text>
+    <text x="1062" y="226" class="field">      updated_at : datetime</text>
+    <text x="1062" y="244" class="field">      is_active : boolean</text>
+    <text x="1062" y="262" class="field">UK    entry_no : varchar</text>
+    <text x="1062" y="280" class="field">      status : varchar</text>
+    <text x="1062" y="298" class="field">      is_locked : boolean</text>
+    <text x="1062" y="316" class="field">      entry_time : datetime</text>
+    <text x="1062" y="334" class="field">... 7 more fields</text>
+  </g>
+  <g id="gate_core_unitchoice" class="card" data-table="gate_core_unitchoice">
+    <title>gate_core_unitchoice</title>
+    <rect class="card-outline" x="1048" y="396" width="260" height="94" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="1048" y="396" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="1048" y="422" width="260" height="8" fill="#e2e8f0"/>
+    <text x="1062" y="418" class="card-title" fill="#94a3b8">gate_core_unitchoice</text>
+    <text x="1294" y="418" class="meta" text-anchor="end">gate_core</text>
+    <text x="1062" y="454" class="field">PK    id : int</text>
+    <text x="1062" y="472" class="field">UK    name : varchar</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>

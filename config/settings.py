@@ -25,6 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Core Settings
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=cast_debug)
+ER_EXPLORER_REFRESH_ENABLED = config('ER_EXPLORER_REFRESH_ENABLED', default=DEBUG, cast=cast_debug)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
 # Application definition

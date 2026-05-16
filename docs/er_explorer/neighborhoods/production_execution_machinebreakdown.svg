@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1141" height="888" viewBox="0 0 1141 888">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <style>
+    .page-title { font: 700 28px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+    .card-title { font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .field { font: 12px Consolas, "Liberation Mono", monospace; fill: #1f2937; }
+    .meta { font: 12px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+    .section { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    .card { transition: opacity .12s ease; }
+    .card-outline { transition: stroke .12s ease, stroke-width .12s ease; }
+    .card.active-card .card-outline { stroke: #ef4444; stroke-width: 4; }
+    .relation { cursor: pointer; }
+    .overview-app { cursor: pointer; }
+    .overview-app:hover .overview-outline { stroke-width: 4; }
+    .edge-hit { stroke: transparent; stroke-width: 18; fill: none; pointer-events: stroke; }
+    .edge { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow); opacity: .62; }
+    .external-edge { stroke: #475569; opacity: .58; }
+    .relation.active .edge { stroke: #ef4444; stroke-width: 4; marker-end: url(#arrow-active); opacity: 1; }
+    .relation.active .edge-label-bg { stroke: #ef4444; stroke-width: 1.5; opacity: 1; }
+    .relation.active .edge-label { fill: #b91c1c; font-weight: 700; }
+    .edge-label-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 1; opacity: .9; }
+    .edge-label { font: 10px "Segoe UI", Arial, sans-serif; fill: #475569; }
+  </style>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="60" y="54" class="page-title">production_execution_machinebreakdown Neighborhood</text>
+  <text x="60" y="80" class="subtitle">3 parent/lookup tables, 0 child tables, 3 direct relationships</text>
+  <text x="60" y="126" class="section">Parents and lookups</text>
+  <g class="relation" data-src="production_execution_breakdowncategory" data-dst="production_execution_machinebreakdown" data-label="breakdown_category_id">
+    <title>production_execution_breakdowncategory to production_execution_machinebreakdown via breakdown_category_id</title>
+    <path class="edge-hit" d="M 354 715 L 372 715 L 372 547 L 534 547"/>
+    <path class="edge" d="M 354 715 L 372 715 L 372 547 L 534 547"/>
+    <rect class="edge-label-bg" x="303.0" y="551.0" width="138" height="16" rx="4"/>
+    <text class="edge-label" x="372.0" y="563.0" text-anchor="middle">breakdown_category_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_machine" data-dst="production_execution_machinebreakdown" data-label="machine_id">
+    <title>production_execution_machine to production_execution_machinebreakdown via machine_id</title>
+    <path class="edge-hit" d="M 320 501 L 338 501 L 338 474 L 534 474"/>
+    <path class="edge" d="M 320 501 L 338 501 L 338 474 L 534 474"/>
+    <rect class="edge-label-bg" x="377.5" y="466.0" width="72" height="16" rx="4"/>
+    <text class="edge-label" x="413.5" y="478.0" text-anchor="middle">machine_id</text>
+  </g>
+  <g class="relation" data-src="production_execution_productionrun" data-dst="production_execution_machinebreakdown" data-label="production_run_id">
+    <title>production_execution_productionrun to production_execution_machinebreakdown via production_run_id</title>
+    <path class="edge-hit" d="M 354 260 L 516 260 L 516 401 L 534 401"/>
+    <path class="edge" d="M 354 260 L 516 260 L 516 401 L 534 401"/>
+    <rect class="edge-label-bg" x="457.5" y="252.0" width="114" height="16" rx="4"/>
+    <text class="edge-label" x="514.5" y="264.0" text-anchor="middle">production_run_id</text>
+  </g>
+  <g id="production_execution_productionrun" class="card" data-table="production_execution_productionrun">
+    <title>production_execution_productionrun</title>
+    <rect class="card-outline" x="60" y="150" width="294" height="220" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="150" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="176" width="294" height="8" fill="#e2e8f0"/>
+    <text x="74" y="172" class="card-title" fill="#94a3b8">production_execution_productionrun</text>
+    <text x="340" y="172" class="meta" text-anchor="end">production_execution</text>
+    <text x="74" y="208" class="field">PK    id : bigint</text>
+    <text x="74" y="226" class="field">      run_number : int</text>
+    <text x="74" y="244" class="field">      date : date</text>
+    <text x="74" y="262" class="field">      rated_speed : decimal (nullable)</text>
+    <text x="74" y="280" class="field">      total_production : decimal</text>
+    <text x="74" y="298" class="field">      total_breakdown_time : int</text>
+    <text x="74" y="316" class="field">      status : varchar</text>
+    <text x="74" y="334" class="field">      created_at : datetime</text>
+    <text x="74" y="352" class="field">... 20 more fields</text>
+  </g>
+  <g id="production_execution_machine" class="card" data-table="production_execution_machine">
+    <title>production_execution_machine</title>
+    <rect class="card-outline" x="60" y="400" width="260" height="202" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="400" width="260" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="426" width="260" height="8" fill="#e2e8f0"/>
+    <text x="74" y="422" class="card-title" fill="#94a3b8">production_execution_machine</text>
+    <text x="306" y="422" class="meta" text-anchor="end">production_execution</text>
+    <text x="74" y="458" class="field">PK    id : bigint</text>
+    <text x="74" y="476" class="field">      name : varchar</text>
+    <text x="74" y="494" class="field">      machine_type : varchar</text>
+    <text x="74" y="512" class="field">      is_active : boolean</text>
+    <text x="74" y="530" class="field">      created_at : datetime</text>
+    <text x="74" y="548" class="field">      updated_at : datetime</text>
+    <text x="74" y="566" class="field">FK    company_id : int</text>
+    <text x="74" y="584" class="field">FK    line_id : bigint</text>
+  </g>
+  <g id="production_execution_breakdowncategory" class="card" data-table="production_execution_breakdowncategory">
+    <title>production_execution_breakdowncategory</title>
+    <rect class="card-outline" x="60" y="632" width="294" height="166" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <rect x="60" y="632" width="294" height="34" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="60" y="658" width="294" height="8" fill="#e2e8f0"/>
+    <text x="74" y="654" class="card-title" fill="#94a3b8">production_execution_breakdowncategory</text>
+    <text x="340" y="654" class="meta" text-anchor="end">production_execution</text>
+    <text x="74" y="690" class="field">PK    id : bigint</text>
+    <text x="74" y="708" class="field">      name : varchar</text>
+    <text x="74" y="726" class="field">      is_active : boolean</text>
+    <text x="74" y="744" class="field">      created_at : datetime</text>
+    <text x="74" y="762" class="field">      updated_at : datetime</text>
+    <text x="74" y="780" class="field">FK    company_id : int</text>
+  </g>
+  <g id="production_execution_machinebreakdown" class="card" data-table="production_execution_machinebreakdown">
+    <title>production_execution_machinebreakdown</title>
+    <rect class="card-outline" x="534" y="328" width="357" height="292" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+    <rect x="534" y="328" width="357" height="34" rx="8" fill="#bfdbfe" stroke="#0f172a" stroke-width="1"/>
+    <rect x="534" y="354" width="357" height="8" fill="#bfdbfe"/>
+    <text x="548" y="350" class="card-title" fill="#0f172a">production_execution_machinebreakdown</text>
+    <text x="548" y="386" class="field">PK    id : bigint</text>
+    <text x="548" y="404" class="field">      start_time : datetime</text>
+    <text x="548" y="422" class="field">      end_time : datetime (nullable)</text>
+    <text x="548" y="440" class="field">      breakdown_minutes : int</text>
+    <text x="548" y="458" class="field">      is_unrecovered : boolean</text>
+    <text x="548" y="476" class="field">      reason : varchar</text>
+    <text x="548" y="494" class="field">      remarks : text</text>
+    <text x="548" y="512" class="field">      created_at : datetime</text>
+    <text x="548" y="530" class="field">      updated_at : datetime</text>
+    <text x="548" y="548" class="field">FK    machine_id : bigint (nullable)</text>
+    <text x="548" y="566" class="field">FK    production_run_id : bigint</text>
+    <text x="548" y="584" class="field">      is_active : boolean</text>
+    <text x="548" y="602" class="field">FK    breakdown_category_id : bigint (nullable)</text>
+  </g>
+
+  <script><![CDATA[
+    (function () {
+      const svg = document.currentScript.ownerSVGElement;
+      if (!svg || svg.dataset.erInteractive === "1") return;
+      svg.dataset.erInteractive = "1";
+      const relations = Array.from(svg.querySelectorAll(".relation"));
+      const cards = Array.from(svg.querySelectorAll(".card"));
+
+      function clear() {
+        relations.forEach((relation) => relation.classList.remove("active"));
+        cards.forEach((card) => card.classList.remove("active-card"));
+      }
+
+      function highlight(relation) {
+        const src = relation.dataset.src;
+        const dst = relation.dataset.dst;
+        relations.forEach((item) => {
+          item.classList.toggle("active", item === relation);
+        });
+        cards.forEach((card) => {
+          const connected = card.dataset.table === src || card.dataset.table === dst;
+          card.classList.toggle("active-card", connected);
+        });
+      }
+
+      relations.forEach((relation) => {
+        relation.addEventListener("click", (event) => {
+          event.stopPropagation();
+          highlight(relation);
+        });
+      });
+      svg.addEventListener("click", clear);
+    })();
+  ]]></script>
+
+</svg>
