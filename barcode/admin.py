@@ -14,7 +14,7 @@ class BoxInline(admin.TabularInline):
 @admin.register(Pallet)
 class PalletAdmin(admin.ModelAdmin):
     list_display = [
-        'pallet_id', 'item_code', 'batch_number', 'box_count',
+        'pallet_id', 'item_code', 'batch_number', 'box_count', 'max_box_count',
         'total_qty', 'current_warehouse', 'status', 'created_at',
     ]
     list_filter = ['status', 'current_warehouse', 'created_at']

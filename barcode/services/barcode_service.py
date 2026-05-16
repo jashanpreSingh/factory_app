@@ -63,7 +63,7 @@ class BarcodeService:
 
         last = (
             model.objects
-            .filter(company=self.company, **{f'{field_name}__startswith': prefix})
+            .filter(**{f'{field_name}__startswith': prefix})
             .order_by(f'-{field_name}')
             .values_list(field_name, flat=True)
             .first()
@@ -95,7 +95,13 @@ class BarcodeService:
                 },
             )
         )
-        start = sequence.next_value
+        # The sequence row is company-scoped, but barcode fields are globally
+        # unique. Keep stale/recreated sequences ahead of any existing global
+        # barcode with the same date and line prefix.
+        start = max(
+            sequence.next_value,
+            self._existing_next_value(sequence_type, date_str, line_key),
+        )
         sequence.next_value = start + count
         sequence.save(update_fields=['next_value', 'updated_at'])
         return start
@@ -126,9 +132,13 @@ class BarcodeService:
 
     def _build_box_barcode_data(self, box):
         """Build the JSON payload that gets encoded in the QR code."""
+        box_number = self._get_box_number(box) if box.pallet_id else None
         return {
             "type": "BOX",
             "box_barcode": box.box_barcode,
+            "pallet_id": box.pallet.pallet_id if box.pallet_id else "",
+            "box_number": box_number,
+            "box_count": box.pallet.box_count if box.pallet_id else None,
             "item_code": box.item_code,
             "batch": box.batch_number,
             "qty": str(box.qty),
@@ -146,6 +156,7 @@ class BarcodeService:
             "item_code": pallet.item_code,
             "batch": pallet.batch_number,
             "box_count": pallet.box_count,
+            "max_box_count": pallet.max_box_count,
             "total_qty": str(pallet.total_qty),
             "uom": pallet.uom,
             "mfg_date": str(pallet.mfg_date),
@@ -323,38 +334,32 @@ class BarcodeService:
     @transaction.atomic
     def create_pallet(self, data: dict, user) -> Pallet:
         """
-        Create a pallet by linking existing boxes to it.
-        All boxes must be ACTIVE, unpalletized, and same item+batch.
+        Create a generic empty pallet for the QR workflow.
+
+        Boxes are attached later by the pallet QR print flow or the explicit
+        add-boxes endpoint. Pallet creation itself must not connect item,
+        batch, quantity, or box records.
         """
-        box_ids = data['box_ids']
-        warehouse = data['warehouse']
-        line = self._clean_production_line(data.get('production_line', ''))
-        run_id = data.get('production_run_id')
-
-        boxes = list(
-            Box.objects.filter(
-                id__in=box_ids,
-                company=self.company,
-                status=BoxStatus.ACTIVE,
-                pallet__isnull=True,
-            )
-        )
-
-        if len(boxes) != len(box_ids):
+        box_ids = data.get('box_ids') or []
+        if box_ids:
             raise ValueError(
-                "Some boxes not found, already on a pallet, or not active."
+                "Create the pallet first, then attach boxes from the pallet QR print workflow."
             )
 
-        # Validate all boxes are same item + batch
-        items = set((b.item_code, b.batch_number) for b in boxes)
-        if len(items) > 1:
-            raise ValueError("All boxes must be for the same item and batch.")
+        data['production_line'] = self._clean_production_line(
+            data.get('production_line', '')
+        )
+        return self._create_empty_pallet(data, user)
 
-        first_box = boxes[0]
-        total_qty = sum(b.qty for b in boxes)
-        date_str = first_box.mfg_date.strftime('%Y%m%d')
+    def _create_empty_pallet(self, data: dict, user) -> Pallet:
+        line = self._clean_production_line(data.get('production_line', ''))
+        mfg_date = data.get('mfg_date') or timezone.now().date()
+        exp_date = data.get('exp_date') or mfg_date
+        date_str = mfg_date.strftime('%Y%m%d') if hasattr(mfg_date, 'strftime') else str(mfg_date).replace('-', '')
+        pallet_id = self._next_pallet_id(date_str, line or 'XX')
 
         production_run = None
+        run_id = data.get('production_run_id')
         if run_id:
             from production_execution.models import ProductionRun
             try:
@@ -364,57 +369,128 @@ class BarcodeService:
             except ProductionRun.DoesNotExist:
                 raise ValueError(f"Production run {run_id} not found.")
 
-        pallet_id = self._next_pallet_id(date_str, line or 'XX')
         pallet = Pallet.objects.create(
             company=self.company,
             pallet_id=pallet_id,
-            item_code=first_box.item_code,
-            item_name=first_box.item_name,
-            batch_number=first_box.batch_number,
-            box_count=len(boxes),
-            total_qty=total_qty,
-            uom=first_box.uom,
-            mfg_date=first_box.mfg_date,
-            exp_date=first_box.exp_date,
-            production_run=production_run or first_box.production_run,
-            production_line=line or first_box.production_line,
-            current_warehouse=warehouse,
+            item_code='',
+            item_name='',
+            batch_number='',
+            box_count=0,
+            max_box_count=int(data.get('max_box_count') or 0),
+            total_qty=D('0'),
+            uom='',
+            mfg_date=mfg_date,
+            exp_date=exp_date,
+            production_run=production_run,
+            production_line=line,
+            current_warehouse=data.get('warehouse', ''),
             status=PalletStatus.ACTIVE,
             created_by=user,
         )
         pallet.barcode_data = self._build_pallet_barcode_data(pallet)
         pallet.save(update_fields=['barcode_data'])
 
-        # Link boxes to pallet
-        box_movements = []
-        for box in boxes:
-            box.pallet = pallet
-            box.current_warehouse = warehouse
-            box_movements.append(BoxMovement(
-                company=self.company,
-                box=box,
-                movement_type=BoxMovementType.PALLETIZE,
-                to_warehouse=warehouse,
-                to_pallet=pallet,
-                performed_by=user,
-            ))
-        Box.objects.bulk_update(boxes, ['pallet', 'current_warehouse', 'updated_at'])
-        BoxMovement.objects.bulk_create(box_movements)
-
         PalletMovement.objects.create(
             company=self.company,
             pallet=pallet,
             movement_type=PalletMovementType.CREATE,
-            to_warehouse=warehouse,
-            quantity=total_qty,
+            to_warehouse=data.get('warehouse', ''),
+            quantity=pallet.total_qty,
             performed_by=user,
+            notes='Empty pallet created for QR workflow',
         )
-
-        logger.info(
-            f"Pallet {pallet_id} created with {len(boxes)} boxes "
-            f"by {user}"
-        )
+        logger.info(f"Empty pallet {pallet_id} created by {user}")
         return pallet
+
+    @transaction.atomic
+    def ensure_pallet_boxes(self, pallet_id: int, target_box_count: int, user) -> list[Box]:
+        pallet = self.get_pallet(pallet_id)
+        if pallet.status != PalletStatus.ACTIVE:
+            raise ValueError(f"Cannot print boxes for pallet with status {pallet.status}.")
+        if target_box_count < 1:
+            raise ValueError("Box count must be greater than zero.")
+
+        active_boxes = list(
+            pallet.boxes
+            .filter(status__in=[BoxStatus.ACTIVE, BoxStatus.PARTIAL])
+            .order_by('box_barcode')
+        )
+        if len(active_boxes) > target_box_count:
+            raise ValueError(
+                f"Pallet already has {len(active_boxes)} boxes; box count cannot be lower."
+            )
+
+        if pallet.max_box_count != target_box_count:
+            pallet.max_box_count = target_box_count
+            pallet.save(update_fields=['max_box_count', 'updated_at'])
+
+        missing_count = target_box_count - len(active_boxes)
+        if missing_count:
+            date_str = pallet.mfg_date.strftime('%Y%m%d')
+            line_key = self._sanitize_line(pallet.production_line or 'XX')
+            start_seq = self._next_box_seq(date_str, line_key, missing_count)
+            qty_per_box = (
+                pallet.total_qty / D(str(target_box_count))
+                if pallet.total_qty and target_box_count
+                else D('0')
+            )
+
+            new_boxes = []
+            for i in range(missing_count):
+                box = Box(
+                    company=self.company,
+                    box_barcode=f"BOX-{date_str}-{line_key}-{start_seq + i:04d}",
+                    item_code=pallet.item_code,
+                    item_name=pallet.item_name,
+                    batch_number=pallet.batch_number,
+                    qty=qty_per_box,
+                    uom=pallet.uom,
+                    mfg_date=pallet.mfg_date,
+                    exp_date=pallet.exp_date,
+                    pallet=pallet,
+                    production_run=pallet.production_run,
+                    production_line=pallet.production_line,
+                    current_warehouse=pallet.current_warehouse,
+                    status=BoxStatus.ACTIVE,
+                    created_by=user,
+                )
+                new_boxes.append(box)
+
+            Box.objects.bulk_create(new_boxes)
+            created_boxes = list(
+                Box.objects
+                .filter(company=self.company, box_barcode__in=[b.box_barcode for b in new_boxes])
+                .select_related('pallet')
+                .order_by('box_barcode')
+            )
+            BoxMovement.objects.bulk_create([
+                BoxMovement(
+                    company=self.company,
+                    box=box,
+                    movement_type=BoxMovementType.CREATE,
+                    to_warehouse=pallet.current_warehouse,
+                    to_pallet=pallet,
+                    performed_by=user,
+                )
+                for box in created_boxes
+            ])
+            active_boxes.extend(created_boxes)
+
+        self._recalculate_pallet(pallet)
+        boxes = list(
+            pallet.boxes
+            .filter(status__in=[BoxStatus.ACTIVE, BoxStatus.PARTIAL])
+            .select_related('pallet')
+            .order_by('box_barcode')
+        )
+        for box in boxes:
+            box.barcode_data = self._build_box_barcode_data(box)
+        Box.objects.bulk_update(boxes, ['barcode_data'])
+
+        pallet.refresh_from_db()
+        pallet.barcode_data = self._build_pallet_barcode_data(pallet)
+        pallet.save(update_fields=['barcode_data', 'updated_at'])
+        return boxes
 
     # ==================================================================
     # PALLET — List / Detail / Void
@@ -596,16 +672,24 @@ class BarcodeService:
         return pallet
 
     # ==================================================================
-    # PALLET — Split (move some boxes to a new pallet)
+    # PALLET — Split (move some boxes to an existing empty pallet)
     # ==================================================================
 
     @transaction.atomic
     def split_pallet(self, pallet_id: int, box_ids: list[int],
-                     warehouse: str, user) -> Pallet:
-        """Split selected boxes off into a new pallet. Returns the NEW pallet."""
+                     target_pallet_id: int, user) -> Pallet:
+        """Split selected boxes off into an existing empty pallet. Returns the target pallet."""
         pallet = self.get_pallet(pallet_id)
         if pallet.status != PalletStatus.ACTIVE:
             raise ValueError(f"Cannot split pallet with status {pallet.status}.")
+
+        target_pallet = self.get_pallet(target_pallet_id)
+        if target_pallet.id == pallet.id:
+            raise ValueError("Target pallet must be different from source pallet.")
+        if target_pallet.status != PalletStatus.ACTIVE:
+            raise ValueError(f"Cannot split into pallet with status {target_pallet.status}.")
+        if target_pallet.box_count != 0 or target_pallet.boxes.exists():
+            raise ValueError("Target pallet must be empty.")
 
         boxes = list(pallet.boxes.filter(
             id__in=box_ids, status__in=[BoxStatus.ACTIVE, BoxStatus.PARTIAL]
@@ -615,38 +699,14 @@ class BarcodeService:
         if len(boxes) == pallet.box_count:
             raise ValueError("Cannot split all boxes — use move pallet instead.")
 
-        # Create new pallet
-        first = boxes[0]
-        date_str = first.mfg_date.strftime('%Y%m%d')
-        line_key = self._sanitize_line(pallet.production_line)
-        new_pallet_id = self._next_pallet_id(date_str, line_key)
         split_qty = sum(b.qty for b in boxes)
+        target_warehouse = target_pallet.current_warehouse
 
-        new_pallet = Pallet.objects.create(
-            company=self.company,
-            pallet_id=new_pallet_id,
-            item_code=pallet.item_code,
-            item_name=pallet.item_name,
-            batch_number=pallet.batch_number,
-            box_count=len(boxes),
-            total_qty=split_qty,
-            uom=pallet.uom,
-            mfg_date=pallet.mfg_date,
-            exp_date=pallet.exp_date,
-            production_run=pallet.production_run,
-            production_line=pallet.production_line,
-            current_warehouse=warehouse,
-            status=PalletStatus.ACTIVE,
-            created_by=user,
-        )
-        new_pallet.barcode_data = self._build_pallet_barcode_data(new_pallet)
-        new_pallet.save(update_fields=['barcode_data'])
-
-        # Move boxes to new pallet
+        # Move boxes to target pallet
         box_movements = []
         for box in boxes:
-            box.pallet = new_pallet
-            box.current_warehouse = warehouse
+            box.pallet = target_pallet
+            box.current_warehouse = target_warehouse
             box_movements.append(BoxMovement(
                 company=self.company,
                 box=box,
@@ -659,8 +719,8 @@ class BarcodeService:
                 company=self.company,
                 box=box,
                 movement_type=BoxMovementType.PALLETIZE,
-                to_warehouse=warehouse,
-                to_pallet=new_pallet,
+                to_warehouse=target_warehouse,
+                to_pallet=target_pallet,
                 performed_by=user,
             ))
         Box.objects.bulk_update(boxes, ['pallet', 'current_warehouse', 'updated_at'])
@@ -668,6 +728,7 @@ class BarcodeService:
 
         # Update original pallet counts
         self._recalculate_pallet(pallet)
+        self._recalculate_pallet(target_pallet)
 
         # Log on both pallets
         PalletMovement.objects.create(
@@ -675,18 +736,18 @@ class BarcodeService:
             movement_type=PalletMovementType.SPLIT,
             from_warehouse=pallet.current_warehouse,
             quantity=split_qty, performed_by=user,
-            notes=f"Split {len(boxes)} boxes to {new_pallet_id}",
+            notes=f"Split {len(boxes)} boxes to {target_pallet.pallet_id}",
         )
         PalletMovement.objects.create(
-            company=self.company, pallet=new_pallet,
-            movement_type=PalletMovementType.CREATE,
-            to_warehouse=warehouse,
+            company=self.company, pallet=target_pallet,
+            movement_type=PalletMovementType.SPLIT,
+            to_warehouse=target_warehouse,
             quantity=split_qty, performed_by=user,
-            notes=f"Created from split of {pallet.pallet_id}",
+            notes=f"Received {len(boxes)} boxes from split of {pallet.pallet_id}",
         )
 
-        logger.info(f"Pallet {pallet.pallet_id} split: {len(boxes)} boxes → {new_pallet_id} by {user}")
-        return new_pallet
+        logger.info(f"Pallet {pallet.pallet_id} split: {len(boxes)} boxes → {target_pallet.pallet_id} by {user}")
+        return target_pallet
 
     # ==================================================================
     # PALLET — Add / Remove boxes
@@ -705,13 +766,6 @@ class BarcodeService:
         ))
         if len(boxes) != len(box_ids):
             raise ValueError("Some boxes not found, not active, or already on a pallet.")
-
-        # Validate same item + batch
-        for box in boxes:
-            if box.item_code != pallet.item_code or box.batch_number != pallet.batch_number:
-                raise ValueError(
-                    f"Box {box.box_barcode} has different item/batch than pallet."
-                )
 
         box_movements = []
         for box in boxes:
@@ -1095,4 +1149,20 @@ class BarcodeService:
         pallet.box_count = active_boxes.count()
         agg = active_boxes.aggregate(total=Sum('qty'))
         pallet.total_qty = agg['total'] or D('0')
-        pallet.save(update_fields=['box_count', 'total_qty', 'updated_at'])
+        pallet.barcode_data = self._build_pallet_barcode_data(pallet)
+        pallet.save(update_fields=['box_count', 'total_qty', 'barcode_data', 'updated_at'])
+
+    @staticmethod
+    def _get_box_number(box: Box) -> int | None:
+        if not box.pallet_id:
+            return None
+        box_ids = list(
+            box.pallet.boxes
+            .filter(status__in=[BoxStatus.ACTIVE, BoxStatus.PARTIAL])
+            .order_by('box_barcode')
+            .values_list('id', flat=True)
+        )
+        try:
+            return box_ids.index(box.id) + 1
+        except ValueError:
+            return None

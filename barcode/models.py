@@ -138,6 +138,10 @@ class Pallet(models.Model):
     item_name = models.CharField(max_length=255, blank=True, default='')
     batch_number = models.CharField(max_length=100)
     box_count = models.PositiveIntegerField(default=0)
+    max_box_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Editable pallet capacity fetched from SAP HANA when available"
+    )
     total_qty = models.DecimalField(max_digits=12, decimal_places=2)
     uom = models.CharField(max_length=20, blank=True, default='')
     mfg_date = models.DateField()

@@ -153,7 +153,7 @@ class PalletListSerializer(serializers.ModelSerializer):
         model = Pallet
         fields = [
             'id', 'pallet_id', 'item_code', 'item_name',
-            'batch_number', 'box_count', 'total_qty', 'uom',
+            'batch_number', 'box_count', 'max_box_count', 'total_qty', 'uom',
             'mfg_date', 'exp_date',
             'current_warehouse', 'current_bin',
             'status', 'production_line',
@@ -175,7 +175,7 @@ class PalletDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'pallet_id', 'barcode_data',
             'item_code', 'item_name',
-            'batch_number', 'box_count', 'total_qty', 'uom',
+            'batch_number', 'box_count', 'max_box_count', 'total_qty', 'uom',
             'mfg_date', 'exp_date',
             'production_run', 'production_line',
             'current_warehouse', 'current_bin',
@@ -228,13 +228,30 @@ class BoxGenerateSerializer(serializers.Serializer):
 
 class PalletCreateSerializer(serializers.Serializer):
     box_ids = serializers.ListField(
-        child=serializers.IntegerField(), min_length=1
+        child=serializers.IntegerField(), required=False, allow_empty=True, default=list
     )
-    warehouse = serializers.CharField(max_length=20)
+    warehouse = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
     production_line = serializers.CharField(
         max_length=50, required=False, allow_blank=True, default=''
     )
     production_run_id = serializers.IntegerField(required=False)
+    item_code = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+    item_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default='')
+    batch_number = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
+    total_qty = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, default=0
+    )
+    uom = serializers.CharField(max_length=20, required=False, allow_blank=True, default='PCS')
+    mfg_date = serializers.DateField(required=False)
+    exp_date = serializers.DateField(required=False, allow_null=True, default=None)
+    max_box_count = serializers.IntegerField(min_value=0, max_value=MAX_BOX_LABELS_PER_REQUEST, required=False, default=0)
+
+    def validate_box_ids(self, value):
+        if value:
+            raise serializers.ValidationError(
+                "Create the pallet first, then attach boxes from the pallet QR print workflow."
+            )
+        return value
 
 
 class VoidSerializer(serializers.Serializer):
@@ -252,7 +269,7 @@ class PalletClearSerializer(serializers.Serializer):
 
 class PalletSplitSerializer(serializers.Serializer):
     box_ids = serializers.ListField(child=serializers.IntegerField(), min_length=1)
-    warehouse = serializers.CharField(max_length=20)
+    target_pallet_id = serializers.IntegerField()
 
 
 class PalletAddBoxesSerializer(serializers.Serializer):
@@ -280,6 +297,12 @@ class PrintRequestSerializer(serializers.Serializer):
     reprint_reason = serializers.CharField(required=False, allow_blank=True, default='')
     printer_name = serializers.CharField(
         max_length=100, required=False, allow_blank=True, default=''
+    )
+
+
+class PalletPrintWorkflowSerializer(PrintRequestSerializer):
+    box_count = serializers.IntegerField(
+        min_value=1, max_value=MAX_BOX_LABELS_PER_REQUEST, required=False
     )
 
 

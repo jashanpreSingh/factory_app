@@ -4,7 +4,7 @@ from .views import (
     PalletCreateAPI, PalletListAPI, PalletDetailAPI, PalletVoidAPI,
     PalletMoveAPI, PalletClearAPI, PalletSplitAPI,
     PalletAddBoxesAPI, PalletRemoveBoxesAPI, BoxTransferAPI,
-    BoxPrintAPI, PalletPrintAPI, BulkPrintAPI, PrintHistoryAPI,
+    BoxPrintAPI, PalletPrintAPI, PalletPrintWorkflowAPI, BulkPrintAPI, PrintHistoryAPI,
     DismantlePalletAPI, DismantleBoxAPI, RepackAPI,
     LooseStockListAPI, LooseStockDetailAPI,
     ScanAPI, BarcodeLookupAPI, ScanHistoryAPI,
@@ -43,6 +43,7 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path('print/box/<int:box_id>/', BoxPrintAPI.as_view(), name='bc-print-box'),
     path('print/pallet/<int:pallet_id>/', PalletPrintAPI.as_view(), name='bc-print-pallet'),
+    path('print/pallet/<int:pallet_id>/workflow/', PalletPrintWorkflowAPI.as_view(), name='bc-print-pallet-workflow'),
     path('print/bulk/', BulkPrintAPI.as_view(), name='bc-print-bulk'),
     path('print/history/', PrintHistoryAPI.as_view(), name='bc-print-history'),
 

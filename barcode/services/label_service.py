@@ -28,17 +28,21 @@ class LabelService:
 
     def get_box_label_data(self, box_id: int) -> dict:
         try:
-            box = Box.objects.get(id=box_id, company=self.company)
+            box = Box.objects.select_related('pallet').get(id=box_id, company=self.company)
         except Box.DoesNotExist:
             raise ValueError(f"Box {box_id} not found.")
 
         qr_payload = box.barcode_data or self._build_box_qr(box)
+        box_number = self._get_box_number(box)
 
         return {
             'type': 'BOX',
             'id': box.id,
             'barcode': box.box_barcode,
             'qr_payload': json.dumps(qr_payload),
+            'pallet_id': box.pallet.pallet_id if box.pallet_id else '',
+            'box_number': box_number,
+            'box_count': box.pallet.box_count if box.pallet_id else None,
             'item_code': box.item_code,
             'item_name': box.item_name,
             'batch_number': box.batch_number,
@@ -69,6 +73,7 @@ class LabelService:
             'item_name': pallet.item_name,
             'batch_number': pallet.batch_number,
             'box_count': pallet.box_count,
+            'max_box_count': pallet.max_box_count,
             'total_qty': str(pallet.total_qty),
             'uom': pallet.uom,
             'mfg_date': str(pallet.mfg_date),
@@ -137,6 +142,9 @@ class LabelService:
         return {
             'type': 'BOX',
             'box_barcode': box.box_barcode,
+            'pallet_id': box.pallet.pallet_id if box.pallet_id else '',
+            'box_number': self._get_box_number(box),
+            'box_count': box.pallet.box_count if box.pallet_id else None,
             'item_code': box.item_code,
             'batch': box.batch_number,
             'qty': str(box.qty),
@@ -152,8 +160,24 @@ class LabelService:
             'item_code': pallet.item_code,
             'batch': pallet.batch_number,
             'box_count': pallet.box_count,
+            'max_box_count': pallet.max_box_count,
             'total_qty': str(pallet.total_qty),
             'uom': pallet.uom,
             'mfg_date': str(pallet.mfg_date),
             'exp_date': str(pallet.exp_date),
         }
+
+    @staticmethod
+    def _get_box_number(box: Box) -> int | None:
+        if not box.pallet_id:
+            return None
+        box_ids = list(
+            box.pallet.boxes
+            .filter(status__in=[BoxStatus.ACTIVE, BoxStatus.PARTIAL])
+            .order_by('box_barcode')
+            .values_list('id', flat=True)
+        )
+        try:
+            return box_ids.index(box.id) + 1
+        except ValueError:
+            return None
