@@ -95,13 +95,11 @@ class StockDashboardService:
             row["stock_status"] = self._stock_status(
                 row["on_hand"],
                 row["min_stock"],
+                planned_qty=row.get("planned_qty", 0),
                 has_open_plan=row.get("has_open_plan", False),
                 movement_status=row["movement_status"],
             )
-            row["health_ratio"] = (
-                round(row["on_hand"] / row["min_stock"], 2)
-                if row["min_stock"] > 0 else 0.0
-            )
+            row["health_ratio"] = self._health_ratio(row)
 
     def _enrich_grouped_rows(self, rows: List[Dict]) -> None:
         """Adds computed stock and movement fields to grouped rows."""
@@ -110,14 +108,12 @@ class StockDashboardService:
             row["stock_status"] = self._stock_status(
                 row["on_hand"],
                 row["min_stock"],
+                planned_qty=row.get("planned_qty", 0),
                 has_open_plan=row.get("has_open_plan", False),
                 planned_without_benchmark=row.get("planned_without_benchmark", 0) > 0,
                 movement_status=row["movement_status"],
             )
-            row["health_ratio"] = (
-                round(row["on_hand"] / row["min_stock"], 2)
-                if row["min_stock"] > 0 else 0.0
-            )
+            row["health_ratio"] = self._health_ratio(row)
             row["warehouse"] = f"{row['warehouse_count']} warehouses"
 
             # Determine worst individual warehouse status
@@ -136,21 +132,26 @@ class StockDashboardService:
     def _stock_status(
         on_hand: float,
         min_stock: float,
+        planned_qty: float = 0,
         has_open_plan: bool = False,
         planned_without_benchmark: bool = False,
         movement_status: str | None = None,
     ) -> str:
         if movement_status == "slow":
             return "none"
-        if planned_without_benchmark:
-            return "critical"
-        if min_stock <= 0:
-            return "critical" if has_open_plan else "unset"
-        if on_hand >= min_stock:
+        required_qty = min_stock + planned_qty
+        if required_qty <= 0:
+            return "unset"
+        if on_hand >= required_qty:
             return "healthy"
-        if on_hand >= min_stock * 0.6:
+        if on_hand >= required_qty * 0.6:
             return "low"
         return "critical"
+
+    @staticmethod
+    def _health_ratio(row: Dict) -> float:
+        required_qty = row["min_stock"] + row.get("planned_qty", 0)
+        return round(row["on_hand"] / required_qty, 2) if required_qty > 0 else 0.0
 
     @staticmethod
     def _movement_status(row: Dict) -> str:

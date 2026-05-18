@@ -26,7 +26,7 @@ All endpoints require:
 | `item_group` | string | SAP item group name from `OITB.ItmsGrpNam`, for example `PACKAGING MATERIAL`. |
 | `status` | comma-separated string | Allowed values: `healthy`, `low`, `critical`, `unset`. The `unset` value is displayed as No Benchmark Set. When the default operational set `healthy,low,critical` is used without a movement filter excluding slow rows, slow rows with a benchmark are still returned with no stock status so the Movement filter owns slow-moving visibility. |
 | `movement_status` | comma-separated string | Allowed values: `planned`, `recent`, `slow`. Omit to include all movement states. |
-| `sort_by` | string | `item_code`, `item_name`, `warehouse`, `on_hand`, `min_stock`, `health_ratio`. The `min_stock` sort is the Benchmark column. |
+| `sort_by` | string | `item_code`, `item_name`, `warehouse`, `on_hand`, `min_stock`, `planned_qty`, `health_ratio`. The `min_stock` sort is the Benchmark column. |
 | `sort_dir` | string | `asc` or `desc`. |
 | `page` | integer | Page number, minimum 1. |
 | `page_size` | integer | Page size, minimum 1, maximum 200. |
@@ -56,7 +56,7 @@ Outbound consumption is taken from `OINM` rows with `OutQty > 0` and transaction
 | `60` | Goods Issue |
 | `202` | Production Order |
 
-Open planning demand is based on `OWOR.Status IN ('P', 'R')`, component rows with `ItemType = 4`, inventory items, and remaining demand where `PlannedQty - IssuedQty > 0`.
+Open planning demand is based on `OWOR.Status IN ('P', 'R')`, component rows with `ItemType = 4`, inventory items, and remaining demand where `PlannedQty - IssuedQty > 0`. The response exposes that remaining demand as `planned_qty`.
 Stock and benchmark quantities are limited to the selected warehouses. Movement age is item-level: recent consumption in any warehouse prevents the item from being classified as slow-moving in Stock Benchmark.
 
 ## Stock Status Rules
@@ -66,13 +66,12 @@ Rows classified as `slow` movement do not receive a stock health status and are 
 
 | Status | Rule |
 |--------|------|
-| `healthy` | Not slow-moving, benchmark is set, and `OnHand >= Benchmark` |
-| `low` | Not slow-moving, benchmark is set, `OnHand < Benchmark`, and `OnHand >= Benchmark * 0.6` |
-| `critical` | Not slow-moving, benchmark is set, and `OnHand < Benchmark * 0.6` |
-| `critical` | Benchmark is not set and open planning demand exists |
-| `unset` | Not slow-moving, benchmark is not set, and no open planning demand exists |
+| `healthy` | Not slow-moving, required quantity is set, and `OnHand >= Benchmark + Planned Qty` |
+| `low` | Not slow-moving, required quantity is set, `OnHand < Benchmark + Planned Qty`, and `OnHand >= (Benchmark + Planned Qty) * 0.6` |
+| `critical` | Not slow-moving, required quantity is set, and `OnHand < (Benchmark + Planned Qty) * 0.6` |
+| `unset` | Not slow-moving, benchmark and planned quantity are both zero |
 
-The SAP field behind Benchmark is `MinStock`; the API field remains `min_stock` for compatibility. The planned-without-benchmark rule is intentional: a planned item with no benchmark is Critical because SAP shows real demand but no configured benchmark.
+The SAP field behind Benchmark is `MinStock`; the API field remains `min_stock` for compatibility. `planned_qty` is part of the required quantity used for status, health ratio, and health sorting.
 
 ## Movement Rules
 
@@ -93,10 +92,11 @@ If two or more warehouses are selected, the service returns grouped item rows:
 
 - `on_hand` is summed across selected warehouses.
 - Benchmark (`min_stock`) is summed across selected warehouses.
+- `planned_qty` is summed from open production order component demand across selected warehouses.
 - `warehouse` is displayed as `<n> warehouses`.
 - `warehouse_count` contains the number of contributing warehouse rows.
 - `has_warning` is set when a child warehouse has a worse status than the aggregate row.
-- `planned_without_benchmark` is included internally so grouped rows and grouped stats can treat any planned no-benchmark child as Critical.
+- A grouped row can be Healthy while still showing `has_warning=true` when an individual child warehouse is Low or Critical.
 
 ## Meta Counts
 
@@ -107,7 +107,7 @@ The response meta contains:
 | `total_items` | Number of rows after the active backend filters, including no-status slow rows when they are visible. |
 | `healthy_count` | Count of non-slow rows classified as Healthy. |
 | `low_stock_count` | Count of non-slow rows classified as Low. |
-| `critical_stock_count` | Count of non-slow rows classified as Critical, including planned-without-benchmark rows. |
+| `critical_stock_count` | Count of non-slow rows classified as Critical. |
 | `warehouses` | Distinct warehouse list from SAP. |
 | `page`, `page_size`, `total_pages` | Pagination metadata. |
 

@@ -27,6 +27,12 @@ class StockDashboardFilterSerializerTests(SimpleTestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["movement_status"], ["planned", "recent"])
 
+    def test_accepts_planned_qty_sort(self):
+        serializer = StockDashboardFilterSerializer(data={"sort_by": "planned_qty"})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["sort_by"], "planned_qty")
+
     def test_rejects_invalid_movement_status_filter(self):
         serializer = StockDashboardFilterSerializer(
             data={"movement_status": "planned,stale"}
@@ -58,6 +64,8 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         self.assertIn('"WOR1" c', query)
         self.assertIn('"LastConsumptionDate"', query)
         self.assertIn('"OpenPlanCount"', query)
+        self.assertIn('"OpenPlanQty"', query)
+        self.assertIn('AS "PlannedQty"', query)
 
     def test_stock_movement_is_item_level_not_selected_warehouse_level(self):
         query, _ = self.reader._build_query({"warehouse": ["BH-BS", "BH-PM"]})
@@ -75,6 +83,11 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         self.assertIn('DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE) <= 30', query)
         self.assertNotIn("WHERE WHERE", query)
 
+    def test_stock_query_sorts_by_planned_qty(self):
+        query, _ = self.reader._build_query({"sort_by": "planned_qty"})
+
+        self.assertIn('ORDER BY IFNULL(plan."OpenPlanQty", 0) ASC', query)
+
     def test_single_status_filter_excludes_slow_moving_rows(self):
         query, _ = self.reader._build_query({"status": ["healthy"]})
 
@@ -87,33 +100,39 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         query, _ = self.reader._build_query({"status": ["healthy", "low", "critical"]})
 
         self.assertIn(
-            'OR (w."MinStock" > 0 AND IFNULL(plan."OpenPlanCount", 0) = 0 AND '
+            'OR ((w."MinStock" + IFNULL(plan."OpenPlanQty", 0)) > 0 AND '
+            'IFNULL(plan."OpenPlanCount", 0) = 0 AND '
             '(mov."LastConsumptionDate" IS NULL OR '
             'DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE) > 30))',
             query,
         )
 
-    def test_critical_status_includes_planned_items_without_benchmark(self):
+    def test_critical_status_uses_required_quantity(self):
         query, _ = self.reader._build_query({"status": ["critical"]})
 
         self.assertIn(
-            'w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) > 0',
+            'w."OnHand" < (w."MinStock" + IFNULL(plan."OpenPlanQty", 0)) * 0.6',
             query,
         )
+        self.assertNotIn('w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) > 0', query)
 
-    def test_unset_status_excludes_planned_items_without_benchmark(self):
+    def test_unset_status_requires_no_benchmark_or_planned_qty(self):
         query, _ = self.reader._build_query({"status": ["unset"]})
 
         self.assertIn(
-            'w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) = 0',
+            '(w."MinStock" + IFNULL(plan."OpenPlanQty", 0)) = 0',
             query,
         )
 
-    def test_stock_stats_count_planned_items_without_benchmark_as_critical(self):
+    def test_stock_stats_count_statuses_by_required_quantity(self):
         query, _ = self.reader._build_stats_query({})
 
         self.assertIn(
-            'w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) > 0',
+            'w."OnHand" >= (w."MinStock" + IFNULL(plan."OpenPlanQty", 0))',
+            query,
+        )
+        self.assertIn(
+            'w."OnHand" < (w."MinStock" + IFNULL(plan."OpenPlanQty", 0)) * 0.6',
             query,
         )
         self.assertIn('AND NOT (IFNULL(plan."OpenPlanCount", 0) = 0', query)
@@ -137,10 +156,10 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         self.assertIn("days_since_last_consumption > 30", query)
         self.assertNotIn("WHERE WHERE", query)
 
-    def test_grouped_critical_status_includes_planned_without_benchmark(self):
+    def test_grouped_critical_status_uses_required_quantity(self):
         query, _ = self.reader._build_grouped_query({"status": ["critical"]})
 
-        self.assertIn("planned_without_benchmark > 0", query)
+        self.assertIn("on_hand < (min_stock + planned_qty) * 0.6", query)
         self.assertIn("AS planned_without_benchmark", query)
         self.assertIn("NOT (IFNULL(has_open_plan, 0) = 0", query)
 
@@ -150,11 +169,58 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         )
 
         self.assertIn(
-            "OR (min_stock > 0 AND IFNULL(has_open_plan, 0) = 0 AND "
+            "OR ((min_stock + planned_qty) > 0 AND IFNULL(has_open_plan, 0) = 0 AND "
             "(days_since_last_consumption IS NULL OR "
             "days_since_last_consumption > 30))",
             query,
         )
+
+    def test_grouped_query_sorts_by_planned_qty(self):
+        query, _ = self.reader._build_grouped_query({"sort_by": "planned_qty"})
+
+        self.assertIn("SUM(IFNULL(plan.\"OpenPlanQty\", 0)) AS planned_qty", query)
+        self.assertIn("ORDER BY planned_qty ASC", query)
+
+    def test_row_mapper_includes_planned_qty(self):
+        row = (
+            "PM0001",
+            "Bottle",
+            "BH-PM",
+            10,
+            20,
+            "PCS",
+            None,
+            None,
+            1,
+            125.5,
+        )
+
+        mapped = self.reader._map_row(row)
+
+        self.assertEqual(mapped["planned_qty"], 125.5)
+        self.assertTrue(mapped["has_open_plan"])
+
+    def test_grouped_row_mapper_includes_planned_qty(self):
+        row = (
+            "PM0001",
+            "Bottle",
+            10,
+            20,
+            "PCS",
+            2,
+            1,
+            0,
+            None,
+            None,
+            1,
+            0,
+            250,
+        )
+
+        mapped = self.reader._map_grouped_row(row)
+
+        self.assertEqual(mapped["planned_qty"], 250.0)
+        self.assertTrue(mapped["has_open_plan"])
 
 
 class StockDashboardServiceTests(SimpleTestCase):
@@ -231,10 +297,10 @@ class StockDashboardServiceTests(SimpleTestCase):
         self.assertEqual(result["meta"]["low_stock_count"], 1)
         self.assertEqual(result["meta"]["critical_stock_count"], 4)
 
-    def test_planned_item_without_benchmark_is_critical(self):
+    def test_uncovered_planned_item_without_benchmark_is_critical(self):
         service = self.make_service(Mock())
 
-        status = service._stock_status(0, 0, has_open_plan=True)
+        status = service._stock_status(0, 0, planned_qty=1, has_open_plan=True)
 
         self.assertEqual(status, "critical")
 
@@ -245,17 +311,25 @@ class StockDashboardServiceTests(SimpleTestCase):
 
         self.assertEqual(status, "unset")
 
-    def test_grouped_planned_without_benchmark_overrides_health(self):
+    def test_grouped_planned_without_benchmark_can_be_healthy_when_covered(self):
         service = self.make_service(Mock())
 
         status = service._stock_status(
             100,
-            10,
+            0,
+            planned_qty=10,
             has_open_plan=True,
             planned_without_benchmark=True,
         )
 
-        self.assertEqual(status, "critical")
+        self.assertEqual(status, "healthy")
+
+    def test_health_ratio_includes_planned_quantity(self):
+        service = self.make_service(Mock())
+
+        ratio = service._health_ratio({"on_hand": 75, "min_stock": 50, "planned_qty": 50})
+
+        self.assertEqual(ratio, 0.75)
 
     def test_slow_moving_item_has_no_stock_status(self):
         service = self.make_service(Mock())

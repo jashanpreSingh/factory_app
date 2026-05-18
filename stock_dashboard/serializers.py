@@ -79,7 +79,15 @@ class StockDashboardFilterSerializer(serializers.Serializer):
         return statuses
 
     sort_by = serializers.ChoiceField(
-        choices=["item_code", "item_name", "warehouse", "on_hand", "min_stock", "health_ratio"],
+        choices=[
+            "item_code",
+            "item_name",
+            "warehouse",
+            "on_hand",
+            "min_stock",
+            "planned_qty",
+            "health_ratio",
+        ],
         default="health_ratio",
         required=False,
     )
@@ -105,6 +113,7 @@ class StockItemSerializer(serializers.Serializer):
     warehouse = serializers.CharField(default="")
     on_hand = serializers.FloatField()
     min_stock = serializers.FloatField()
+    planned_qty = serializers.FloatField(default=0)
     uom = serializers.CharField()
     stock_status = serializers.CharField()
     health_ratio = serializers.FloatField()
