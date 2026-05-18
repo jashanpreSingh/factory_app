@@ -37,7 +37,7 @@ class HanaServiceGRPOOptionsReader:
                 "gl_accounts": self._get_gl_accounts(cursor, schema),
                 "sac_codes": self._get_sac_codes(cursor, schema),
                 "locations": self._get_locations(cursor, schema),
-                "projects": self._get_projects(cursor, schema),
+                "projects": self._get_budget_delivery_points(cursor, schema),
             }
 
         except dbapi.ProgrammingError as e:
@@ -166,15 +166,16 @@ class HanaServiceGRPOOptionsReader:
         ]
 
     @staticmethod
-    def _get_projects(cursor, schema: str) -> List[Dict[str, Any]]:
+    def _get_budget_delivery_points(cursor, schema: str) -> List[Dict[str, Any]]:
         cursor.execute(
             f"""
                 SELECT
-                    "PrjCode" AS project_code,
-                    IFNULL("PrjName", '') AS project_name
-                FROM "{schema}"."OPRJ"
-                WHERE IFNULL("Active", 'Y') <> 'N'
-                ORDER BY "PrjCode"
+                    "OcrCode" AS project_code,
+                    IFNULL("OcrName", '') AS project_name
+                FROM "{schema}"."OOCR"
+                WHERE "DimCode" = 3
+                  AND IFNULL("Active", 'Y') = 'Y'
+                ORDER BY "OcrName", "OcrCode"
             """
         )
         return [

@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import List, Dict, Any, Optional
 from decimal import Decimal
 from datetime import date
+from django.core.files import File
 from django.utils import timezone
 from django.db import transaction
 
@@ -148,6 +149,95 @@ class GRPOService:
         if summary:
             return "Oil"
         return ""
+
+    @staticmethod
+    def _infer_service_description(item_summary: str, product_variety: str = "") -> str:
+        summary = (item_summary or "").lower()
+        service_tokens = [
+            (("water",), "Water"),
+            (("drink",), "Drink"),
+            (("juice",), "Juice"),
+            (("beverage",), "Beverage"),
+            (("oil",), "Oil"),
+        ]
+        for tokens, label in service_tokens:
+            if any(token in summary for token in tokens):
+                return label
+        return (product_variety or "").strip() or "Transport"
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_active_budget_codes(company_code: str) -> Optional[Dict[str, str]]:
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                    SELECT "OcrCode", IFNULL("OcrName", '')
+                    FROM "{connection.schema}"."OOCR"
+                    WHERE "DimCode" = 3
+                      AND IFNULL("Active", 'Y') = 'Y'
+                """
+            )
+            return {
+                str(row[0]).strip(): str(row[1] or row[0]).strip()
+                for row in cursor.fetchall()
+                if row[0]
+            }
+        except Exception as exc:
+            logger.warning(
+                "Could not read active SAP budget distribution rules for %s: %s",
+                company_code,
+                exc,
+            )
+            return None
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    def _is_active_budget_code(self, budget_code: str) -> bool:
+        budget_code = (budget_code or "").strip()
+        if not budget_code:
+            return False
+        active_budget_codes = self._get_active_budget_codes(self.company_code)
+        if active_budget_codes is None:
+            return True
+        return budget_code in active_budget_codes
+
+    def _infer_budget_delivery_point(self, dispatch_plan: DispatchPlan) -> str:
+        active_budget_codes = self._get_active_budget_codes(self.company_code) or {}
+        saved_budget = (dispatch_plan.budget_delivery_point or "").strip()
+        if saved_budget in active_budget_codes:
+            return saved_budget
+
+        normalized_saved_budget = saved_budget.lower()
+        if normalized_saved_budget:
+            for code, name in active_budget_codes.items():
+                if normalized_saved_budget in {code.lower(), name.lower()}:
+                    return code
+
+        location_hint = (
+            f"{dispatch_plan.service_location_name} {dispatch_plan.service_location_code or ''}"
+        ).lower()
+        if any(token in location_hint for token in ("mayapuri", "delhi isd")):
+            if "Del Mayp" in active_budget_codes:
+                return "Del Mayp"
+
+        if "Del Bkhp" in active_budget_codes:
+            return "Del Bkhp"
+        return next(iter(active_budget_codes), saved_budget)
 
     def _get_dispatch_bill_snapshot(self, dispatch_plan: DispatchPlan) -> Dict[str, Any]:
         doc_num = (dispatch_plan.sap_invoice_doc_num or "").strip()
@@ -689,6 +779,16 @@ class GRPOService:
             .order_by("-updated_at", "-created_at")
         )
 
+    @staticmethod
+    def _get_dispatch_bilty_attachment_name(dispatch_plan: DispatchPlan) -> str:
+        if not dispatch_plan.bilty_attachment:
+            return ""
+        filename = (
+            dispatch_plan.bilty_attachment_name
+            or os.path.basename(dispatch_plan.bilty_attachment.name)
+        )
+        return filename or "bilty_attachment"
+
     def get_service_grpo_preview_data(self, dispatch_plan_id: int) -> Dict[str, Any]:
         """Get dispatch booking data required for service GRPO posting."""
         try:
@@ -724,15 +824,9 @@ class GRPOService:
         if amount is None:
             amount = Decimal("0")
 
-        bill_no = dispatch_plan.sap_invoice_doc_num or str(
-            dispatch_plan.sap_invoice_doc_entry
-        )
         vehicle_no = dispatch_plan.vehicle_no or (
             dispatch_plan.vehicle.vehicle_number if dispatch_plan.vehicle_id else ""
         )
-        service_description = f"Transport freight for dispatch bill {bill_no}"
-        if vehicle_no:
-            service_description = f"{service_description} - {vehicle_no}"
 
         latest_grpo = dispatch_plan.service_grpo_postings.order_by("-created_at").first()
         bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
@@ -741,6 +835,12 @@ class GRPOService:
             dispatch_plan.product_variety
             or self._infer_product_variety(item_summary)
         )
+        service_description = self._infer_service_description(
+            item_summary,
+            product_variety,
+        )
+        delivery_point = self._infer_budget_delivery_point(dispatch_plan)
+        source_state = bill_snapshot.get("state", "") or dispatch_plan.place_of_supply
         total_litres = dispatch_plan.total_litres
         if total_litres is None and bill_snapshot:
             total_litres = self._decimal_or_none(
@@ -775,9 +875,9 @@ class GRPOService:
             "updated_at": dispatch_plan.updated_at,
             "default_amount": amount,
             "default_service_description": service_description[:255],
-            "default_place_of_supply": dispatch_plan.place_of_supply or "HR",
+            "default_place_of_supply": dispatch_plan.place_of_supply or source_state or "HR",
             "default_effective_month": effective_month,
-            "default_budget_delivery_point": dispatch_plan.budget_delivery_point,
+            "default_budget_delivery_point": delivery_point,
             "default_location_code": dispatch_plan.service_location_code,
             "default_location_name": dispatch_plan.service_location_name,
             "default_sac_entry": dispatch_plan.sac_entry,
@@ -789,9 +889,17 @@ class GRPOService:
             "eway_bill": dispatch_plan.eway_bill or bill_snapshot.get("sap_eway_bill", ""),
             "invoice_weight": invoice_weight,
             "invoice_amount": invoice_amount,
-            "source_state": bill_snapshot.get("state", ""),
+            "source_state": source_state,
             "source_city": bill_snapshot.get("city", ""),
             "item_summary": item_summary,
+            "bilty_attachment": (
+                dispatch_plan.bilty_attachment.url
+                if dispatch_plan.bilty_attachment
+                else None
+            ),
+            "bilty_attachment_name": self._get_dispatch_bilty_attachment_name(
+                dispatch_plan
+            ),
             "grpo_status": existing_grpo.status if existing_grpo else (
                 latest_grpo.status if latest_grpo else None
             ),
@@ -820,6 +928,95 @@ class GRPOService:
         ]
 
         return " | ".join(parts)
+
+    def _get_service_attachment_sources(
+        self,
+        dispatch_plan: DispatchPlan,
+        attachments: Optional[list],
+        include_bilty_attachment: bool,
+    ) -> List[Dict[str, Any]]:
+        sources = []
+        if include_bilty_attachment and dispatch_plan.bilty_attachment:
+            sources.append(
+                {
+                    "kind": "dispatch_bilty",
+                    "file": dispatch_plan.bilty_attachment,
+                    "filename": self._get_dispatch_bilty_attachment_name(dispatch_plan),
+                }
+            )
+
+        for uploaded_file in attachments or []:
+            sources.append(
+                {
+                    "kind": "uploaded",
+                    "file": uploaded_file,
+                    "filename": uploaded_file.name,
+                }
+            )
+        return sources
+
+    @staticmethod
+    def _copy_attachment_to_temp(file_obj, filename: str) -> str:
+        suffix = os.path.splitext(filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            if hasattr(file_obj, "seek"):
+                try:
+                    file_obj.seek(0)
+                except Exception:
+                    pass
+            if hasattr(file_obj, "chunks"):
+                for chunk in file_obj.chunks():
+                    tmp.write(chunk)
+            else:
+                while True:
+                    chunk = file_obj.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    tmp.write(chunk)
+            tmp_path = tmp.name
+
+        if hasattr(file_obj, "seek"):
+            try:
+                file_obj.seek(0)
+            except Exception:
+                pass
+        return tmp_path
+
+    @staticmethod
+    def _create_service_attachment_record(
+        grpo_posting: ServiceGRPOPosting,
+        att_data: Dict[str, Any],
+        user,
+    ) -> None:
+        source_file = att_data["file"]
+        filename = att_data["filename"]
+
+        if att_data["kind"] == "dispatch_bilty":
+            attachment = ServiceGRPOAttachment(
+                service_grpo_posting=grpo_posting,
+                original_filename=filename,
+                sap_attachment_status=SAPAttachmentStatus.LINKED,
+                sap_absolute_entry=att_data["sap_absolute_entry"],
+                uploaded_by=user,
+            )
+            source_file.open("rb")
+            try:
+                attachment.file.save(filename, File(source_file), save=False)
+            finally:
+                source_file.close()
+            attachment.save()
+            return
+
+        if hasattr(source_file, "seek"):
+            source_file.seek(0)
+        ServiceGRPOAttachment.objects.create(
+            service_grpo_posting=grpo_posting,
+            file=source_file,
+            original_filename=filename,
+            sap_attachment_status=SAPAttachmentStatus.LINKED,
+            sap_absolute_entry=att_data["sap_absolute_entry"],
+            uploaded_by=user,
+        )
 
     @transaction.atomic
     def post_service_grpo(
@@ -850,6 +1047,7 @@ class GRPOService:
         vendor_ref: Optional[str] = None,
         extra_charges: Optional[List[Dict[str, Any]]] = None,
         attachments: Optional[list] = None,
+        include_bilty_attachment: bool = True,
         doc_date: Optional[str] = None,
         doc_due_date: Optional[str] = None,
         tax_date: Optional[str] = None,
@@ -920,6 +1118,7 @@ class GRPOService:
 
         if effective_month:
             effective_month = self._first_day_of_month(effective_month)
+        post_budget_as_dimension = self._is_active_budget_code(budget_delivery_point)
 
         grpo_posting = ServiceGRPOPosting.objects.create(
             dispatch_plan=dispatch_plan,
@@ -952,8 +1151,8 @@ class GRPOService:
             document_line["SACEntry"] = int(sac_entry)
         if location_code:
             document_line["LocationCode"] = int(location_code)
-        if budget_delivery_point:
-            document_line["ProjectCode"] = budget_delivery_point
+        if post_budget_as_dimension:
+            document_line["CostingCode3"] = budget_delivery_point
         if total_litres is not None:
             document_line["U_UNE_LTS"] = float(total_litres)
         if dispatch_plan.bilty_no:
@@ -981,8 +1180,6 @@ class GRPOService:
         }
         if place_of_supply:
             grpo_payload["ShipPlace"] = place_of_supply
-        if budget_delivery_point:
-            grpo_payload["Project"] = budget_delivery_point
         if dispatch_plan.bilty_no:
             grpo_payload["U_BilltyNumber"] = dispatch_plan.bilty_no
             grpo_payload["U_LRNUmber"] = dispatch_plan.bilty_no
@@ -1035,36 +1232,39 @@ class GRPOService:
         sap_client = SAPClient(company_code=self.company_code)
         attachment_records = []
         sap_absolute_entry = None
+        attachment_sources = self._get_service_attachment_sources(
+            dispatch_plan=dispatch_plan,
+            attachments=attachments,
+            include_bilty_attachment=include_bilty_attachment,
+        )
 
-        if attachments:
-            for uploaded_file in attachments:
-                suffix = os.path.splitext(uploaded_file.name)[1]
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                    for chunk in uploaded_file.chunks():
-                        tmp.write(chunk)
-                    tmp_path = tmp.name
-
+        if attachment_sources:
+            for attachment_source in attachment_sources:
+                filename = attachment_source["filename"]
+                file_obj = attachment_source["file"]
+                tmp_path = self._copy_attachment_to_temp(file_obj, filename)
                 try:
                     if sap_absolute_entry:
                         sap_client.add_line_to_existing_attachment(
                             absolute_entry=sap_absolute_entry,
                             file_path=tmp_path,
-                            filename=uploaded_file.name,
+                            filename=filename,
                         )
                         abs_entry = sap_absolute_entry
                     else:
                         sap_result = sap_client.upload_attachment(
                             file_path=tmp_path,
-                            filename=uploaded_file.name,
+                            filename=filename,
                         )
                         abs_entry = sap_result.get("AbsoluteEntry")
                     if abs_entry:
                         sap_absolute_entry = abs_entry
-                        attachment_records.append({
-                            "file": uploaded_file,
-                            "filename": uploaded_file.name,
-                            "sap_absolute_entry": abs_entry,
-                        })
+                        attachment_records.append(
+                            {
+                                **attachment_source,
+                                "sap_absolute_entry": abs_entry,
+                            }
+                        )
                 finally:
                     os.unlink(tmp_path)
 
@@ -1107,16 +1307,10 @@ class GRPOService:
             )
 
             for att_data in attachment_records:
-                uploaded_file = att_data["file"]
-                if hasattr(uploaded_file, "seek"):
-                    uploaded_file.seek(0)
-                ServiceGRPOAttachment.objects.create(
-                    service_grpo_posting=grpo_posting,
-                    file=uploaded_file,
-                    original_filename=att_data["filename"],
-                    sap_attachment_status=SAPAttachmentStatus.LINKED,
-                    sap_absolute_entry=att_data["sap_absolute_entry"],
-                    uploaded_by=user,
+                self._create_service_attachment_record(
+                    grpo_posting=grpo_posting,
+                    att_data=att_data,
+                    user=user,
                 )
 
             logger.info(

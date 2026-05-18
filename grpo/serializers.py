@@ -230,6 +230,7 @@ class ServiceGRPOPendingEntrySerializer(serializers.Serializer):
     driver_name = serializers.CharField(allow_blank=True)
     transporter_name = serializers.CharField(allow_blank=True)
     transporter_gstin = serializers.CharField(allow_blank=True)
+    source_state = serializers.CharField(required=False, allow_blank=True)
     bilty_no = serializers.CharField(allow_blank=True)
     bilty_date = serializers.DateField(allow_null=True)
     freight = serializers.DecimalField(
@@ -273,6 +274,10 @@ class ServiceGRPOPreviewSerializer(ServiceGRPOPendingEntrySerializer):
     source_state = serializers.CharField(allow_blank=True)
     source_city = serializers.CharField(allow_blank=True)
     item_summary = serializers.CharField(allow_blank=True)
+    bilty_attachment = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+    bilty_attachment_name = serializers.CharField(required=False, allow_blank=True)
     grpo_status = serializers.CharField(allow_null=True)
     sap_doc_num = serializers.IntegerField(allow_null=True)
     total_amount = serializers.DecimalField(
@@ -361,6 +366,7 @@ class ServiceGRPOPostRequestSerializer(serializers.Serializer):
     comments = serializers.CharField(required=False, allow_blank=True)
     vendor_ref = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     extra_charges = ExtraChargeInputSerializer(many=True, required=False)
+    include_bilty_attachment = serializers.BooleanField(required=False, default=True)
     doc_date = serializers.DateField(required=False, allow_null=True)
     doc_due_date = serializers.DateField(required=False, allow_null=True)
     tax_date = serializers.DateField(required=False, allow_null=True)

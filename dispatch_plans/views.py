@@ -167,6 +167,7 @@ class DispatchPendingBiltyGRPOListAPI(APIView):
             vehicle_no = plan.vehicle_no or (
                 plan.vehicle.vehicle_number if plan.vehicle_id else ""
             )
+            bill_snapshot = service._get_dispatch_bill_snapshot(plan)
             result.append(
                 {
                     "dispatch_plan_id": plan.id,
@@ -178,6 +179,7 @@ class DispatchPendingBiltyGRPOListAPI(APIView):
                     "driver_name": plan.driver_name,
                     "transporter_name": plan.transporter_name,
                     "transporter_gstin": plan.transporter_gstin,
+                    "source_state": bill_snapshot.get("state", "") or plan.place_of_supply,
                     "bilty_no": plan.bilty_no,
                     "bilty_date": plan.bilty_date,
                     "freight": plan.freight,
@@ -273,6 +275,9 @@ class DispatchBiltyServiceGRPOPostAPI(APIView):
                 vendor_ref=serializer.validated_data.get("vendor_ref"),
                 extra_charges=serializer.validated_data.get("extra_charges"),
                 attachments=attachments,
+                include_bilty_attachment=serializer.validated_data.get(
+                    "include_bilty_attachment", True
+                ),
                 doc_date=serializer.validated_data.get("doc_date"),
                 doc_due_date=serializer.validated_data.get("doc_due_date"),
                 tax_date=serializer.validated_data.get("tax_date"),

@@ -51,6 +51,8 @@ class Command(BaseCommand):
         user = get_user_model().objects.order_by("id").first()
         now = timezone.now()
 
+        self._clear_existing_dummy_data(company)
+
         open_posting = self._seed_service_grpo(
             company=company,
             user=user,
@@ -61,6 +63,18 @@ class Command(BaseCommand):
             bilty_no="TEST-BILTY-OPEN",
             vehicle_no="TEST-TRUCK-01",
             amount=Decimal("1234.00"),
+            now=now,
+        )
+        second_open_posting = self._seed_service_grpo(
+            company=company,
+            user=user,
+            sap_invoice_doc_entry=990003,
+            sap_invoice_doc_num="990003",
+            sap_grpo_doc_entry=880003,
+            sap_grpo_doc_num=880003,
+            bilty_no="TEST-BILTY-OPEN-2",
+            vehicle_no="TEST-TRUCK-03",
+            amount=Decimal("1750.50"),
             now=now,
         )
         pending_posting = self._seed_service_grpo(
@@ -84,11 +98,27 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Seeded dispatch invoice UI data."))
         self.stdout.write(f"Open bilty Service GRPO id: {open_posting.id}")
+        self.stdout.write(f"Second open bilty Service GRPO id: {second_open_posting.id}")
         self.stdout.write(f"Pending A/P Invoice id: {ap_invoice.id}")
         self.stdout.write(
             "Use /dispatch/open-bilties for the open test bilty and "
             "/dispatch/transporter-invoices/pending for the pending A/P invoice."
         )
+
+    def _clear_existing_dummy_data(self, company):
+        dummy_grpo_doc_entries = [880001, 880002, 880003]
+        dummy_grpos = ServiceGRPOPosting.objects.filter(
+            dispatch_plan__company=company,
+            sap_doc_entry__in=dummy_grpo_doc_entries,
+        )
+        TransporterAPInvoicePosting.objects.filter(
+            company=company,
+            lines__service_grpo_posting__in=dummy_grpos,
+        ).distinct().delete()
+        TransporterAPInvoicePosting.objects.filter(
+            company=company,
+            invoice_number__startswith="TEST-AP-INV",
+        ).delete()
 
     def _seed_service_grpo(
         self,
