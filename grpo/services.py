@@ -1,6 +1,7 @@
 import logging
 import os
 import tempfile
+from functools import lru_cache
 from typing import List, Dict, Any, Optional
 from decimal import Decimal
 from datetime import date
@@ -16,6 +17,7 @@ from quality_control.enums import InspectionStatus
 from sap_client.client import SAPClient
 from sap_client.context import CompanyContext
 from sap_client.exceptions import SAPConnectionError, SAPDataError, SAPValidationError
+from sap_client.hana.connection import HanaConnection
 
 from .models import (
     GRPOPosting,
@@ -39,6 +41,74 @@ class GRPOService:
 
     def __init__(self, company_code: str):
         self.company_code = company_code
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_sap_table_columns(
+        company_code: str,
+        table_name: str,
+    ) -> Optional[frozenset[str]]:
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                    SELECT "COLUMN_NAME"
+                    FROM "SYS"."TABLE_COLUMNS"
+                    WHERE "SCHEMA_NAME" = ? AND "TABLE_NAME" = ?
+                """,
+                [connection.schema, table_name.upper()],
+            )
+            return frozenset(row[0] for row in cursor.fetchall())
+        except Exception as exc:
+            logger.warning(
+                "Could not read SAP column metadata for %s.%s: %s",
+                company_code,
+                table_name,
+                exc,
+            )
+            return None
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    def _filter_purchase_delivery_note_udfs(self, payload: Dict[str, Any]) -> None:
+        """Drop company-missing UDFs before Service Layer rejects the GRPO."""
+        header_columns = self._get_sap_table_columns(self.company_code, "OPDN")
+        line_columns = self._get_sap_table_columns(self.company_code, "PDN1")
+
+        if header_columns:
+            for key in list(payload):
+                if key.startswith("U_") and key not in header_columns:
+                    logger.info(
+                        "Skipping unsupported OPDN UDF %s for %s",
+                        key,
+                        self.company_code,
+                    )
+                    payload.pop(key, None)
+
+        if line_columns:
+            for line in payload.get("DocumentLines", []):
+                for key in list(line):
+                    if key.startswith("U_") and key not in line_columns:
+                        logger.info(
+                            "Skipping unsupported PDN1 UDF %s for %s",
+                            key,
+                            self.company_code,
+                        )
+                        line.pop(key, None)
 
     @classmethod
     def _truncate_sap_document_comments(cls, comments: str) -> str:
@@ -1000,6 +1070,8 @@ class GRPOService:
 
             if sap_absolute_entry:
                 grpo_payload["AttachmentEntry"] = sap_absolute_entry
+
+        self._filter_purchase_delivery_note_udfs(grpo_payload)
 
         logger.info(
             "Service GRPO payload for dispatch plan %s: %s",

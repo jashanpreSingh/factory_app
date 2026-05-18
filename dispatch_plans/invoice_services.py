@@ -680,6 +680,7 @@ class DispatchInvoiceService:
         attachment_entry: Optional[int],
     ) -> Dict[str, Any]:
         payload = {
+            "DocType": "dDocument_Service",
             "CardCode": preview["vendor_code"],
             "NumAtCard": invoice_number,
             "BPL_IDAssignedToInvoice": preview["branch_id"],
