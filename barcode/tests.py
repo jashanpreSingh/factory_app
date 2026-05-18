@@ -3,6 +3,8 @@ from datetime import date
 from decimal import Decimal
 
 from django.test import TestCase
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
 
 from accounts.models import User
 from company.models import Company
@@ -17,11 +19,13 @@ from .models import (
     LabelPrintLog,
     LooseStockStatus,
     PalletMovement,
+    PalletStatus,
     ScanLog,
     ScanResult,
 )
 from .serializers import (
     BoxGenerateSerializer,
+    BoxListSerializer,
     MAX_BOX_LABELS_PER_REQUEST,
     PalletCreateSerializer,
 )
@@ -29,6 +33,7 @@ from .services.barcode_service import BarcodeService
 from .services.label_service import LabelService
 from .services.production_release_service import ProductionReleaseOilService
 from .services.scan_service import ScanService
+from .views import _list_response
 
 
 class BarcodeWorkflowTests(TestCase):
@@ -99,6 +104,29 @@ class BarcodeWorkflowTests(TestCase):
             ],
         )
 
+    def test_list_response_returns_page_metadata_when_requested(self):
+        self._generate_boxes(count=3)
+        request = Request(APIRequestFactory().get('/barcode/boxes/?page=1&page_size=2'))
+
+        response = _list_response(request, self.service.list_boxes(), BoxListSerializer)
+
+        self.assertEqual(response.data['count'], 3)
+        self.assertEqual(response.data['page'], 1)
+        self.assertEqual(response.data['page_size'], 2)
+        self.assertEqual(response.data['total_pages'], 2)
+        self.assertTrue(response.data['next'])
+        self.assertFalse(response.data['previous'])
+        self.assertEqual(len(response.data['results']), 2)
+
+    def test_list_response_keeps_legacy_array_shape_without_page_params(self):
+        self._generate_boxes(count=2)
+        request = Request(APIRequestFactory().get('/barcode/boxes/'))
+
+        response = _list_response(request, self.service.list_boxes(), BoxListSerializer)
+
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 2)
+
     def test_create_pallet_creates_empty_pallet_then_adds_boxes(self):
         boxes = self._generate_boxes(count=3)
 
@@ -124,11 +152,258 @@ class BarcodeWorkflowTests(TestCase):
         )
         self.assertEqual(pallet.box_count, 3)
         self.assertEqual(pallet.total_qty, Decimal('37.50'))
+        self.assertEqual(pallet.item_code, 'FG001')
+        self.assertEqual(pallet.item_name, 'Test Finished Good')
+        self.assertEqual(pallet.batch_number, 'BATCH-001')
+        self.assertEqual(pallet.uom, 'PCS')
+        self.assertEqual(pallet.mfg_date, date(2026, 5, 7))
+        self.assertEqual(pallet.exp_date, date(2027, 5, 7))
         self.assertEqual(
             Box.objects.filter(pallet=pallet, current_warehouse='FG01').count(),
             3,
         )
         self.assertEqual(pallet.barcode_data['type'], 'PALLET')
+
+    def test_add_boxes_to_pallet_rejects_mismatched_item_context(self):
+        boxes = self._generate_boxes(count=1)
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        self.service.add_boxes_to_pallet(pallet.id, [boxes[0].id], user=self.user)
+
+        other_box = self.service.generate_boxes(
+            {
+                'item_code': 'FG002',
+                'item_name': 'Other Finished Good',
+                'batch_number': 'BATCH-002',
+                'qty': Decimal('12.50'),
+                'box_count': 1,
+                'uom': 'PCS',
+                'mfg_date': date(2026, 5, 7),
+                'exp_date': date(2027, 5, 7),
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+            },
+            user=self.user,
+        )[0]
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Box item, batch, or UOM does not match the target pallet.",
+        ):
+            self.service.add_boxes_to_pallet(pallet.id, [other_box.id], user=self.user)
+
+        other_box.refresh_from_db()
+        pallet.refresh_from_db()
+        self.assertIsNone(other_box.pallet)
+        self.assertEqual(pallet.box_count, 1)
+
+    def test_add_boxes_to_pallet_enforces_capacity(self):
+        boxes = self._generate_boxes(count=2)
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+                'max_box_count': 1,
+            },
+            user=self.user,
+        )
+
+        with self.assertRaisesMessage(ValueError, "Pallet capacity exceeded."):
+            self.service.add_boxes_to_pallet(
+                pallet.id,
+                [box.id for box in boxes],
+                user=self.user,
+            )
+
+        self.assertEqual(Box.objects.filter(pallet=pallet).count(), 0)
+
+    def test_clear_pallet_resets_context_and_allows_reuse(self):
+        first_boxes = self._generate_boxes(count=2, qty='10.00', batch='BATCH-001')
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        pallet = self.service.add_boxes_to_pallet(
+            pallet.id,
+            [box.id for box in first_boxes],
+            user=self.user,
+        )
+
+        cleared = self.service.clear_pallet(
+            pallet.id,
+            notes='Ready for reuse',
+            user=self.user,
+        )
+
+        self.assertEqual(cleared.status, PalletStatus.CLEARED)
+        self.assertEqual(cleared.box_count, 0)
+        self.assertEqual(cleared.total_qty, Decimal('0'))
+        self.assertEqual(cleared.item_code, '')
+        self.assertEqual(cleared.batch_number, '')
+        self.assertEqual(cleared.uom, '')
+        self.assertEqual(cleared.max_box_count, 0)
+        self.assertEqual(Box.objects.filter(pallet=cleared).count(), 0)
+
+        new_box = self.service.generate_boxes(
+            {
+                'item_code': 'FG002',
+                'item_name': 'Reusable Pallet Product',
+                'batch_number': 'BATCH-REUSE',
+                'qty': Decimal('7.50'),
+                'box_count': 1,
+                'uom': 'PCS',
+                'mfg_date': date(2026, 6, 1),
+                'exp_date': date(2027, 6, 1),
+                'warehouse': 'FG01',
+                'production_line': 'Line 2',
+            },
+            user=self.user,
+        )[0]
+
+        reused = self.service.add_boxes_to_pallet(cleared.id, [new_box.id], user=self.user)
+
+        self.assertEqual(reused.status, PalletStatus.ACTIVE)
+        self.assertEqual(reused.pallet_id, pallet.pallet_id)
+        self.assertEqual(reused.box_count, 1)
+        self.assertEqual(reused.total_qty, Decimal('7.50'))
+        self.assertEqual(reused.item_code, 'FG002')
+        self.assertEqual(reused.item_name, 'Reusable Pallet Product')
+        self.assertEqual(reused.batch_number, 'BATCH-REUSE')
+        self.assertEqual(reused.mfg_date, date(2026, 6, 1))
+        self.assertEqual(reused.exp_date, date(2027, 6, 1))
+
+    def test_split_into_cleared_pallet_reactivates_and_sets_context(self):
+        boxes = self._generate_boxes(count=3, qty='5.00', batch='BATCH-SPLIT')
+        source = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        source = self.service.add_boxes_to_pallet(
+            source.id,
+            [box.id for box in boxes],
+            user=self.user,
+        )
+        target = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG02',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        target.status = PalletStatus.CLEARED
+        target.save(update_fields=['status'])
+
+        updated_target = self.service.split_pallet(
+            source.id,
+            [boxes[0].id],
+            target.id,
+            user=self.user,
+        )
+
+        self.assertEqual(updated_target.status, PalletStatus.ACTIVE)
+        self.assertEqual(updated_target.box_count, 1)
+        self.assertEqual(updated_target.total_qty, Decimal('5.00'))
+        self.assertEqual(updated_target.item_code, 'FG001')
+        self.assertEqual(updated_target.batch_number, 'BATCH-SPLIT')
+        self.assertEqual(updated_target.uom, 'PCS')
+        updated_target.refresh_from_db()
+        self.assertEqual(updated_target.boxes.first().current_warehouse, 'FG02')
+
+    def test_full_pallet_dismantle_clears_context_for_reuse(self):
+        boxes = self._generate_boxes(count=1, qty='10.00', batch='BATCH-DISMANTLE')
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        pallet = self.service.add_boxes_to_pallet(
+            pallet.id,
+            [boxes[0].id],
+            user=self.user,
+        )
+
+        dismantled = self.service.dismantle_pallet(
+            pallet.id,
+            box_ids=None,
+            reason='REPACK',
+            reason_notes='Production test',
+            user=self.user,
+        )
+
+        self.assertEqual(dismantled.status, PalletStatus.CLEARED)
+        self.assertEqual(dismantled.box_count, 0)
+        self.assertEqual(dismantled.total_qty, Decimal('0'))
+        self.assertEqual(dismantled.item_code, '')
+        self.assertEqual(dismantled.batch_number, '')
+        self.assertEqual(dismantled.uom, '')
+        self.assertEqual(dismantled.max_box_count, 0)
+
+    def test_box_transfer_to_pallet_rejects_mismatched_context(self):
+        target_box = self._generate_boxes(count=1, batch='BATCH-TARGET')[0]
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        pallet = self.service.add_boxes_to_pallet(pallet.id, [target_box.id], user=self.user)
+        other_box = self.service.generate_boxes(
+            {
+                'item_code': 'FG002',
+                'item_name': 'Other Finished Good',
+                'batch_number': 'BATCH-OTHER',
+                'qty': Decimal('4.00'),
+                'box_count': 1,
+                'uom': 'PCS',
+                'mfg_date': date(2026, 5, 7),
+                'exp_date': date(2027, 5, 7),
+                'warehouse': 'FG02',
+                'production_line': 'Line 1',
+            },
+            user=self.user,
+        )[0]
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Box item, batch, or UOM does not match the target pallet.",
+        ):
+            self.service.transfer_boxes(
+                [other_box.id],
+                to_warehouse='FG01',
+                to_pallet_id=pallet.id,
+                user=self.user,
+            )
+
+        other_box.refresh_from_db()
+        self.assertIsNone(other_box.pallet)
 
     def test_pallet_sequence_uses_global_unique_namespace(self):
         first = self.service.create_pallet(

@@ -29,6 +29,9 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_PAGE_SIZE = 25
+MAX_PAGE_SIZE = 100
+
 
 def _get_service(request) -> BarcodeService:
     company_code = request.company.company.code
@@ -43,6 +46,45 @@ def _get_scan_service(request) -> ScanService:
 def _get_label_service(request) -> LabelService:
     company_code = request.company.company.code
     return LabelService(company_code=company_code)
+
+
+def _parse_positive_int(value, default):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _paginated_response(request, qs, serializer_class):
+    page = _parse_positive_int(request.query_params.get('page'), 1)
+    page_size = min(
+        _parse_positive_int(request.query_params.get('page_size'), DEFAULT_PAGE_SIZE),
+        MAX_PAGE_SIZE,
+    )
+    total_count = qs.count()
+    total_pages = max((total_count + page_size - 1) // page_size, 1)
+    page = min(page, total_pages)
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    return Response(
+        {
+            'results': serializer_class(qs[start:end], many=True).data,
+            'count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
+            'next': page < total_pages,
+            'previous': page > 1,
+        }
+    )
+
+
+def _list_response(request, qs, serializer_class):
+    if 'page' in request.query_params or 'page_size' in request.query_params:
+        return _paginated_response(request, qs, serializer_class)
+    return Response(serializer_class(qs[:500], many=True).data)
 
 
 # ===========================================================================
@@ -92,7 +134,7 @@ class BoxListAPI(APIView):
             unpalletized=request.query_params.get('unpalletized'),
             search=request.query_params.get('search'),
         )
-        return Response(BoxListSerializer(qs[:500], many=True).data)
+        return _list_response(request, qs, BoxListSerializer)
 
 
 class BoxDetailAPI(APIView):
@@ -174,7 +216,7 @@ class PalletListAPI(APIView):
             warehouse=request.query_params.get('warehouse'),
             search=request.query_params.get('search'),
         )
-        return Response(PalletListSerializer(qs[:500], many=True).data)
+        return _list_response(request, qs, PalletListSerializer)
 
 
 class PalletDetailAPI(APIView):
@@ -466,7 +508,7 @@ class PrintHistoryAPI(APIView):
             print_type=request.query_params.get('print_type'),
             reference_code=request.query_params.get('search'),
         )
-        return Response(LabelPrintLogSerializer(qs[:500], many=True).data)
+        return _list_response(request, qs, LabelPrintLogSerializer)
 
 
 # ===========================================================================
@@ -560,7 +602,7 @@ class LooseStockListAPI(APIView):
             reason=request.query_params.get('reason'),
             search=request.query_params.get('search'),
         )
-        return Response(LooseStockListSerializer(qs[:500], many=True).data)
+        return _list_response(request, qs, LooseStockListSerializer)
 
 
 class LooseStockDetailAPI(APIView):
@@ -620,7 +662,7 @@ class ScanHistoryAPI(APIView):
             scan_result=request.query_params.get('scan_result'),
             entity_type=request.query_params.get('entity_type'),
         )
-        return Response(ScanLogSerializer(qs[:500], many=True).data)
+        return _list_response(request, qs, ScanLogSerializer)
 
 
 # ===========================================================================
