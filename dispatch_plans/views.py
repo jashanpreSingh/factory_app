@@ -184,6 +184,7 @@ class DispatchPendingBiltyGRPOListAPI(APIView):
                     "bilty_date": plan.bilty_date,
                     "freight": plan.freight,
                     "total_freight": plan.total_freight,
+                    "invoice_count": getattr(plan, "_service_group_invoice_count", 1),
                     "created_at": plan.created_at,
                     "updated_at": plan.updated_at,
                 }

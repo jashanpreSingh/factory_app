@@ -96,6 +96,12 @@ class DispatchPlanUpdateSerializer(serializers.Serializer):
     sap_invoice_doc_num = serializers.CharField(
         required=False, max_length=30, allow_blank=True
     )
+    linked_invoice_doc_entries = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+    )
     invoice_number = serializers.CharField(required=False, max_length=50, allow_blank=True)
     eway_bill = serializers.CharField(required=False, max_length=80, allow_blank=True)
     invoice_weight = serializers.DecimalField(

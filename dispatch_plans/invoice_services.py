@@ -508,12 +508,17 @@ class DispatchInvoiceService:
                         f"SAP GRPO {posting.sap_doc_num or posting.sap_doc_entry} line {index} is already invoiced."
                     )
 
+                line_dispatch_plan = (
+                    getattr(local_line, "dispatch_plan", None)
+                    if local_line is not None
+                    else posting.dispatch_plan
+                ) or posting.dispatch_plan
                 preview_lines.append(
                     {
                         "service_grpo_posting_id": posting.id,
                         "service_grpo_line_id": getattr(local_line, "id", None),
-                        "dispatch_plan_id": posting.dispatch_plan_id,
-                        "bilty_no": posting.dispatch_plan.bilty_no or "",
+                        "dispatch_plan_id": line_dispatch_plan.id,
+                        "bilty_no": line_dispatch_plan.bilty_no or "",
                         "grpo_doc_entry": posting.sap_doc_entry,
                         "grpo_doc_num": posting.sap_doc_num,
                         "grpo_line_num": index,

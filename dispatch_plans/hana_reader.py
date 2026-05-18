@@ -30,6 +30,17 @@ class HanaDispatchBillReader:
         bill["items"] = self.list_bill_lines(bill["doc_entry"])
         return bill
 
+    def list_bills_by_doc_entries(self, doc_entries: List[int]) -> List[Dict[str, Any]]:
+        doc_entries = [int(doc_entry) for doc_entry in dict.fromkeys(doc_entries or [])]
+        if not doc_entries:
+            return []
+        return self.list_bills(
+            {
+                "doc_entries": doc_entries,
+                "limit": len(doc_entries),
+            }
+        )
+
     def list_bill_lines(self, doc_entry: int) -> List[Dict[str, Any]]:
         schema = self.connection.schema
         line_columns = self._table_columns("INV1")
@@ -141,8 +152,13 @@ class HanaDispatchBillReader:
         where_clauses = ['H."CANCELED" = \'N\'']
         params: List[Any] = []
 
+        doc_entries = [int(value) for value in filters.get("doc_entries") or []]
         invoice_doc_num = (filters.get("invoice_doc_num") or "").strip()
-        if invoice_doc_num:
+        if doc_entries:
+            placeholders = ", ".join("?" for _ in doc_entries)
+            where_clauses.append(f'H."DocEntry" IN ({placeholders})')
+            params.extend(doc_entries)
+        elif invoice_doc_num:
             where_clauses.append('TO_NVARCHAR(H."DocNum") = ?')
             params.append(invoice_doc_num)
         else:

@@ -241,6 +241,32 @@ class ServiceGRPOPendingEntrySerializer(serializers.Serializer):
     )
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
+    invoice_count = serializers.IntegerField(required=False, default=1)
+
+
+class ServiceGRPOInvoiceLinePreviewSerializer(serializers.Serializer):
+    dispatch_plan_id = serializers.IntegerField()
+    sap_invoice_doc_entry = serializers.IntegerField()
+    sap_invoice_doc_num = serializers.CharField(allow_blank=True)
+    invoice_number = serializers.CharField(allow_blank=True)
+    customer_code = serializers.CharField(allow_blank=True)
+    customer_name = serializers.CharField(allow_blank=True)
+    source_state = serializers.CharField(allow_blank=True)
+    source_city = serializers.CharField(allow_blank=True)
+    service_description = serializers.CharField(allow_blank=True)
+    product_variety = serializers.CharField(allow_blank=True)
+    total_litres = serializers.DecimalField(
+        max_digits=18, decimal_places=3, allow_null=True
+    )
+    invoice_weight = serializers.DecimalField(
+        max_digits=18, decimal_places=3, allow_null=True
+    )
+    invoice_amount = serializers.DecimalField(
+        max_digits=18, decimal_places=2, allow_null=True
+    )
+    freight_amount = serializers.DecimalField(
+        max_digits=18, decimal_places=2, allow_null=True
+    )
 
 
 class ServiceGRPOPreviewSerializer(ServiceGRPOPendingEntrySerializer):
@@ -284,6 +310,7 @@ class ServiceGRPOPreviewSerializer(ServiceGRPOPendingEntrySerializer):
     total_amount = serializers.DecimalField(
         max_digits=18, decimal_places=2, allow_null=True
     )
+    invoice_lines = ServiceGRPOInvoiceLinePreviewSerializer(many=True)
 
 
 class ServiceGRPOPostRequestSerializer(serializers.Serializer):
@@ -563,6 +590,7 @@ class ServiceGRPOLinePostingSerializer(serializers.ModelSerializer):
         model = ServiceGRPOLinePosting
         fields = [
             "id",
+            "dispatch_plan",
             "service_description",
             "amount",
             "unit_price",

@@ -242,6 +242,13 @@ class ServiceGRPOLinePosting(models.Model):
         on_delete=models.CASCADE,
         related_name="lines",
     )
+    dispatch_plan = models.ForeignKey(
+        DispatchPlan,
+        on_delete=models.PROTECT,
+        related_name="service_grpo_lines",
+        null=True,
+        blank=True,
+    )
     service_description = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=18, decimal_places=2)
     unit_price = models.DecimalField(
@@ -262,6 +269,14 @@ class ServiceGRPOLinePosting(models.Model):
 
     def __str__(self):
         return f"{self.service_description} - {self.amount}"
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["dispatch_plan"],
+                name="grpo_servic_dispatc_line_idx",
+            ),
+        ]
 
 
 class ServiceGRPOAttachment(models.Model):

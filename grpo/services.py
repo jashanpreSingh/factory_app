@@ -8,6 +8,7 @@ from datetime import date
 from django.core.files import File
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Q
 
 from gate_core.enums import GateEntryStatus
 from dispatch_plans.hana_reader import HanaDispatchBillReader
@@ -251,6 +252,122 @@ class GRPOService:
     @staticmethod
     def _infer_service_sub_account(bill_snapshot: Dict[str, Any]) -> str:
         return "SALES" if bill_snapshot.get("card_code") else ""
+
+    @staticmethod
+    def _service_group_key(dispatch_plan: DispatchPlan) -> tuple:
+        bilty_no = (dispatch_plan.bilty_no or "").strip()
+        if not bilty_no:
+            return ("dispatch-plan", dispatch_plan.id)
+        return (
+            "bilty",
+            bilty_no,
+            dispatch_plan.bilty_date,
+            dispatch_plan.linked_vehicle_entry_id or 0,
+            dispatch_plan.vehicle_id or 0,
+            dispatch_plan.transporter_id or 0,
+            (dispatch_plan.vehicle_no or "").strip().upper(),
+        )
+
+    def _get_service_group_plans(self, dispatch_plan: DispatchPlan) -> List[DispatchPlan]:
+        bilty_no = (dispatch_plan.bilty_no or "").strip()
+        if not bilty_no:
+            return [dispatch_plan]
+
+        queryset = DispatchPlan.objects.filter(
+            company=dispatch_plan.company,
+            booking_status=DispatchPlanStatus.BOOKED,
+            is_active=True,
+            bilty_no=bilty_no,
+            bilty_date=dispatch_plan.bilty_date,
+        )
+        if dispatch_plan.linked_vehicle_entry_id:
+            queryset = queryset.filter(
+                linked_vehicle_entry_id=dispatch_plan.linked_vehicle_entry_id
+            )
+        elif dispatch_plan.vehicle_id:
+            queryset = queryset.filter(vehicle_id=dispatch_plan.vehicle_id)
+        elif dispatch_plan.vehicle_no:
+            queryset = queryset.filter(vehicle_no__iexact=dispatch_plan.vehicle_no)
+
+        if dispatch_plan.transporter_id:
+            queryset = queryset.filter(transporter_id=dispatch_plan.transporter_id)
+        elif dispatch_plan.transporter_name:
+            queryset = queryset.filter(transporter_name__iexact=dispatch_plan.transporter_name)
+
+        return list(
+            queryset.select_related(
+                "company",
+                "vehicle",
+                "transporter",
+                "driver",
+                "linked_vehicle_entry",
+            ).order_by("sap_invoice_doc_num", "sap_invoice_doc_entry", "id")
+        )
+
+    @staticmethod
+    def _line_amount_from_plan(dispatch_plan: DispatchPlan) -> Decimal:
+        amount = dispatch_plan.total_freight
+        if amount is None:
+            amount = dispatch_plan.freight
+        if amount is None:
+            return Decimal("0.00")
+        return Decimal(str(amount)).quantize(Decimal("0.01"))
+
+    @staticmethod
+    def _allocate_amount_by_weight(
+        total_amount: Decimal,
+        weights: List[Decimal],
+    ) -> List[Decimal]:
+        if not weights:
+            return []
+        cleaned_weights = [weight if weight > 0 else Decimal("1") for weight in weights]
+        total_weight = sum(cleaned_weights, Decimal("0"))
+        allocations = []
+        running_total = Decimal("0.00")
+        for index, weight in enumerate(cleaned_weights):
+            if index == len(cleaned_weights) - 1:
+                allocation = total_amount - running_total
+            else:
+                allocation = (total_amount * weight / total_weight).quantize(
+                    Decimal("0.01"),
+                    rounding="ROUND_HALF_UP",
+                )
+                running_total += allocation
+            allocations.append(allocation)
+        return allocations
+
+    def _posted_service_grpo_for_group(
+        self,
+        group_plans: List[DispatchPlan],
+    ) -> Optional[ServiceGRPOPosting]:
+        plan_ids = [plan.id for plan in group_plans]
+        return (
+            ServiceGRPOPosting.objects.filter(
+                status=GRPOStatus.POSTED,
+            )
+            .filter(
+                Q(dispatch_plan_id__in=plan_ids)
+                | Q(lines__dispatch_plan_id__in=plan_ids)
+            )
+            .distinct()
+            .order_by("-created_at")
+            .first()
+        )
+
+    def _latest_service_grpo_for_group(
+        self,
+        group_plans: List[DispatchPlan],
+    ) -> Optional[ServiceGRPOPosting]:
+        plan_ids = [plan.id for plan in group_plans]
+        return (
+            ServiceGRPOPosting.objects.filter(
+                Q(dispatch_plan_id__in=plan_ids)
+                | Q(lines__dispatch_plan_id__in=plan_ids)
+            )
+            .distinct()
+            .order_by("-created_at")
+            .first()
+        )
 
     def _get_dispatch_bill_snapshot(self, dispatch_plan: DispatchPlan) -> Dict[str, Any]:
         doc_num = (dispatch_plan.sap_invoice_doc_num or "").strip()
@@ -773,13 +890,12 @@ class GRPOService:
         Get booked dispatch plans pending transport service GRPO posting.
         A plan appears here only after the transport booking is marked BOOKED.
         """
-        return (
+        plans = list(
             DispatchPlan.objects.filter(
                 company__code=self.company_code,
                 booking_status=DispatchPlanStatus.BOOKED,
                 is_active=True,
             )
-            .exclude(service_grpo_postings__status=GRPOStatus.POSTED)
             .select_related(
                 "company",
                 "vehicle",
@@ -787,10 +903,42 @@ class GRPOService:
                 "driver",
                 "linked_vehicle_entry",
             )
-            .prefetch_related("service_grpo_postings")
+            .prefetch_related("service_grpo_postings", "service_grpo_lines")
             .distinct()
             .order_by("-updated_at", "-created_at")
         )
+        posted_plan_ids = set(
+            DispatchPlan.objects.filter(
+                company__code=self.company_code,
+                is_active=True,
+            )
+            .filter(
+                Q(service_grpo_postings__status=GRPOStatus.POSTED)
+                | Q(service_grpo_lines__service_grpo_posting__status=GRPOStatus.POSTED)
+            )
+            .values_list("id", flat=True)
+        )
+
+        grouped = {}
+        posted_group_keys = set()
+        group_counts = {}
+        for plan in plans:
+            key = self._service_group_key(plan)
+            group_counts[key] = group_counts.get(key, 0) + 1
+            if plan.id in posted_plan_ids:
+                posted_group_keys.add(key)
+                grouped.pop(key, None)
+                continue
+            if key in posted_group_keys:
+                continue
+            if key not in grouped:
+                grouped[key] = plan
+
+        result = []
+        for key, plan in grouped.items():
+            setattr(plan, "_service_group_invoice_count", group_counts.get(key, 1))
+            result.append(plan)
+        return result
 
     @staticmethod
     def _get_dispatch_bilty_attachment_name(dispatch_plan: DispatchPlan) -> str:
@@ -823,25 +971,21 @@ class GRPOService:
         except DispatchPlan.DoesNotExist:
             raise ValueError(f"Dispatch plan {dispatch_plan_id} not found")
 
-        existing_grpo = dispatch_plan.service_grpo_postings.filter(
-            status=GRPOStatus.POSTED
-        ).first()
+        group_plans = self._get_service_group_plans(dispatch_plan)
+        existing_grpo = self._posted_service_grpo_for_group(group_plans)
         is_ready = (
-            dispatch_plan.booking_status == DispatchPlanStatus.BOOKED
+            all(plan.booking_status == DispatchPlanStatus.BOOKED for plan in group_plans)
             and existing_grpo is None
         )
 
-        amount = dispatch_plan.total_freight
-        if amount is None:
-            amount = dispatch_plan.freight
-        if amount is None:
-            amount = Decimal("0")
+        line_amounts = [self._line_amount_from_plan(plan) for plan in group_plans]
+        amount = sum(line_amounts, Decimal("0.00"))
 
         vehicle_no = dispatch_plan.vehicle_no or (
             dispatch_plan.vehicle.vehicle_number if dispatch_plan.vehicle_id else ""
         )
 
-        latest_grpo = dispatch_plan.service_grpo_postings.order_by("-created_at").first()
+        latest_grpo = self._latest_service_grpo_for_group(group_plans)
         bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
         item_summary = bill_snapshot.get("item_summary", "")
         product_variety = (
@@ -854,17 +998,68 @@ class GRPOService:
         )
         delivery_point = self._infer_budget_delivery_point(dispatch_plan)
         source_state = bill_snapshot.get("state", "") or dispatch_plan.place_of_supply
-        total_litres = dispatch_plan.total_litres
-        if total_litres is None and bill_snapshot:
-            total_litres = self._decimal_or_none(
-                bill_snapshot.get("total_litres"), "0.001"
+        invoice_lines = []
+        total_litres = Decimal("0.000")
+        invoice_amount_total = Decimal("0.00")
+        for index, plan in enumerate(group_plans):
+            line_snapshot = self._get_dispatch_bill_snapshot(plan)
+            line_item_summary = line_snapshot.get("item_summary", "")
+            line_product_variety = (
+                plan.product_variety
+                or self._infer_product_variety(line_item_summary)
             )
+            line_total_litres = plan.total_litres
+            if line_total_litres is None and line_snapshot:
+                line_total_litres = self._decimal_or_none(
+                    line_snapshot.get("total_litres"), "0.001"
+                )
+            line_invoice_weight = plan.invoice_weight
+            if line_invoice_weight is None and line_snapshot:
+                line_invoice_weight = self._decimal_or_none(
+                    line_snapshot.get("total_weight"), "0.001"
+                )
+            line_invoice_amount = plan.invoice_amount
+            if line_invoice_amount is None and line_snapshot:
+                line_invoice_amount = self._decimal_or_none(
+                    line_snapshot.get("doc_total"), "0.01"
+                )
+            if line_total_litres is not None:
+                total_litres += Decimal(str(line_total_litres))
+            if line_invoice_amount is not None:
+                invoice_amount_total += Decimal(str(line_invoice_amount))
+
+            invoice_lines.append(
+                {
+                    "dispatch_plan_id": plan.id,
+                    "sap_invoice_doc_entry": plan.sap_invoice_doc_entry,
+                    "sap_invoice_doc_num": plan.sap_invoice_doc_num,
+                    "invoice_number": plan.invoice_number
+                    or str(line_snapshot.get("doc_num") or ""),
+                    "customer_code": line_snapshot.get("card_code", ""),
+                    "customer_name": line_snapshot.get("card_name", ""),
+                    "source_state": line_snapshot.get("state", "") or plan.place_of_supply,
+                    "source_city": line_snapshot.get("city", ""),
+                    "service_description": self._infer_service_description(
+                        line_item_summary,
+                        line_product_variety,
+                    )[:255],
+                    "product_variety": line_product_variety,
+                    "total_litres": line_total_litres,
+                    "invoice_weight": line_invoice_weight,
+                    "invoice_amount": line_invoice_amount,
+                    "freight_amount": line_amounts[index],
+                }
+            )
+        total_litres = total_litres if total_litres != Decimal("0.000") else None
         invoice_weight = dispatch_plan.invoice_weight
         invoice_amount = dispatch_plan.invoice_amount
         if invoice_amount is None and bill_snapshot:
             invoice_amount = self._decimal_or_none(
                 bill_snapshot.get("doc_total"), "0.01"
             )
+        if len(group_plans) > 1:
+            invoice_weight = None
+            invoice_amount = None
         effective_month = dispatch_plan.effective_month or self._first_day_of_month(
             dispatch_plan.dispatch_date or bill_snapshot.get("doc_date")
         )
@@ -884,11 +1079,14 @@ class GRPOService:
             "bilty_date": dispatch_plan.bilty_date,
             "freight": dispatch_plan.freight,
             "total_freight": dispatch_plan.total_freight,
+            "invoice_count": len(group_plans),
             "created_at": dispatch_plan.created_at,
             "updated_at": dispatch_plan.updated_at,
             "default_amount": amount,
             "default_service_description": service_description[:255],
-            "default_place_of_supply": dispatch_plan.place_of_supply or source_state or "HR",
+            "default_place_of_supply": (
+                "" if len(group_plans) > 1 else dispatch_plan.place_of_supply or source_state or "HR"
+            ),
             "default_effective_month": effective_month,
             "default_budget_delivery_point": delivery_point,
             "default_location_code": dispatch_plan.service_location_code,
@@ -898,9 +1096,14 @@ class GRPOService:
             "default_product_variety": product_variety,
             "default_total_litres": total_litres,
             "default_sub_account": self._infer_service_sub_account(bill_snapshot),
-            "invoice_number": dispatch_plan.invoice_number
-            or str(bill_snapshot.get("doc_num") or ""),
-            "eway_bill": dispatch_plan.eway_bill or bill_snapshot.get("sap_eway_bill", ""),
+            "invoice_number": (
+                "" if len(group_plans) > 1 else dispatch_plan.invoice_number
+                or str(bill_snapshot.get("doc_num") or "")
+            ),
+            "eway_bill": (
+                "" if len(group_plans) > 1 else dispatch_plan.eway_bill
+                or bill_snapshot.get("sap_eway_bill", "")
+            ),
             "invoice_weight": invoice_weight,
             "invoice_amount": invoice_amount,
             "source_state": source_state,
@@ -923,6 +1126,7 @@ class GRPOService:
             "total_amount": existing_grpo.sap_doc_total if existing_grpo else (
                 latest_grpo.sap_doc_total if latest_grpo else None
             ),
+            "invoice_lines": invoice_lines,
         }
 
     def _build_service_structured_comments(
@@ -1084,17 +1288,16 @@ class GRPOService:
         except DispatchPlan.DoesNotExist:
             raise ValueError(f"Dispatch plan {dispatch_plan_id} not found")
 
-        if dispatch_plan.booking_status != DispatchPlanStatus.BOOKED:
+        group_plans = self._get_service_group_plans(dispatch_plan)
+        if any(plan.booking_status != DispatchPlanStatus.BOOKED for plan in group_plans):
             raise ValueError(
                 "Service GRPO can be posted only after the vehicle booking is Booked."
             )
 
-        existing_grpo = dispatch_plan.service_grpo_postings.filter(
-            status=GRPOStatus.POSTED
-        ).first()
+        existing_grpo = self._posted_service_grpo_for_group(group_plans)
         if existing_grpo:
             raise ValueError(
-                f"Service GRPO already posted for this dispatch plan. "
+                f"Service GRPO already posted for this bilty group. "
                 f"SAP Doc Num: {existing_grpo.sap_doc_num}"
             )
 
@@ -1136,7 +1339,80 @@ class GRPOService:
             effective_month = self._first_day_of_month(effective_month)
         post_budget_as_dimension = self._is_active_budget_code(budget_delivery_point)
         bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
-        customer_code = (bill_snapshot.get("card_code") or "").strip()
+        group_line_data = []
+        aggregate_litres = Decimal("0.000")
+        aggregate_invoice_amount = Decimal("0.00")
+        line_weights = []
+
+        for plan in group_plans:
+            line_snapshot = self._get_dispatch_bill_snapshot(plan)
+            line_item_summary = line_snapshot.get("item_summary", "")
+            line_product_variety = (
+                plan.product_variety
+                or self._infer_product_variety(line_item_summary)
+                or product_variety
+            )
+            line_total_litres = plan.total_litres
+            if line_total_litres is None and line_snapshot:
+                line_total_litres = self._decimal_or_none(
+                    line_snapshot.get("total_litres"), "0.001"
+                )
+            line_invoice_weight = plan.invoice_weight
+            if line_invoice_weight is None and line_snapshot:
+                line_invoice_weight = self._decimal_or_none(
+                    line_snapshot.get("total_weight"), "0.001"
+                )
+            line_invoice_amount = plan.invoice_amount
+            if line_invoice_amount is None and line_snapshot:
+                line_invoice_amount = self._decimal_or_none(
+                    line_snapshot.get("doc_total"), "0.01"
+                )
+
+            if len(group_plans) == 1 and total_litres is not None:
+                line_total_litres = total_litres
+            if line_total_litres is not None:
+                aggregate_litres += Decimal(str(line_total_litres))
+            if line_invoice_amount is not None:
+                aggregate_invoice_amount += Decimal(str(line_invoice_amount))
+
+            weight = Decimal(str(line_total_litres or 0))
+            if weight <= 0:
+                weight = Decimal(str(line_invoice_weight or 0))
+            if weight <= 0:
+                weight = Decimal(str(line_invoice_amount or 0))
+            line_weights.append(weight)
+            group_line_data.append(
+                {
+                    "plan": plan,
+                    "snapshot": line_snapshot,
+                    "product_variety": line_product_variety,
+                    "total_litres": line_total_litres,
+                    "invoice_weight": line_invoice_weight,
+                    "invoice_amount": line_invoice_amount,
+                    "service_description": (
+                        service_description
+                        if len(group_plans) == 1
+                        else self._infer_service_description(
+                            line_item_summary,
+                            line_product_variety,
+                        )[:255]
+                    ),
+                }
+            )
+
+        saved_line_amounts = [self._line_amount_from_plan(plan) for plan in group_plans]
+        saved_amount_total = sum(saved_line_amounts, Decimal("0.00"))
+        if len(group_plans) == 1:
+            line_amounts = [amount]
+        elif saved_amount_total > 0 and abs(saved_amount_total - amount) <= Decimal("0.01"):
+            line_amounts = saved_line_amounts
+        else:
+            line_amounts = self._allocate_amount_by_weight(amount, line_weights)
+
+        if total_litres is None and aggregate_litres > 0:
+            total_litres = aggregate_litres
+        if invoice_amount is None and aggregate_invoice_amount > 0:
+            invoice_amount = aggregate_invoice_amount
 
         grpo_posting = ServiceGRPOPosting.objects.create(
             dispatch_plan=dispatch_plan,
@@ -1157,64 +1433,81 @@ class GRPOService:
         )
 
         company_code = self.company_code.upper()
+        document_lines = []
+        for index, line_data in enumerate(group_line_data):
+            plan = line_data["plan"]
+            line_snapshot = line_data["snapshot"]
+            line_amount = line_amounts[index]
+            line_unit_price = line_amount
+            line_invoice_number = (
+                plan.invoice_number
+                or str(line_snapshot.get("doc_num") or "")
+                or invoice_number
+            )
+            line_eway_bill = plan.eway_bill or line_snapshot.get("sap_eway_bill", "") or eway_bill
+            line_invoice_weight = line_data["invoice_weight"]
+            line_total_litres = line_data["total_litres"]
 
-        document_line = {
-            "ItemDescription": service_description,
-            "LineTotal": float(amount),
-            "U_UNE_SCHI": "N",
-            "U_UNE_CUNT": "Y",
-        }
-        if company_code != "JIVO_MART":
-            document_line["U_UNE_CALI"] = "Y"
-        if unit_price is not None:
-            document_line["UnitPrice"] = float(unit_price)
-        if gl_account:
-            document_line["AccountCode"] = gl_account
-        if tax_code:
-            document_line["TaxCode"] = tax_code
-        if sac_entry:
-            document_line["SACEntry"] = int(sac_entry)
-        if location_code:
-            document_line["LocationCode"] = int(location_code)
-        if post_budget_as_dimension:
-            document_line["CostingCode3"] = budget_delivery_point
-        if sub_account:
-            document_line["U_Sub_Account"] = sub_account
-        if customer_code:
-            document_line["U_CardCode"] = customer_code
-        if total_litres is not None:
-            document_line["U_UNE_LTS"] = float(total_litres)
-            if company_code == "JIVO_MART":
-                document_line["U_Disp_Qty"] = float(total_litres)
-                document_line["U_Recvd_Qty"] = float(total_litres)
-        if dispatch_plan.bilty_no:
-            document_line["U_BilltyNumber"] = dispatch_plan.bilty_no
-        if company_code == "JIVO_BEVERAGES" and dispatch_plan.bilty_date:
-            document_line["U_BiltyDate"] = dispatch_plan.bilty_date.isoformat()
-        if invoice_number:
-            document_line["U_ARNO"] = invoice_number
-        remarks = []
-        if dispatch_plan.bilty_no:
-            remarks.append(f"BILTY NO {dispatch_plan.bilty_no}")
-        if product_variety:
-            remarks.append(f"Variety: {product_variety}")
-        if eway_bill:
-            remarks.append(f"E-way Bill: {eway_bill}")
-        if invoice_weight is not None:
-            remarks.append(f"Charged Weight: {invoice_weight}")
-        if remarks:
-            document_line["U_Remarks"] = " | ".join(remarks)[:254]
+            document_line = {
+                "ItemDescription": line_data["service_description"],
+                "LineTotal": float(line_amount),
+                "UnitPrice": float(line_unit_price),
+                "U_UNE_SCHI": "N",
+                "U_UNE_CUNT": "Y",
+            }
+            if company_code != "JIVO_MART":
+                document_line["U_UNE_CALI"] = "Y"
+            if gl_account:
+                document_line["AccountCode"] = gl_account
+            if tax_code:
+                document_line["TaxCode"] = tax_code
+            if sac_entry:
+                document_line["SACEntry"] = int(sac_entry)
+            if location_code:
+                document_line["LocationCode"] = int(location_code)
+            if post_budget_as_dimension:
+                document_line["CostingCode3"] = budget_delivery_point
+            if sub_account:
+                document_line["U_Sub_Account"] = sub_account
+            customer_code = (line_snapshot.get("card_code") or "").strip()
+            if customer_code:
+                document_line["U_CardCode"] = customer_code
+            if line_total_litres is not None:
+                document_line["U_UNE_LTS"] = float(line_total_litres)
+                if company_code == "JIVO_MART":
+                    document_line["U_Disp_Qty"] = float(line_total_litres)
+                    document_line["U_Recvd_Qty"] = float(line_total_litres)
+            if dispatch_plan.bilty_no:
+                document_line["U_BilltyNumber"] = dispatch_plan.bilty_no
+            if company_code == "JIVO_BEVERAGES" and dispatch_plan.bilty_date:
+                document_line["U_BiltyDate"] = dispatch_plan.bilty_date.isoformat()
+            if line_invoice_number:
+                document_line["U_ARNO"] = line_invoice_number
+
+            remarks = []
+            if dispatch_plan.bilty_no:
+                remarks.append(f"BILTY NO {dispatch_plan.bilty_no}")
+            if line_data["product_variety"]:
+                remarks.append(f"Variety: {line_data['product_variety']}")
+            if line_eway_bill:
+                remarks.append(f"E-way Bill: {line_eway_bill}")
+            if line_invoice_weight is not None:
+                remarks.append(f"Charged Weight: {line_invoice_weight}")
+            if remarks:
+                document_line["U_Remarks"] = " | ".join(remarks)[:254]
+            document_lines.append(document_line)
 
         structured_comments = self._build_service_structured_comments(user, dispatch_plan)
 
+        is_multi_invoice = len(group_plans) > 1
         grpo_payload = {
             "DocType": "dDocument_Service",
             "CardCode": vendor_code,
             "BPL_IDAssignedToInvoice": branch_id,
             "Comments": structured_comments,
-            "DocumentLines": [document_line],
+            "DocumentLines": document_lines,
         }
-        if place_of_supply:
+        if place_of_supply and not is_multi_invoice:
             grpo_payload["ShipPlace"] = place_of_supply
         if dispatch_plan.bilty_no:
             grpo_payload["U_BilltyNumber"] = dispatch_plan.bilty_no
@@ -1225,10 +1518,10 @@ class GRPOService:
             grpo_payload["U_TransporterName"] = dispatch_plan.transporter_name
         if dispatch_plan.vehicle_no:
             grpo_payload["U_VehicleNoM"] = dispatch_plan.vehicle_no
-        if invoice_number:
+        if invoice_number and not is_multi_invoice:
             grpo_payload["U_ARNO"] = invoice_number
             grpo_payload["U_TransporterInvoice"] = invoice_number
-        if invoice_amount is not None:
+        if invoice_amount is not None and not is_multi_invoice:
             grpo_payload["U_TotalAmt"] = float(invoice_amount)
 
         if doc_date:
@@ -1324,22 +1617,24 @@ class GRPOService:
             grpo_posting.posted_by = user
             grpo_posting.save()
 
-            ServiceGRPOLinePosting.objects.create(
-                service_grpo_posting=grpo_posting,
-                service_description=service_description,
-                amount=amount,
-                unit_price=unit_price,
-                tax_code=tax_code or "",
-                gl_account=gl_account or "",
-                sac_entry=sac_entry,
-                sac_code=sac_code,
-                location_code=location_code,
-                location_name=location_name,
-                project_code=budget_delivery_point,
-                sub_account=sub_account,
-                product_variety=product_variety,
-                total_litres=total_litres,
-            )
+            for index, line_data in enumerate(group_line_data):
+                ServiceGRPOLinePosting.objects.create(
+                    service_grpo_posting=grpo_posting,
+                    dispatch_plan=line_data["plan"],
+                    service_description=line_data["service_description"],
+                    amount=line_amounts[index],
+                    unit_price=line_amounts[index],
+                    tax_code=tax_code or "",
+                    gl_account=gl_account or "",
+                    sac_entry=sac_entry,
+                    sac_code=sac_code,
+                    location_code=location_code,
+                    location_name=location_name,
+                    project_code=budget_delivery_point,
+                    sub_account=sub_account,
+                    product_variety=line_data["product_variety"],
+                    total_litres=line_data["total_litres"],
+                )
 
             for att_data in attachment_records:
                 self._create_service_attachment_record(
