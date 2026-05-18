@@ -167,7 +167,10 @@ class GRPOService:
 
     @staticmethod
     @lru_cache(maxsize=32)
-    def _get_active_budget_codes(company_code: str) -> Optional[Dict[str, str]]:
+    def _get_active_dimension_codes(
+        company_code: str,
+        dim_code: int,
+    ) -> Optional[Dict[str, str]]:
         context = CompanyContext(company_code)
         connection = HanaConnection(context.hana)
         conn = None
@@ -179,9 +182,10 @@ class GRPOService:
                 f"""
                     SELECT "OcrCode", IFNULL("OcrName", '')
                     FROM "{connection.schema}"."OOCR"
-                    WHERE "DimCode" = 3
+                    WHERE "DimCode" = ?
                       AND IFNULL("Active", 'Y') = 'Y'
-                """
+                """,
+                [dim_code],
             )
             return {
                 str(row[0]).strip(): str(row[1] or row[0]).strip()
@@ -190,7 +194,8 @@ class GRPOService:
             }
         except Exception as exc:
             logger.warning(
-                "Could not read active SAP budget distribution rules for %s: %s",
+                "Could not read active SAP dimension %s distribution rules for %s: %s",
+                dim_code,
                 company_code,
                 exc,
             )
@@ -206,6 +211,10 @@ class GRPOService:
                     conn.close()
                 except Exception:
                     pass
+
+    @classmethod
+    def _get_active_budget_codes(cls, company_code: str) -> Optional[Dict[str, str]]:
+        return cls._get_active_dimension_codes(company_code, 3)
 
     def _is_active_budget_code(self, budget_code: str) -> bool:
         budget_code = (budget_code or "").strip()
@@ -238,6 +247,10 @@ class GRPOService:
         if "Del Bkhp" in active_budget_codes:
             return "Del Bkhp"
         return next(iter(active_budget_codes), saved_budget)
+
+    @staticmethod
+    def _infer_service_sub_account(bill_snapshot: Dict[str, Any]) -> str:
+        return "SALES" if bill_snapshot.get("card_code") else ""
 
     def _get_dispatch_bill_snapshot(self, dispatch_plan: DispatchPlan) -> Dict[str, Any]:
         doc_num = (dispatch_plan.sap_invoice_doc_num or "").strip()
@@ -884,6 +897,7 @@ class GRPOService:
             "default_sac_code": dispatch_plan.sac_code,
             "default_product_variety": product_variety,
             "default_total_litres": total_litres,
+            "default_sub_account": self._infer_service_sub_account(bill_snapshot),
             "invoice_number": dispatch_plan.invoice_number
             or str(bill_snapshot.get("doc_num") or ""),
             "eway_bill": dispatch_plan.eway_bill or bill_snapshot.get("sap_eway_bill", ""),
@@ -1033,6 +1047,7 @@ class GRPOService:
         place_of_supply: Optional[str] = None,
         effective_month: Optional[str] = None,
         budget_delivery_point: Optional[str] = None,
+        sub_account: Optional[str] = None,
         location_code: Optional[int] = None,
         location_name: Optional[str] = None,
         sac_entry: Optional[int] = None,
@@ -1101,6 +1116,7 @@ class GRPOService:
         unit_price = Decimal(str(unit_price)) if unit_price is not None else amount
         place_of_supply = (place_of_supply or "").strip()
         budget_delivery_point = (budget_delivery_point or "").strip()
+        sub_account = (sub_account or "").strip()
         location_name = (location_name or "").strip()
         sac_code = (sac_code or "").strip()
         product_variety = (product_variety or "").strip()
@@ -1119,6 +1135,8 @@ class GRPOService:
         if effective_month:
             effective_month = self._first_day_of_month(effective_month)
         post_budget_as_dimension = self._is_active_budget_code(budget_delivery_point)
+        bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
+        customer_code = (bill_snapshot.get("card_code") or "").strip()
 
         grpo_posting = ServiceGRPOPosting.objects.create(
             dispatch_plan=dispatch_plan,
@@ -1127,6 +1145,7 @@ class GRPOService:
             place_of_supply=place_of_supply,
             effective_month=effective_month,
             budget_delivery_point=budget_delivery_point,
+            sub_account=sub_account,
             location_code=location_code,
             location_name=location_name,
             sac_entry=sac_entry,
@@ -1137,10 +1156,16 @@ class GRPOService:
             posted_by=user,
         )
 
+        company_code = self.company_code.upper()
+
         document_line = {
             "ItemDescription": service_description,
             "LineTotal": float(amount),
+            "U_UNE_SCHI": "N",
+            "U_UNE_CUNT": "Y",
         }
+        if company_code != "JIVO_MART":
+            document_line["U_UNE_CALI"] = "Y"
         if unit_price is not None:
             document_line["UnitPrice"] = float(unit_price)
         if gl_account:
@@ -1153,13 +1178,24 @@ class GRPOService:
             document_line["LocationCode"] = int(location_code)
         if post_budget_as_dimension:
             document_line["CostingCode3"] = budget_delivery_point
+        if sub_account:
+            document_line["U_Sub_Account"] = sub_account
+        if customer_code:
+            document_line["U_CardCode"] = customer_code
         if total_litres is not None:
             document_line["U_UNE_LTS"] = float(total_litres)
+            if company_code == "JIVO_MART":
+                document_line["U_Disp_Qty"] = float(total_litres)
+                document_line["U_Recvd_Qty"] = float(total_litres)
         if dispatch_plan.bilty_no:
             document_line["U_BilltyNumber"] = dispatch_plan.bilty_no
+        if company_code == "JIVO_BEVERAGES" and dispatch_plan.bilty_date:
+            document_line["U_BiltyDate"] = dispatch_plan.bilty_date.isoformat()
         if invoice_number:
             document_line["U_ARNO"] = invoice_number
         remarks = []
+        if dispatch_plan.bilty_no:
+            remarks.append(f"BILTY NO {dispatch_plan.bilty_no}")
         if product_variety:
             remarks.append(f"Variety: {product_variety}")
         if eway_bill:
@@ -1192,8 +1228,6 @@ class GRPOService:
         if invoice_number:
             grpo_payload["U_ARNO"] = invoice_number
             grpo_payload["U_TransporterInvoice"] = invoice_number
-        if total_litres is not None:
-            grpo_payload["U_UNE_TOTL"] = float(total_litres)
         if invoice_amount is not None:
             grpo_payload["U_TotalAmt"] = float(invoice_amount)
 
@@ -1302,6 +1336,7 @@ class GRPOService:
                 location_code=location_code,
                 location_name=location_name,
                 project_code=budget_delivery_point,
+                sub_account=sub_account,
                 product_variety=product_variety,
                 total_litres=total_litres,
             )

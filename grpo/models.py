@@ -193,6 +193,7 @@ class ServiceGRPOPosting(models.Model):
     place_of_supply = models.CharField(max_length=100, blank=True, default="")
     effective_month = models.DateField(null=True, blank=True)
     budget_delivery_point = models.CharField(max_length=100, blank=True, default="")
+    sub_account = models.CharField(max_length=100, blank=True, default="")
     location_code = models.IntegerField(null=True, blank=True)
     location_name = models.CharField(max_length=100, blank=True, default="")
     sac_entry = models.IntegerField(null=True, blank=True)
@@ -253,6 +254,7 @@ class ServiceGRPOLinePosting(models.Model):
     location_code = models.IntegerField(null=True, blank=True)
     location_name = models.CharField(max_length=100, blank=True, default="")
     project_code = models.CharField(max_length=100, blank=True, default="")
+    sub_account = models.CharField(max_length=100, blank=True, default="")
     product_variety = models.CharField(max_length=50, blank=True, default="")
     total_litres = models.DecimalField(
         max_digits=18, decimal_places=3, null=True, blank=True

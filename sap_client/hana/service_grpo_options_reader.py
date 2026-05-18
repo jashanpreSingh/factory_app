@@ -38,6 +38,7 @@ class HanaServiceGRPOOptionsReader:
                 "sac_codes": self._get_sac_codes(cursor, schema),
                 "locations": self._get_locations(cursor, schema),
                 "projects": self._get_budget_delivery_points(cursor, schema),
+                "sub_accounts": self._get_sub_accounts(cursor, schema),
             }
 
         except dbapi.ProgrammingError as e:
@@ -184,4 +185,34 @@ class HanaServiceGRPOOptionsReader:
                 "project_name": row[1] or row[0],
             }
             for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_sub_accounts(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    V."FldValue" AS sub_account_code,
+                    IFNULL(V."Descr", V."FldValue") AS sub_account_name
+                FROM "{schema}"."CUFD" C
+                JOIN "{schema}"."UFD1" V
+                  ON V."TableID" = C."TableID"
+                 AND V."FieldID" = C."FieldID"
+                WHERE C."TableID" = 'PDN1'
+                  AND C."AliasID" = 'Sub_Account'
+                  AND IFNULL(V."FldValue", '') <> ''
+                ORDER BY V."IndexID"
+            """
+        )
+        rows = [
+            {
+                "sub_account_code": row[0],
+                "sub_account_name": row[1] or row[0],
+            }
+            for row in cursor.fetchall()
+        ]
+        return rows or [
+            {"sub_account_code": "SALES", "sub_account_name": "SALES"},
+            {"sub_account_code": "SALES RETURN", "sub_account_name": "SALES RETURN"},
+            {"sub_account_code": "BST", "sub_account_name": "BST"},
         ]

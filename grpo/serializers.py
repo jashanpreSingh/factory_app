@@ -263,6 +263,7 @@ class ServiceGRPOPreviewSerializer(ServiceGRPOPendingEntrySerializer):
     default_total_litres = serializers.DecimalField(
         max_digits=18, decimal_places=3, allow_null=True
     )
+    default_sub_account = serializers.CharField(allow_blank=True)
     invoice_number = serializers.CharField(allow_blank=True)
     eway_bill = serializers.CharField(allow_blank=True)
     invoice_weight = serializers.DecimalField(
@@ -323,6 +324,9 @@ class ServiceGRPOPostRequestSerializer(serializers.Serializer):
         input_formats=MONTH_INPUT_FORMATS,
     )
     budget_delivery_point = serializers.CharField(
+        required=False, max_length=100, allow_blank=True, allow_null=True
+    )
+    sub_account = serializers.CharField(
         required=False, max_length=100, allow_blank=True, allow_null=True
     )
     location_code = serializers.IntegerField(required=False, allow_null=True, min_value=1)
@@ -411,6 +415,11 @@ class ServiceGRPOProjectOptionSerializer(serializers.Serializer):
     project_name = serializers.CharField()
 
 
+class ServiceGRPOSubAccountOptionSerializer(serializers.Serializer):
+    sub_account_code = serializers.CharField()
+    sub_account_name = serializers.CharField()
+
+
 class ServiceGRPOOptionsSerializer(serializers.Serializer):
     branches = ServiceGRPOBranchOptionSerializer(many=True)
     tax_codes = ServiceGRPOTaxCodeOptionSerializer(many=True)
@@ -418,6 +427,7 @@ class ServiceGRPOOptionsSerializer(serializers.Serializer):
     sac_codes = ServiceGRPOSACCodeOptionSerializer(many=True)
     locations = ServiceGRPOLocationOptionSerializer(many=True)
     projects = ServiceGRPOProjectOptionSerializer(many=True)
+    sub_accounts = ServiceGRPOSubAccountOptionSerializer(many=True)
 
 
 class GRPOLinePostingSerializer(serializers.ModelSerializer):
@@ -563,6 +573,7 @@ class ServiceGRPOLinePostingSerializer(serializers.ModelSerializer):
             "location_code",
             "location_name",
             "project_code",
+            "sub_account",
             "product_variety",
             "total_litres",
         ]
@@ -636,6 +647,7 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
             "place_of_supply",
             "effective_month",
             "budget_delivery_point",
+            "sub_account",
             "location_code",
             "location_name",
             "sac_entry",

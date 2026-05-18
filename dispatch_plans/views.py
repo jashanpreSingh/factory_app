@@ -261,6 +261,7 @@ class DispatchBiltyServiceGRPOPostAPI(APIView):
                 budget_delivery_point=serializer.validated_data.get(
                     "budget_delivery_point"
                 ),
+                sub_account=serializer.validated_data.get("sub_account"),
                 location_code=serializer.validated_data.get("location_code"),
                 location_name=serializer.validated_data.get("location_name"),
                 sac_entry=serializer.validated_data.get("sac_entry"),
