@@ -148,6 +148,7 @@ class PalletListSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(
         source='created_by.full_name', read_only=True, default=''
     )
+    max_box_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Pallet
@@ -161,6 +162,9 @@ class PalletListSerializer(serializers.ModelSerializer):
             'created_at',
         ]
 
+    def get_max_box_count(self, obj):
+        return getattr(obj, 'max_box_count', 0) or 0
+
 
 class PalletDetailSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(
@@ -169,6 +173,7 @@ class PalletDetailSerializer(serializers.ModelSerializer):
     boxes = BoxListSerializer(many=True, read_only=True)
     dismantled_boxes = serializers.SerializerMethodField()
     movements = PalletMovementSerializer(many=True, read_only=True)
+    max_box_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Pallet
@@ -184,6 +189,9 @@ class PalletDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
             'boxes', 'dismantled_boxes', 'movements',
         ]
+
+    def get_max_box_count(self, obj):
+        return getattr(obj, 'max_box_count', 0) or 0
 
     def get_dismantled_boxes(self, obj):
         """Boxes that were removed from this pallet (via depalletize/dismantle movements)."""

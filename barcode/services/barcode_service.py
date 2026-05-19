@@ -654,9 +654,20 @@ class BarcodeService:
 
         cleared_qty = pallet.total_qty
         pallet.status = PalletStatus.CLEARED
+        pallet.item_code = ''
+        pallet.item_name = ''
+        pallet.batch_number = ''
         pallet.box_count = 0
+        pallet.max_box_count = 0
         pallet.total_qty = D('0')
-        pallet.save(update_fields=['status', 'box_count', 'total_qty', 'updated_at'])
+        pallet.uom = ''
+        pallet.production_run = None
+        pallet.barcode_data = self._build_pallet_barcode_data(pallet)
+        pallet.save(update_fields=[
+            'status', 'item_code', 'item_name', 'batch_number',
+            'box_count', 'max_box_count', 'total_qty', 'uom',
+            'production_run', 'barcode_data', 'updated_at',
+        ])
 
         PalletMovement.objects.create(
             company=self.company,
@@ -686,7 +697,7 @@ class BarcodeService:
         target_pallet = self.get_pallet(target_pallet_id)
         if target_pallet.id == pallet.id:
             raise ValueError("Target pallet must be different from source pallet.")
-        if target_pallet.status != PalletStatus.ACTIVE:
+        if target_pallet.status not in (PalletStatus.ACTIVE, PalletStatus.CLEARED):
             raise ValueError(f"Cannot split into pallet with status {target_pallet.status}.")
         if target_pallet.box_count != 0 or target_pallet.boxes.exists():
             raise ValueError("Target pallet must be empty.")
@@ -698,6 +709,8 @@ class BarcodeService:
             raise ValueError("Some boxes not found or not active on this pallet.")
         if len(boxes) == pallet.box_count:
             raise ValueError("Cannot split all boxes — use move pallet instead.")
+
+        self._prepare_pallet_for_receiving_boxes(target_pallet, boxes)
 
         split_qty = sum(b.qty for b in boxes)
         target_warehouse = target_pallet.current_warehouse
@@ -756,8 +769,6 @@ class BarcodeService:
     @transaction.atomic
     def add_boxes_to_pallet(self, pallet_id: int, box_ids: list[int], user) -> Pallet:
         pallet = self.get_pallet(pallet_id)
-        if pallet.status != PalletStatus.ACTIVE:
-            raise ValueError(f"Cannot add to pallet with status {pallet.status}.")
 
         boxes = list(Box.objects.filter(
             id__in=box_ids, company=self.company,
@@ -766,6 +777,7 @@ class BarcodeService:
         ))
         if len(boxes) != len(box_ids):
             raise ValueError("Some boxes not found, not active, or already on a pallet.")
+        self._prepare_pallet_for_receiving_boxes(pallet, boxes)
 
         box_movements = []
         for box in boxes:
@@ -837,9 +849,8 @@ class BarcodeService:
 
         to_pallet = None
         if to_pallet_id:
-            to_pallet = Pallet.objects.get(id=to_pallet_id, company=self.company)
-            if to_pallet.status != PalletStatus.ACTIVE:
-                raise ValueError(f"Target pallet {to_pallet.pallet_id} is not active.")
+            to_pallet = self.get_pallet(to_pallet_id)
+            self._prepare_pallet_for_receiving_boxes(to_pallet, boxes)
 
         affected_pallets = set()
         box_movements = []
@@ -926,7 +937,19 @@ class BarcodeService:
         is_fully_cleared = pallet.box_count == 0
         if is_fully_cleared:
             pallet.status = PalletStatus.CLEARED
-            pallet.save(update_fields=['status', 'updated_at'])
+            pallet.item_code = ''
+            pallet.item_name = ''
+            pallet.batch_number = ''
+            pallet.max_box_count = 0
+            pallet.total_qty = D('0')
+            pallet.uom = ''
+            pallet.production_run = None
+            pallet.barcode_data = self._build_pallet_barcode_data(pallet)
+            pallet.save(update_fields=[
+                'status', 'item_code', 'item_name', 'batch_number',
+                'max_box_count', 'total_qty', 'uom', 'production_run',
+                'barcode_data', 'updated_at',
+            ])
 
         PalletMovement.objects.create(
             company=self.company,
@@ -1142,6 +1165,71 @@ class BarcodeService:
     # ==================================================================
     # Helpers
     # ==================================================================
+
+    def _prepare_pallet_for_receiving_boxes(self, pallet: Pallet, boxes: list[Box]):
+        """Validate and stamp pallet context before boxes are linked to it."""
+        if not boxes:
+            raise ValueError("Select at least one box.")
+        if pallet.status not in (PalletStatus.ACTIVE, PalletStatus.CLEARED):
+            raise ValueError(f"Cannot add to pallet with status {pallet.status}.")
+
+        first_box = boxes[0]
+        for box in boxes:
+            if (
+                box.item_code != first_box.item_code or
+                box.batch_number != first_box.batch_number or
+                box.uom != first_box.uom
+            ):
+                raise ValueError(
+                    "All boxes added to a pallet must have the same item, batch, and UOM."
+                )
+
+        current_boxes_exist = pallet.boxes.filter(
+            status__in=[BoxStatus.ACTIVE, BoxStatus.PARTIAL]
+        ).exists()
+        pallet_is_empty = pallet.box_count == 0 and not current_boxes_exist
+        if pallet.status == PalletStatus.CLEARED and not pallet_is_empty:
+            raise ValueError("Cleared pallet must be empty before it can be reused.")
+
+        incoming_count = sum(1 for box in boxes if box.pallet_id != pallet.id)
+        if pallet.max_box_count and pallet.box_count + incoming_count > pallet.max_box_count:
+            raise ValueError(
+                f"Pallet capacity exceeded. Maximum boxes allowed: {pallet.max_box_count}."
+            )
+
+        reuse_cleared_pallet = pallet.status == PalletStatus.CLEARED and pallet_is_empty
+        pallet_has_item_context = bool(pallet.item_code or pallet.batch_number or pallet.uom)
+        if pallet_has_item_context and not reuse_cleared_pallet:
+            for box in boxes:
+                if (
+                    box.item_code != pallet.item_code or
+                    box.batch_number != pallet.batch_number or
+                    box.uom != pallet.uom
+                ):
+                    raise ValueError(
+                        "Box item, batch, or UOM does not match the target pallet."
+                    )
+            return
+
+        if pallet_is_empty:
+            pallet.item_code = first_box.item_code
+            pallet.item_name = first_box.item_name
+            pallet.batch_number = first_box.batch_number
+            pallet.uom = first_box.uom
+            pallet.mfg_date = first_box.mfg_date
+            pallet.exp_date = first_box.exp_date
+            if not pallet.production_line:
+                pallet.production_line = first_box.production_line
+            if not pallet.production_run:
+                pallet.production_run = first_box.production_run
+            if reuse_cleared_pallet:
+                pallet.status = PalletStatus.ACTIVE
+            pallet.barcode_data = self._build_pallet_barcode_data(pallet)
+            pallet.save(update_fields=[
+                'status', 'item_code', 'item_name', 'batch_number', 'uom',
+                'mfg_date', 'exp_date', 'production_line',
+                'production_run', 'barcode_data', 'updated_at',
+            ])
 
     def _recalculate_pallet(self, pallet: Pallet):
         """Recalculate pallet box_count and total_qty from active/partial boxes."""
