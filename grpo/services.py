@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tempfile
 from functools import lru_cache
 from typing import List, Dict, Any, Optional
@@ -40,6 +41,17 @@ class GRPOService:
     Service for handling GRPO operations.
     """
     SAP_DOCUMENT_COMMENTS_MAX_LENGTH = 254
+    STATE_NAME_CODES = {
+        "HARYANA": "HR",
+        "DELHI": "DL",
+        "NEW DELHI": "DL",
+        "PUNJAB": "PB",
+        "UTTAR PRADESH": "UP",
+        "RAJASTHAN": "RJ",
+        "HIMACHAL PRADESH": "HP",
+        "UTTARAKHAND": "UK",
+        "CHANDIGARH": "CH",
+    }
 
     def __init__(self, company_code: str):
         self.company_code = company_code
@@ -134,6 +146,8 @@ class GRPOService:
         if not value:
             return None
         if isinstance(value, str):
+            if re.fullmatch(r"\d{4}-\d{2}", value):
+                value = f"{value}-01"
             try:
                 value = date.fromisoformat(value)
             except ValueError:
@@ -165,6 +179,220 @@ class GRPOService:
             if any(token in summary for token in tokens):
                 return label
         return (product_variety or "").strip() or "Transport"
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_sap_tax_codes(company_code: str) -> Dict[str, Dict[str, Any]]:
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                    SELECT "Code", IFNULL("Name", ''), "Rate"
+                    FROM "{connection.schema}"."OSTC"
+                """
+            )
+            codes = {}
+            for code, name, rate in cursor.fetchall():
+                if not code:
+                    continue
+                rate_value = Decimal(str(rate)) if rate is not None else None
+                codes[str(code).strip().upper()] = {
+                    "code": str(code).strip(),
+                    "name": str(name or "").strip(),
+                    "rate": rate_value,
+                }
+            return codes
+        except Exception as exc:
+            logger.warning("Could not read SAP tax codes for %s: %s", company_code, exc)
+            return {}
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_sap_branch_states(company_code: str) -> Dict[int, str]:
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                    SELECT "BPLId", IFNULL("State", '')
+                    FROM "{connection.schema}"."OBPL"
+                    WHERE IFNULL("Disabled", 'N') = 'N'
+                """
+            )
+            return {
+                int(row[0]): GRPOService._normalize_state(row[1])
+                for row in cursor.fetchall()
+                if row[0] is not None
+            }
+        except Exception as exc:
+            logger.warning("Could not read SAP branch states for %s: %s", company_code, exc)
+            return {}
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    @classmethod
+    def _normalize_state(cls, value: Any) -> str:
+        state = str(value or "").strip().upper()
+        if not state:
+            return ""
+        match = re.search(r"\(([A-Z]{2})\)", state)
+        if match:
+            return match.group(1)
+        if len(state) == 2:
+            return state
+        return cls.STATE_NAME_CODES.get(state, state)
+
+    @staticmethod
+    def _format_tax_rate(rate: Decimal) -> str:
+        normalized = Decimal(str(rate)).normalize()
+        if normalized == normalized.to_integral():
+            return str(int(normalized))
+        return format(normalized, "f").rstrip("0").rstrip(".")
+
+    @classmethod
+    def _tax_rate_for_code(
+        cls,
+        tax_code: str,
+        tax_codes: Dict[str, Dict[str, Any]],
+    ) -> Optional[Decimal]:
+        code = (tax_code or "").strip()
+        if not code:
+            return None
+
+        tax_record = tax_codes.get(code.upper())
+        if tax_record and tax_record.get("rate") is not None:
+            return Decimal(str(tax_record["rate"]))
+
+        match = re.search(r"@(\d+(?:\.\d+)?)", code)
+        if not match:
+            match = re.search(r"(\d+(?:\.\d+)?)", code)
+        if not match:
+            return None
+        return Decimal(match.group(1))
+
+    @staticmethod
+    def _tax_code_details(
+        tax_code: str,
+        tax_codes: Dict[str, Dict[str, Any]],
+    ) -> str:
+        code = (tax_code or "").strip()
+        tax_record = tax_codes.get(code.upper())
+        name = tax_record.get("name", "") if tax_record else ""
+        return f"{code} {name}".upper()
+
+    @classmethod
+    def _is_rcm_tax_code(
+        cls,
+        tax_code: str,
+        tax_codes: Dict[str, Dict[str, Any]],
+    ) -> bool:
+        details = cls._tax_code_details(tax_code, tax_codes)
+        code = (tax_code or "").strip().upper()
+        return (
+            "RCM" in details
+            or code.startswith(("RIGST", "RISGT", "RCGSG"))
+            or code == "GST05R"
+        )
+
+    @classmethod
+    def _is_igst_tax_code(
+        cls,
+        tax_code: str,
+        tax_codes: Dict[str, Dict[str, Any]],
+    ) -> bool:
+        details = cls._tax_code_details(tax_code, tax_codes)
+        return "IGST" in details or (tax_code or "").strip().upper().startswith(
+            ("RIGST", "RISGT")
+        )
+
+    @staticmethod
+    def _first_available_tax_code(
+        tax_codes: Dict[str, Dict[str, Any]],
+        candidates: List[str],
+    ) -> str:
+        if not tax_codes:
+            return candidates[0] if candidates else ""
+        for candidate in candidates:
+            tax_record = tax_codes.get(candidate.upper())
+            if tax_record:
+                return tax_record["code"]
+        return ""
+
+    def _resolve_service_line_tax_code(
+        self,
+        requested_tax_code: Optional[str],
+        branch_state: str,
+        supply_state: str,
+    ) -> str:
+        requested_tax_code = (requested_tax_code or "").strip()
+        if not requested_tax_code:
+            return ""
+
+        branch_state = self._normalize_state(branch_state)
+        supply_state = self._normalize_state(supply_state)
+        if not branch_state or not supply_state:
+            return requested_tax_code
+
+        tax_codes = self._get_sap_tax_codes(self.company_code)
+        tax_rate = self._tax_rate_for_code(requested_tax_code, tax_codes)
+        if tax_rate is None:
+            return requested_tax_code
+
+        is_interstate = branch_state != supply_state
+        is_rcm = self._is_rcm_tax_code(requested_tax_code, tax_codes)
+        is_igst = self._is_igst_tax_code(requested_tax_code, tax_codes)
+        rate_key = self._format_tax_rate(tax_rate)
+
+        if is_interstate:
+            if is_igst:
+                return requested_tax_code
+            candidates = (
+                [f"RIGST@{rate_key}", f"RISGT@{rate_key}", f"IGST@{rate_key}"]
+                if is_rcm
+                else [f"IGST@{rate_key}", f"RIGST@{rate_key}"]
+            )
+            return self._first_available_tax_code(tax_codes, candidates) or requested_tax_code
+
+        if not is_igst:
+            return requested_tax_code
+
+        candidates = (
+            ["GST05R", f"RCGSG@{rate_key}", f"CG+SG@{rate_key}"]
+            if is_rcm and rate_key == "5"
+            else [f"RCGSG@{rate_key}", f"CG+SG@{rate_key}"]
+            if is_rcm
+            else [f"CG+SG@{rate_key}"]
+        )
+        return self._first_available_tax_code(tax_codes, candidates) or requested_tax_code
 
     @staticmethod
     @lru_cache(maxsize=32)
@@ -225,6 +453,49 @@ class GRPOService:
         if active_budget_codes is None:
             return True
         return budget_code in active_budget_codes
+
+    @staticmethod
+    def _format_effective_month_dimension(value: Optional[date]) -> str:
+        if not value:
+            return ""
+        return value.strftime("%m-%Y")
+
+    def _resolve_active_dimension_code(
+        self,
+        dim_code: int,
+        *candidates: Any,
+    ) -> str:
+        active_codes = self._get_active_dimension_codes(self.company_code, dim_code)
+        cleaned_candidates = [
+            str(candidate or "").strip()
+            for candidate in candidates
+            if str(candidate or "").strip()
+        ]
+        if not cleaned_candidates:
+            return ""
+        if active_codes is None:
+            return cleaned_candidates[0]
+
+        lower_lookup = {
+            code.lower(): code
+            for code in active_codes
+        }
+        name_lookup = {
+            name.lower(): code
+            for code, name in active_codes.items()
+            if name
+        }
+        for candidate in cleaned_candidates:
+            variants = [candidate, candidate.upper()]
+            for variant in variants:
+                if variant in active_codes:
+                    return variant
+                matched_code = lower_lookup.get(variant.lower()) or name_lookup.get(
+                    variant.lower()
+                )
+                if matched_code:
+                    return matched_code
+        return ""
 
     def _infer_budget_delivery_point(self, dispatch_plan: DispatchPlan) -> str:
         active_budget_codes = self._get_active_budget_codes(self.company_code) or {}
@@ -1337,6 +1608,16 @@ class GRPOService:
 
         if effective_month:
             effective_month = self._first_day_of_month(effective_month)
+        if not effective_month:
+            raise ValueError("Expense Effective Month is required for Service GRPO.")
+        effective_month_dimension = self._resolve_active_dimension_code(
+            2,
+            self._format_effective_month_dimension(effective_month),
+        )
+        if not effective_month_dimension:
+            raise ValueError(
+                "Expense Effective Month is not configured as an active SAP dimension code."
+            )
         post_budget_as_dimension = self._is_active_budget_code(budget_delivery_point)
         bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
         group_line_data = []
@@ -1385,6 +1666,11 @@ class GRPOService:
                 {
                     "plan": plan,
                     "snapshot": line_snapshot,
+                    "source_state": (
+                        line_snapshot.get("state")
+                        or plan.place_of_supply
+                        or place_of_supply
+                    ),
                     "product_variety": line_product_variety,
                     "total_litres": line_total_litres,
                     "invoice_weight": line_invoice_weight,
@@ -1433,6 +1719,7 @@ class GRPOService:
         )
 
         company_code = self.company_code.upper()
+        branch_state = self._get_sap_branch_states(self.company_code).get(int(branch_id), "")
         document_lines = []
         for index, line_data in enumerate(group_line_data):
             plan = line_data["plan"]
@@ -1447,6 +1734,21 @@ class GRPOService:
             line_eway_bill = plan.eway_bill or line_snapshot.get("sap_eway_bill", "") or eway_bill
             line_invoice_weight = line_data["invoice_weight"]
             line_total_litres = line_data["total_litres"]
+            line_tax_code = self._resolve_service_line_tax_code(
+                requested_tax_code=tax_code,
+                branch_state=branch_state,
+                supply_state=line_data["source_state"],
+            )
+            line_data["tax_code"] = line_tax_code
+            product_dimension = self._resolve_active_dimension_code(
+                1,
+                line_data["product_variety"],
+                line_data["service_description"],
+            )
+            state_dimension = self._resolve_active_dimension_code(
+                5,
+                self._normalize_state(line_data["source_state"]),
+            )
 
             document_line = {
                 "ItemDescription": line_data["service_description"],
@@ -1459,14 +1761,20 @@ class GRPOService:
                 document_line["U_UNE_CALI"] = "Y"
             if gl_account:
                 document_line["AccountCode"] = gl_account
-            if tax_code:
-                document_line["TaxCode"] = tax_code
+            if line_tax_code:
+                document_line["TaxCode"] = line_tax_code
             if sac_entry:
                 document_line["SACEntry"] = int(sac_entry)
             if location_code:
                 document_line["LocationCode"] = int(location_code)
+            if product_dimension:
+                document_line["CostingCode"] = product_dimension
+            if effective_month_dimension:
+                document_line["CostingCode2"] = effective_month_dimension
             if post_budget_as_dimension:
                 document_line["CostingCode3"] = budget_delivery_point
+            if state_dimension:
+                document_line["CostingCode5"] = state_dimension
             if sub_account:
                 document_line["U_Sub_Account"] = sub_account
             customer_code = (line_snapshot.get("card_code") or "").strip()
@@ -1624,7 +1932,7 @@ class GRPOService:
                     service_description=line_data["service_description"],
                     amount=line_amounts[index],
                     unit_price=line_amounts[index],
-                    tax_code=tax_code or "",
+                    tax_code=line_data.get("tax_code") or tax_code or "",
                     gl_account=gl_account or "",
                     sac_entry=sac_entry,
                     sac_code=sac_code,

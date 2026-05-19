@@ -69,7 +69,8 @@ class HanaServiceGRPOOptionsReader:
             f"""
                 SELECT
                     "BPLId" AS branch_id,
-                    "BPLName" AS branch_name
+                    "BPLName" AS branch_name,
+                    IFNULL("State", '') AS state
                 FROM "{schema}"."OBPL"
                 WHERE IFNULL("Disabled", 'N') = 'N'
                 ORDER BY "BPLId"
@@ -79,6 +80,7 @@ class HanaServiceGRPOOptionsReader:
             {
                 "branch_id": int(row[0]),
                 "branch_name": row[1] or str(row[0]),
+                "state": row[2] or "",
             }
             for row in cursor.fetchall()
         ]

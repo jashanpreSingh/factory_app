@@ -1,3 +1,5 @@
+import os
+import tempfile
 from unittest.mock import patch, MagicMock
 from datetime import date
 from django.test import TestCase
@@ -8,6 +10,7 @@ from rest_framework import status
 from company.models import Company, UserCompany, UserRole
 from .dtos import PODTO, POItemDTO
 from .serializers import GRPORequestSerializer, GRPOLineRequestSerializer, POSerializer
+from .service_layer.attachment_writer import AttachmentWriter
 from .service_layer.grpo_writer import GRPOWriter
 from .exceptions import SAPConnectionError, SAPValidationError, SAPDataError
 
@@ -205,6 +208,74 @@ class GRPOWriterTests(TestCase):
 
         with self.assertRaises(SAPConnectionError):
             self.writer.create(payload)
+
+
+class AttachmentWriterTests(TestCase):
+    """Tests for SAP Attachments2 writer."""
+
+    def setUp(self):
+        self.mock_context = MagicMock()
+        self.mock_context.service_layer = {
+            "base_url": "https://test-server:50000",
+            "company_db": "TEST_DB",
+            "username": "test_user",
+            "password": "test_pass",
+        }
+        self.writer = AttachmentWriter(self.mock_context)
+
+    def _temp_file(self, suffix=".pdf"):
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp.write(b"test-file")
+        tmp.close()
+        self.addCleanup(lambda: os.path.exists(tmp.name) and os.unlink(tmp.name))
+        return tmp.name
+
+    @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
+    @patch("sap_client.service_layer.attachment_writer.requests.post")
+    def test_upload_raises_when_sap_cannot_copy_binary_file(
+        self, mock_post, mock_session_class
+    ):
+        mock_session = MagicMock()
+        mock_session.login.return_value = {"B1SESSION": "abc123"}
+        mock_session_class.return_value = mock_session
+
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            "error": {
+                "code": "-43",
+                "message": "Fail to get the LINUX mount point for AttachmentsFolderPath",
+            }
+        }
+        mock_post.return_value = mock_response
+
+        with self.assertRaises(SAPValidationError) as context:
+            self.writer.upload(self._temp_file(".jpeg"), "proof.jpeg")
+
+        self.assertIn("LINUX mount point", str(context.exception))
+        mock_post.assert_called_once()
+
+    @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
+    @patch("sap_client.service_layer.attachment_writer.requests.patch")
+    def test_add_line_uses_multipart_upload(self, mock_patch, mock_session_class):
+        mock_session = MagicMock()
+        mock_session.login.return_value = {"B1SESSION": "abc123"}
+        mock_session_class.return_value = mock_session
+
+        mock_response = MagicMock()
+        mock_response.status_code = 204
+        mock_patch.return_value = mock_response
+
+        result = self.writer.add_line_to_existing_attachment(
+            absolute_entry=123,
+            file_path=self._temp_file(".pdf"),
+            filename="proof.pdf",
+        )
+
+        self.assertEqual(result["AbsoluteEntry"], 123)
+        kwargs = mock_patch.call_args.kwargs
+        self.assertIn("files", kwargs)
+        self.assertNotIn("json", kwargs)
 
 
 class GRPOAPITests(APITestCase):

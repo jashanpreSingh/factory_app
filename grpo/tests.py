@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date
 from unittest.mock import patch, MagicMock
 from io import BytesIO
 
@@ -217,6 +218,88 @@ class GRPOServiceTests(TestCase):
 
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0].entry_no, "VE-2024-001")
+
+    @patch.object(GRPOService, "_get_sap_tax_codes")
+    def test_service_line_tax_code_uses_rcm_igst_for_interstate(self, mock_tax_codes):
+        """Interstate RCM service freight must use the SAP RCM IGST code."""
+        mock_tax_codes.return_value = {
+            "GST05R": {
+                "code": "GST05R",
+                "name": "SGST @ 2.5 % + CGST @ 2.5 % RCM",
+                "rate": Decimal("5"),
+            },
+            "RIGST@5": {
+                "code": "RIGST@5",
+                "name": "RCM IGST @5%",
+                "rate": Decimal("5"),
+            },
+        }
+
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_service_line_tax_code("GST05R", "HR", "DL"),
+            "RIGST@5",
+        )
+
+    @patch.object(GRPOService, "_get_sap_tax_codes")
+    def test_service_line_tax_code_keeps_intrastate_rcm_code(self, mock_tax_codes):
+        """Intrastate RCM service freight keeps the CGST/SGST RCM code."""
+        mock_tax_codes.return_value = {
+            "GST05R": {
+                "code": "GST05R",
+                "name": "SGST @ 2.5 % + CGST @ 2.5 % RCM",
+                "rate": Decimal("5"),
+            },
+            "RIGST@5": {
+                "code": "RIGST@5",
+                "name": "RCM IGST @5%",
+                "rate": Decimal("5"),
+            },
+        }
+
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_service_line_tax_code("GST05R", "Haryana", "HR"),
+            "GST05R",
+        )
+
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    def test_service_grpo_effective_month_maps_to_dimension_code(self, mock_dimension_codes):
+        """SAP expects Expense Effective Month in line dimension 2 as MM-YYYY."""
+        mock_dimension_codes.return_value = {
+            "04-2026": "04-2026",
+            "05-2026": "05-2026",
+        }
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(service._first_day_of_month("2026-04"), date(2026, 4, 1))
+        self.assertEqual(
+            service._format_effective_month_dimension(date(2026, 4, 1)),
+            "04-2026",
+        )
+        self.assertEqual(
+            service._resolve_active_dimension_code(
+                2,
+                service._format_effective_month_dimension(date(2026, 4, 1)),
+            ),
+            "04-2026",
+        )
+
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    def test_service_grpo_product_dimension_uses_active_sap_code(self, mock_dimension_codes):
+        """Service line dimension 1 should use SAP's active product/service code."""
+        mock_dimension_codes.return_value = {
+            "WATER": "WATER",
+            "CANOLA": "CANOLA",
+        }
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_active_dimension_code(1, "Beverage", "Water"),
+            "WATER",
+        )
 
     def test_get_grpo_preview_data(self):
         """Test getting GRPO preview data returns all PO details for pre-fill"""

@@ -42,19 +42,18 @@ Changed the flow to:
 |------|--------|
 | `grpo/views.py` | `PostGRPOAPI` now accepts `multipart/form-data` with files in `attachments` field and JSON data in `data` field. Also supports plain `application/json` (backward compatible). |
 | `grpo/services.py` | `post_grpo()` accepts optional `attachments` parameter (list of Django `UploadedFile`). Uploads them to SAP before creating the GRPO, then includes `AttachmentEntry` in the payload. |
-| `sap_client/service_layer/attachment_writer.py` | Added fallback: if multipart file upload fails with error -43 (SAP attachment folder path issue), falls back to JSON metadata entry creation. Added `_create_attachment_entry()` and `_get_attachment_source_path()` methods. Also added MIME type detection for file uploads. |
+| `sap_client/service_layer/attachment_writer.py` | Uses multipart upload for `Attachments2` so SAP receives the actual file bytes. Metadata-only fallback was removed because it created SAP rows that looked linked but could not be opened. |
 
-### SAP Attachment Upload — Fallback Mechanism
+### SAP Attachment Upload
 
-The SAP Attachments2 endpoint supports two upload modes:
+The app uploads files through the SAP `Attachments2` multipart endpoint.
+This is the only supported path for app-created SAP attachments because it
+copies the actual binary into SAP's attachment folder.
 
-1. **Multipart file upload** (preferred) — sends the actual file binary
-2. **JSON metadata entry** (fallback) — creates an attachment entry record with
-   `SourcePath`, `FileName`, and `FileExtension` fields
-
-The fallback is triggered when multipart upload fails with SAP error `-43`
-(typically caused by the SAP server's attachment folder path not being
-writable from the Service Layer process).
+If SAP returns an attachment folder or Linux mount-point error, posting must
+fail and SAP Basis/admin must fix the Service Layer attachment-folder mount.
+Creating a JSON-only attachment entry is not acceptable because SAP Business
+One displays the row but has no readable file to open.
 
 ## API Usage
 
@@ -125,4 +124,4 @@ The GRPO payload sent to SAP now includes the `AttachmentEntry` field:
 - Original error `(200019) Please Attach its Receiving` — **resolved**
 - Multipart form data with attachments — **working**
 - JSON-only requests (no attachments) — **backward compatible**
-- SAP Attachments2 fallback (JSON metadata) — **working** when multipart upload returns -43
+- SAP Attachments2 multipart upload is required. JSON metadata fallback is disabled because those attachments do not open in SAP.

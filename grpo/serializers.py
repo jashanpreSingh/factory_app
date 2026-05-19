@@ -412,6 +412,7 @@ class ServiceGRPOPostRequestSerializer(serializers.Serializer):
 class ServiceGRPOBranchOptionSerializer(serializers.Serializer):
     branch_id = serializers.IntegerField()
     branch_name = serializers.CharField()
+    state = serializers.CharField(required=False, allow_blank=True)
 
 
 class ServiceGRPOTaxCodeOptionSerializer(serializers.Serializer):
