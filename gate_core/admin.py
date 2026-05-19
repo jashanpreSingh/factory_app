@@ -10,6 +10,10 @@ from .models import (
     JobWorkGateInItem,
     RejectedQCReturnEntry,
     RejectedQCReturnItem,
+    SalesDispatchAttachment,
+    SalesDispatchGateOut,
+    SalesDispatchGateOutItem,
+    SalesDispatchGatepassSequence,
     UnitChoice,
 )
 
@@ -41,6 +45,42 @@ class BSTGateOutAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("entry_no", "created_at", "updated_at")
     inlines = [BSTGateOutItemInline]
+
+
+class SalesDispatchGateOutItemInline(admin.TabularInline):
+    model = SalesDispatchGateOutItem
+    extra = 0
+    readonly_fields = (
+        "line_num", "item_code", "item_name", "quantity", "uom",
+        "warehouse_code", "from_warehouse", "to_warehouse",
+    )
+
+
+class SalesDispatchAttachmentInline(admin.TabularInline):
+    model = SalesDispatchAttachment
+    extra = 0
+    readonly_fields = ("uploaded_at", "uploaded_by", "original_filename")
+
+
+@admin.register(SalesDispatchGateOut)
+class SalesDispatchGateOutAdmin(admin.ModelAdmin):
+    list_display = (
+        "entry_no", "company", "document_type", "sap_doc_num",
+        "vehicle_no", "driver_name", "status", "gatepass_no", "created_at",
+    )
+    list_filter = ("company", "document_type", "status", "created_at")
+    search_fields = (
+        "entry_no", "vehicle_entry__entry_no", "sap_doc_num",
+        "vehicle_no", "driver_name", "customer_name", "gatepass_no",
+    )
+    readonly_fields = ("entry_no", "gatepass_no", "created_at", "updated_at")
+    inlines = [SalesDispatchGateOutItemInline, SalesDispatchAttachmentInline]
+
+
+@admin.register(SalesDispatchGatepassSequence)
+class SalesDispatchGatepassSequenceAdmin(admin.ModelAdmin):
+    list_display = ("company", "financial_year", "last_number", "updated_at")
+    list_filter = ("company", "financial_year")
 
 
 class JobWorkGateInItemInline(admin.TabularInline):
