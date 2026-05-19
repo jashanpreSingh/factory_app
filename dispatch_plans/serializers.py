@@ -92,11 +92,37 @@ class DispatchPlanSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class CommaSeparatedIntegerListField(serializers.ListField):
+    """Accept JSON arrays and multipart comma-separated/repeated values."""
+
+    def to_internal_value(self, data):
+        if data == "":
+            data = []
+        elif isinstance(data, str):
+            data = self._split_value(data)
+        elif isinstance(data, (list, tuple)):
+            values = []
+            for item in data:
+                if item == "":
+                    continue
+                if isinstance(item, str):
+                    values.extend(self._split_value(item))
+                else:
+                    values.append(item)
+            data = values
+
+        return super().to_internal_value(data)
+
+    @staticmethod
+    def _split_value(value: str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+
+
 class DispatchPlanUpdateSerializer(serializers.Serializer):
     sap_invoice_doc_num = serializers.CharField(
         required=False, max_length=30, allow_blank=True
     )
-    linked_invoice_doc_entries = serializers.ListField(
+    linked_invoice_doc_entries = CommaSeparatedIntegerListField(
         child=serializers.IntegerField(min_value=1),
         required=False,
         allow_empty=True,
