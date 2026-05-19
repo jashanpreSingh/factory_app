@@ -1,6 +1,5 @@
 import logging
 import mimetypes
-import os
 from typing import Optional
 import requests
 
@@ -32,33 +31,10 @@ class AttachmentWriter:
             logger.error(f"SAP Service Layer authentication failed: {e}")
             raise SAPConnectionError("SAP Service Layer authentication failed")
 
-    def _get_attachment_source_path(self) -> str:
-        """Get the SAP attachment source path from existing attachment entries."""
-        cookies = self._get_session_cookies()
-        url = (
-            f"{self.sl_config['base_url']}/b1s/v2/Attachments2"
-            f"?$top=1&$select=Attachments2_Lines"
-        )
-        try:
-            response = requests.get(
-                url, cookies=cookies, timeout=30, verify=False
-            )
-            if response.status_code == 200:
-                data = response.json()
-                entries = data.get("value", [])
-                if entries:
-                    lines = entries[0].get("Attachments2_Lines", [])
-                    if lines:
-                        return lines[0].get("SourcePath", "")
-        except Exception as e:
-            logger.warning(f"Failed to get SAP attachment source path: {e}")
-        return ""
-
     def upload(self, file_path: str, filename: str) -> dict:
         """
         Upload a file to SAP Attachments2 endpoint.
-        First tries multipart file upload; if that fails with -43 (path error),
-        falls back to creating a JSON metadata entry using the SAP attachment path.
+        Uses multipart upload so SAP receives and copies the actual file bytes.
 
         Args:
             file_path: Absolute path to the file on disk (from FileField.path)
@@ -92,17 +68,7 @@ class AttachmentWriter:
                 )
                 return result
 
-            # If file upload fails with -43 (internal/path error),
-            # fall back to JSON metadata approach
             if response.status_code == 400:
-                error_text = response.text
-                if '"-43"' in error_text:
-                    logger.warning(
-                        "Multipart upload failed with -43, "
-                        "falling back to JSON metadata entry"
-                    )
-                    return self._create_attachment_entry(filename, cookies, url)
-
                 error_msg = self._extract_error_message(response)
                 logger.error(f"SAP validation error uploading attachment: {error_msg}")
                 raise SAPValidationError(error_msg)
@@ -125,59 +91,6 @@ class AttachmentWriter:
             raise
         except Exception as e:
             logger.error(f"Unexpected error uploading attachment: {e}")
-            raise SAPDataError(f"Unexpected error: {str(e)}")
-
-    def _create_attachment_entry(
-        self, filename: str, cookies: dict, url: str
-    ) -> dict:
-        """
-        Create an attachment entry in SAP using JSON metadata.
-        Used as fallback when multipart file upload fails due to
-        SAP server path configuration issues.
-        """
-        name_without_ext = os.path.splitext(filename)[0]
-        file_ext = os.path.splitext(filename)[1].lstrip(".")
-
-        source_path = self._get_attachment_source_path()
-
-        payload = {
-            "Attachments2_Lines": [{
-                "SourcePath": source_path,
-                "FileName": name_without_ext,
-                "FileExtension": file_ext,
-                "Override": "tYES",
-                "U_CHK2": "OK",
-                "U_CHK": "1"
-            }]
-        }
-        headers = {"Content-Type": "application/json"}
-
-        try:
-            response = requests.post(
-                url,
-                json=payload,
-                cookies=cookies,
-                headers=headers,
-                timeout=30,
-                verify=False,
-            )
-
-            if response.status_code == 201:
-                result = response.json()
-                logger.info(
-                    f"Attachment entry created in SAP (JSON). "
-                    f"AbsoluteEntry: {result.get('AbsoluteEntry')}"
-                )
-                return result
-
-            error_msg = self._extract_error_message(response)
-            logger.error(f"SAP error creating attachment entry: {error_msg}")
-            raise SAPDataError(f"Failed to create attachment entry: {error_msg}")
-
-        except (SAPConnectionError, SAPDataError, SAPValidationError):
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error creating attachment entry: {e}")
             raise SAPDataError(f"Unexpected error: {str(e)}")
 
     def get_document_attachment_entry(self, doc_entry: int) -> Optional[int]:
@@ -213,8 +126,8 @@ class AttachmentWriter:
         self, absolute_entry: int, file_path: str, filename: str
     ) -> dict:
         """
-        Add a new file line to an existing Attachments2 entry.
-        This avoids PATCHing the GRPO document (which triggers SAP approval).
+        Add a new file line to an existing Attachments2 entry using multipart
+        upload so SAP receives and copies the actual file bytes.
 
         Args:
             absolute_entry: The existing Attachments2 AbsoluteEntry
@@ -226,63 +139,22 @@ class AttachmentWriter:
         """
         cookies = self._get_session_cookies()
 
-        # First, get existing lines so we can append
-        get_url = (
-            f"{self.sl_config['base_url']}/b1s/v2"
-            f"/Attachments2({absolute_entry})"
-        )
-
-        try:
-            response = requests.get(
-                get_url, cookies=cookies, timeout=30, verify=False
-            )
-            if response.status_code != 200:
-                error_msg = self._extract_error_message(response)
-                raise SAPDataError(
-                    f"Failed to get existing attachment entry: {error_msg}"
-                )
-
-            existing_data = response.json()
-            existing_lines = existing_data.get("Attachments2_Lines", [])
-
-        except (SAPConnectionError, SAPDataError, SAPValidationError):
-            raise
-        except Exception as e:
-            logger.error(f"Error fetching attachment entry {absolute_entry}: {e}")
-            raise SAPDataError(f"Unexpected error: {str(e)}")
-
-        # Build new line
-        name_without_ext = os.path.splitext(filename)[0]
-        file_ext = os.path.splitext(filename)[1].lstrip(".")
-        source_path = ""
-        if existing_lines:
-            source_path = existing_lines[0].get("SourcePath", "")
-
-        new_line = {
-            "SourcePath": source_path,
-            "FileName": name_without_ext,
-            "FileExtension": file_ext,
-            "Override": "tYES",
-        }
-        existing_lines.append(new_line)
-
-        # PATCH the Attachments2 entry with updated lines
         patch_url = (
             f"{self.sl_config['base_url']}/b1s/v2"
             f"/Attachments2({absolute_entry})"
         )
-        payload = {"Attachments2_Lines": existing_lines}
-        headers = {"Content-Type": "application/json"}
 
         try:
-            response = requests.patch(
-                patch_url,
-                json=payload,
-                cookies=cookies,
-                headers=headers,
-                timeout=30,
-                verify=False,
-            )
+            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            with open(file_path, "rb") as f:
+                files = {"files": (filename, f, content_type)}
+                response = requests.patch(
+                    patch_url,
+                    files=files,
+                    cookies=cookies,
+                    timeout=60,
+                    verify=False,
+                )
 
             if response.status_code in (200, 204):
                 logger.info(
@@ -381,7 +253,12 @@ class AttachmentWriter:
         try:
             error_data = response.json()
             if "error" in error_data:
-                return error_data["error"].get("message", {}).get("value", str(error_data))
+                message = error_data["error"].get("message")
+                if isinstance(message, dict):
+                    return message.get("value", str(error_data))
+                if message:
+                    return str(message)
+                return str(error_data)
             return str(error_data)
         except Exception:
             return response.text or f"HTTP {response.status_code}"

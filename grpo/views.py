@@ -380,6 +380,7 @@ class PendingServiceGRPOListAPI(APIView):
             vehicle_no = plan.vehicle_no or (
                 plan.vehicle.vehicle_number if plan.vehicle_id else ""
             )
+            bill_snapshot = service._get_dispatch_bill_snapshot(plan)
             result.append({
                 "dispatch_plan_id": plan.id,
                 "sap_invoice_doc_entry": plan.sap_invoice_doc_entry,
@@ -390,10 +391,12 @@ class PendingServiceGRPOListAPI(APIView):
                 "driver_name": plan.driver_name,
                 "transporter_name": plan.transporter_name,
                 "transporter_gstin": plan.transporter_gstin,
+                "source_state": bill_snapshot.get("state", "") or plan.place_of_supply,
                 "bilty_no": plan.bilty_no,
                 "bilty_date": plan.bilty_date,
                 "freight": plan.freight,
                 "total_freight": plan.total_freight,
+                "invoice_count": getattr(plan, "_service_group_invoice_count", 1),
                 "created_at": plan.created_at,
                 "updated_at": plan.updated_at,
             })
@@ -496,10 +499,28 @@ class PostServiceGRPOAPI(APIView):
                 amount=serializer.validated_data["amount"],
                 tax_code=serializer.validated_data.get("tax_code"),
                 gl_account=serializer.validated_data.get("gl_account"),
+                unit_price=serializer.validated_data.get("unit_price"),
+                place_of_supply=serializer.validated_data.get("place_of_supply"),
+                effective_month=serializer.validated_data.get("effective_month"),
+                budget_delivery_point=serializer.validated_data.get("budget_delivery_point"),
+                sub_account=serializer.validated_data.get("sub_account"),
+                location_code=serializer.validated_data.get("location_code"),
+                location_name=serializer.validated_data.get("location_name"),
+                sac_entry=serializer.validated_data.get("sac_entry"),
+                sac_code=serializer.validated_data.get("sac_code"),
+                product_variety=serializer.validated_data.get("product_variety"),
+                total_litres=serializer.validated_data.get("total_litres"),
+                invoice_number=serializer.validated_data.get("invoice_number"),
+                eway_bill=serializer.validated_data.get("eway_bill"),
+                invoice_weight=serializer.validated_data.get("invoice_weight"),
+                invoice_amount=serializer.validated_data.get("invoice_amount"),
                 comments=serializer.validated_data.get("comments"),
                 vendor_ref=serializer.validated_data.get("vendor_ref"),
                 extra_charges=serializer.validated_data.get("extra_charges"),
                 attachments=attachments,
+                include_bilty_attachment=serializer.validated_data.get(
+                    "include_bilty_attachment", True
+                ),
                 doc_date=serializer.validated_data.get("doc_date"),
                 doc_due_date=serializer.validated_data.get("doc_due_date"),
                 tax_date=serializer.validated_data.get("tax_date"),

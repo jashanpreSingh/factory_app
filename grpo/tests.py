@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date
 from unittest.mock import patch, MagicMock
 from io import BytesIO
 
@@ -15,6 +16,7 @@ from driver_management.models import VehicleEntry, Driver
 from vehicle_management.models import Vehicle, VehicleType
 from raw_material_gatein.models import POReceipt, POItemReceipt
 from grpo.models import GRPOPosting, GRPOLinePosting, GRPOStatus, GRPOAttachment, SAPAttachmentStatus
+from grpo.serializers import ServiceGRPOPostRequestSerializer, ServiceGRPOPreviewSerializer
 from grpo.services import GRPOService
 
 User = get_user_model()
@@ -216,6 +218,88 @@ class GRPOServiceTests(TestCase):
 
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0].entry_no, "VE-2024-001")
+
+    @patch.object(GRPOService, "_get_sap_tax_codes")
+    def test_service_line_tax_code_uses_rcm_igst_for_interstate(self, mock_tax_codes):
+        """Interstate RCM service freight must use the SAP RCM IGST code."""
+        mock_tax_codes.return_value = {
+            "GST05R": {
+                "code": "GST05R",
+                "name": "SGST @ 2.5 % + CGST @ 2.5 % RCM",
+                "rate": Decimal("5"),
+            },
+            "RIGST@5": {
+                "code": "RIGST@5",
+                "name": "RCM IGST @5%",
+                "rate": Decimal("5"),
+            },
+        }
+
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_service_line_tax_code("GST05R", "HR", "DL"),
+            "RIGST@5",
+        )
+
+    @patch.object(GRPOService, "_get_sap_tax_codes")
+    def test_service_line_tax_code_keeps_intrastate_rcm_code(self, mock_tax_codes):
+        """Intrastate RCM service freight keeps the CGST/SGST RCM code."""
+        mock_tax_codes.return_value = {
+            "GST05R": {
+                "code": "GST05R",
+                "name": "SGST @ 2.5 % + CGST @ 2.5 % RCM",
+                "rate": Decimal("5"),
+            },
+            "RIGST@5": {
+                "code": "RIGST@5",
+                "name": "RCM IGST @5%",
+                "rate": Decimal("5"),
+            },
+        }
+
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_service_line_tax_code("GST05R", "Haryana", "HR"),
+            "GST05R",
+        )
+
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    def test_service_grpo_effective_month_maps_to_dimension_code(self, mock_dimension_codes):
+        """SAP expects Expense Effective Month in line dimension 2 as MM-YYYY."""
+        mock_dimension_codes.return_value = {
+            "04-2026": "04-2026",
+            "05-2026": "05-2026",
+        }
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(service._first_day_of_month("2026-04"), date(2026, 4, 1))
+        self.assertEqual(
+            service._format_effective_month_dimension(date(2026, 4, 1)),
+            "04-2026",
+        )
+        self.assertEqual(
+            service._resolve_active_dimension_code(
+                2,
+                service._format_effective_month_dimension(date(2026, 4, 1)),
+            ),
+            "04-2026",
+        )
+
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    def test_service_grpo_product_dimension_uses_active_sap_code(self, mock_dimension_codes):
+        """Service line dimension 1 should use SAP's active product/service code."""
+        mock_dimension_codes.return_value = {
+            "WATER": "WATER",
+            "CANOLA": "CANOLA",
+        }
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_active_dimension_code(1, "Beverage", "Water"),
+            "WATER",
+        )
 
     def test_get_grpo_preview_data(self):
         """Test getting GRPO preview data returns all PO details for pre-fill"""
@@ -437,6 +521,70 @@ class GRPOServiceTests(TestCase):
         self.assertIn("PO: PO-001", comments)
         self.assertIn("Gate Entry: VE-2024-001", comments)
         self.assertIn("QC passed", comments)
+
+    def test_structured_comments_are_sap_safe_length(self):
+        """Generated SAP document comments should not exceed SAP's short field limit."""
+        service = GRPOService(company_code="TC001")
+        comments = service._build_structured_comments(
+            self.user,
+            [self.po_receipt],
+            self.vehicle_entry,
+            "x" * 500,
+        )
+
+        self.assertLessEqual(len(comments), service.SAP_DOCUMENT_COMMENTS_MAX_LENGTH)
+        self.assertTrue(comments.endswith("..."))
+
+    def test_service_structured_comments_only_include_app_and_user(self):
+        """Service GRPO auto-comments should stay minimal because line fields hold details."""
+        service = GRPOService(company_code="TC001")
+        dispatch_plan = MagicMock()
+        dispatch_plan.sap_invoice_doc_num = "726055003"
+        dispatch_plan.sap_invoice_doc_entry = 12345
+        dispatch_plan.vehicle_no = "DL1LAB1234"
+        dispatch_plan.bilty_no = "NCR-1092"
+
+        comments = service._build_service_structured_comments(
+            self.user,
+            dispatch_plan,
+            "x" * 500,
+            {
+                "invoice_number": "726055003",
+                "eway_bill": "372213652647,302213652240",
+                "place_of_supply": "HR",
+                "delivery_point": "Bakhapur Sonipat",
+                "location_name": "HARYANA",
+                "sac_code": "9965",
+                "product_variety": "Oil",
+                "effective_month": "2026-05-01",
+                "total_litres": Decimal("0"),
+                "charged_weight": Decimal("1275"),
+            },
+        )
+
+        full_name = self.user.get_full_name() if hasattr(self.user, "get_full_name") else str(self.user)
+        username = getattr(self.user, "username", getattr(self.user, "email", str(self.user)))
+        expected_user = f"{full_name} ({username})"
+        self.assertEqual(comments, f"App: JI | User: {expected_user}")
+        self.assertNotIn("Dispatch Bill", comments)
+        self.assertNotIn("Effective Month", comments)
+
+    def test_service_grpo_effective_month_uses_month_year_api_format(self):
+        """Service GRPO API should accept and render effective month as YYYY-MM."""
+        serializer = ServiceGRPOPostRequestSerializer(data={
+            "dispatch_plan_id": 1,
+            "vendor_code": "VENDA000807",
+            "branch_id": 2,
+            "service_description": "Transport freight",
+            "amount": "1000.00",
+            "effective_month": "2026-05",
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["effective_month"].isoformat(), "2026-05-01")
+
+        field = ServiceGRPOPreviewSerializer().fields["default_effective_month"]
+        self.assertEqual(field.to_representation(serializer.validated_data["effective_month"]), "2026-05")
 
 
 class GRPOAPITests(APITestCase):

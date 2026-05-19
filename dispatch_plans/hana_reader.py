@@ -30,6 +30,17 @@ class HanaDispatchBillReader:
         bill["items"] = self.list_bill_lines(bill["doc_entry"])
         return bill
 
+    def list_bills_by_doc_entries(self, doc_entries: List[int]) -> List[Dict[str, Any]]:
+        doc_entries = [int(doc_entry) for doc_entry in dict.fromkeys(doc_entries or [])]
+        if not doc_entries:
+            return []
+        return self.list_bills(
+            {
+                "doc_entries": doc_entries,
+                "limit": len(doc_entries),
+            }
+        )
+
     def list_bill_lines(self, doc_entry: int) -> List[Dict[str, Any]]:
         schema = self.connection.schema
         line_columns = self._table_columns("INV1")
@@ -94,6 +105,7 @@ class HanaDispatchBillReader:
     def _build_bills_query(self, filters: Dict[str, Any]):
         schema = self.connection.schema
         header_columns = self._table_columns("OINV")
+        tax_columns = self._table_columns("INV12")
         item_columns = self._table_columns("OITM")
 
         dispatch_date = self._optional_raw(
@@ -117,6 +129,21 @@ class HanaDispatchBillReader:
         lr_number = self._optional_string(
             header_columns, "U_LRNUmber", "sap_lr_number"
         )
+        eway_bill = self._optional_table_string(
+            tax_columns,
+            [
+                "EWayBillNo",
+                "EWayBillNum",
+                "EwbNo",
+                "EWBNo",
+                "U_EWAYBILL",
+                "U_EWayBillNo",
+                "U_EWBNo",
+                "U_EwayBillNo",
+            ],
+            "A",
+            "sap_eway_bill",
+        )
 
         litre_expr = self._optional_item_number(item_columns, "U_UNE_TOTL")
         box_expr = self._optional_item_number(item_columns, "U_UNE_TOTB")
@@ -125,8 +152,13 @@ class HanaDispatchBillReader:
         where_clauses = ['H."CANCELED" = \'N\'']
         params: List[Any] = []
 
+        doc_entries = [int(value) for value in filters.get("doc_entries") or []]
         invoice_doc_num = (filters.get("invoice_doc_num") or "").strip()
-        if invoice_doc_num:
+        if doc_entries:
+            placeholders = ", ".join("?" for _ in doc_entries)
+            where_clauses.append(f'H."DocEntry" IN ({placeholders})')
+            params.extend(doc_entries)
+        elif invoice_doc_num:
             where_clauses.append('TO_NVARCHAR(H."DocNum") = ?')
             params.append(invoice_doc_num)
         else:
@@ -207,6 +239,7 @@ class HanaDispatchBillReader:
                 {vehicle_no},
                 {transporter_invoice},
                 {lr_number},
+                {eway_bill},
                 IFNULL(A."Vehicle", '') AS gst_vehicle_no,
                 A."TransprtDT" AS gst_transport_date,
                 IFNULL(A."TransprtRS", '') AS gst_transport_reason,
@@ -261,6 +294,18 @@ class HanaDispatchBillReader:
         if column not in columns:
             return f"{fallback} AS {alias}"
         return f'H."{column}" AS {alias}'
+
+    @staticmethod
+    def _optional_table_string(
+        columns: Set[str],
+        candidates: List[str],
+        table_alias: str,
+        alias: str,
+    ) -> str:
+        for column in candidates:
+            if column in columns:
+                return f'IFNULL(TO_NVARCHAR({table_alias}."{column}"), \'\') AS {alias}'
+        return f"'' AS {alias}"
 
     @staticmethod
     def _optional_item_number(columns: Set[str], column: str) -> str:
@@ -324,19 +369,20 @@ class HanaDispatchBillReader:
             "sap_vehicle_no": row[19] or "",
             "sap_transporter_invoice": row[20] or "",
             "sap_lr_number": row[21] or "",
-            "gst_vehicle_no": row[22] or "",
-            "gst_transport_date": self._format_date(row[23]),
-            "gst_transport_reason": row[24] or "",
-            "line_count": int(row[25] or 0),
-            "total_quantity": float(row[26] or 0),
-            "total_litres": float(row[27] or 0),
-            "total_boxes": float(row[28] or 0),
-            "total_weight": float(row[29] or 0),
-            "total_line_amount": float(row[30] or 0),
-            "total_gross_amount": float(row[31] or 0),
-            "warehouses": row[32] or "",
-            "item_summary": row[33] or "",
-            "base_refs": row[34] or "",
+            "sap_eway_bill": row[22] or "",
+            "gst_vehicle_no": row[23] or "",
+            "gst_transport_date": self._format_date(row[24]),
+            "gst_transport_reason": row[25] or "",
+            "line_count": int(row[26] or 0),
+            "total_quantity": float(row[27] or 0),
+            "total_litres": float(row[28] or 0),
+            "total_boxes": float(row[29] or 0),
+            "total_weight": float(row[30] or 0),
+            "total_line_amount": float(row[31] or 0),
+            "total_gross_amount": float(row[32] or 0),
+            "warehouses": row[33] or "",
+            "item_summary": row[34] or "",
+            "base_refs": row[35] or "",
         }
 
     @staticmethod

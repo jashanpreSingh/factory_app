@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List
 
 from company.models import Company
@@ -80,6 +81,91 @@ class DispatchPlansService:
         data: Dict[str, Any],
         user,
     ) -> DispatchPlan:
+        linked_doc_entries = data.pop("linked_invoice_doc_entries", None)
+        if linked_doc_entries:
+            return self.update_linked_plans(
+                primary_sap_invoice_doc_entry=sap_invoice_doc_entry,
+                linked_sap_invoice_doc_entries=linked_doc_entries,
+                data=data,
+                user=user,
+            )
+
+        return self._update_single_plan(
+            sap_invoice_doc_entry=sap_invoice_doc_entry,
+            data=data,
+            user=user,
+        )
+
+    def update_linked_plans(
+        self,
+        primary_sap_invoice_doc_entry: int,
+        linked_sap_invoice_doc_entries: List[int],
+        data: Dict[str, Any],
+        user,
+    ) -> DispatchPlan:
+        doc_entries = list(
+            dict.fromkeys([primary_sap_invoice_doc_entry, *linked_sap_invoice_doc_entries])
+        )
+        if len(doc_entries) == 1:
+            return self._update_single_plan(
+                sap_invoice_doc_entry=primary_sap_invoice_doc_entry,
+                data=data,
+                user=user,
+            )
+
+        bills = self.reader.list_bills_by_doc_entries(doc_entries)
+        bills_by_doc_entry = {bill["doc_entry"]: bill for bill in bills}
+        missing = [doc_entry for doc_entry in doc_entries if doc_entry not in bills_by_doc_entry]
+        if missing:
+            raise ValueError(f"Selected dispatch invoice(s) were not found in SAP: {missing}")
+
+        branch_ids = {
+            bill["branch_id"] for bill in bills if bill.get("branch_id") is not None
+        }
+        if len(branch_ids) > 1:
+            raise ValueError("Selected invoices must belong to the same SAP branch.")
+
+        shared_data = self._shared_batch_link_data(data)
+        allocations = self._allocate_batch_freight(
+            bills=[bills_by_doc_entry[doc_entry] for doc_entry in doc_entries],
+            amount=data.get("total_freight") or data.get("freight"),
+        )
+
+        updated_plans = []
+        for index, doc_entry in enumerate(doc_entries):
+            bill = bills_by_doc_entry[doc_entry]
+            plan_data = {
+                **shared_data,
+                **self._invoice_defaults_from_bill(bill),
+            }
+            if allocations:
+                plan_data["freight"] = allocations[doc_entry]
+                plan_data["total_freight"] = allocations[doc_entry]
+
+            bilty_attachment = plan_data.get("bilty_attachment")
+            if bilty_attachment and hasattr(bilty_attachment, "seek"):
+                bilty_attachment.seek(0)
+
+            updated_plans.append(
+                self._update_single_plan(
+                    sap_invoice_doc_entry=doc_entry,
+                    data=plan_data,
+                    user=user,
+                )
+            )
+
+        return next(
+            plan
+            for plan in updated_plans
+            if plan.sap_invoice_doc_entry == primary_sap_invoice_doc_entry
+        )
+
+    def _update_single_plan(
+        self,
+        sap_invoice_doc_entry: int,
+        data: Dict[str, Any],
+        user,
+    ) -> DispatchPlan:
         doc_num = data.pop("sap_invoice_doc_num", "")
         bilty_attachment = data.get("bilty_attachment")
         self._validate_links(data)
@@ -112,16 +198,123 @@ class DispatchPlansService:
 
         if plan.booking_status == DispatchPlanStatus.BOOKED and not plan.bilty_no.strip():
             raise ValueError("Bilty number is required before booking the dispatch vehicle.")
+        if plan.booking_status == DispatchPlanStatus.BOOKED and not plan.bilty_attachment:
+            raise ValueError("Bilty attachment is required before booking the dispatch vehicle.")
 
         plan.updated_by = user
         plan.save()
         return plan
+
+    @staticmethod
+    def _shared_batch_link_data(data: Dict[str, Any]) -> Dict[str, Any]:
+        invoice_specific_fields = {
+            "sap_invoice_doc_num",
+            "invoice_number",
+            "eway_bill",
+            "invoice_weight",
+            "invoice_amount",
+            "place_of_supply",
+            "product_variety",
+            "total_litres",
+            "effective_month",
+        }
+        return {
+            field: value
+            for field, value in data.items()
+            if field not in invoice_specific_fields
+        }
+
+    @classmethod
+    def _invoice_defaults_from_bill(cls, bill: Dict[str, Any]) -> Dict[str, Any]:
+        place_of_supply = bill.get("state") or bill.get("city") or ""
+        return {
+            "sap_invoice_doc_num": bill.get("doc_num") or "",
+            "invoice_number": bill.get("doc_num") or "",
+            "eway_bill": bill.get("sap_eway_bill") or "",
+            "invoice_weight": bill.get("total_weight") or None,
+            "invoice_amount": bill.get("doc_total") or None,
+            "place_of_supply": place_of_supply,
+            "product_variety": cls._infer_product_variety(bill.get("item_summary") or ""),
+            "total_litres": bill.get("total_litres") or None,
+            "effective_month": cls._month_start(bill.get("doc_date")),
+            "budget_delivery_point": bill.get("city") or "",
+        }
+
+    @staticmethod
+    def _infer_product_variety(item_summary: str) -> str:
+        normalized = (item_summary or "").lower()
+        if any(token in normalized for token in ("water", "drink", "beverage", "juice")):
+            return "Beverage"
+        return "Oil" if item_summary.strip() else ""
+
+    @staticmethod
+    def _month_start(value: Any):
+        if not value:
+            return None
+        if hasattr(value, "date"):
+            value = value.date()
+        if hasattr(value, "replace") and not isinstance(value, str):
+            return value.replace(day=1)
+        try:
+            parsed = datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+            return parsed.replace(day=1)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _allocate_batch_freight(
+        bills: List[Dict[str, Any]],
+        amount: Any,
+    ) -> Dict[int, Decimal]:
+        if amount in (None, ""):
+            return {}
+        total_amount = Decimal(str(amount))
+        if total_amount <= 0 or not bills:
+            return {}
+
+        weights = []
+        for bill in bills:
+            weight = Decimal(str(bill.get("total_litres") or 0))
+            if weight <= 0:
+                weight = Decimal(str(bill.get("total_weight") or 0))
+            if weight <= 0:
+                weight = Decimal(str(bill.get("doc_total") or 0))
+            weights.append(weight if weight > 0 else Decimal("1"))
+
+        total_weight = sum(weights, Decimal("0"))
+        allocations: Dict[int, Decimal] = {}
+        running_total = Decimal("0")
+        for index, bill in enumerate(bills):
+            doc_entry = int(bill["doc_entry"])
+            if index == len(bills) - 1:
+                allocation = total_amount - running_total
+            else:
+                allocation = (total_amount * weights[index] / total_weight).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP,
+                )
+                running_total += allocation
+            allocations[doc_entry] = allocation
+        return allocations
 
     def _empty_plan(self, doc_entry: int, doc_num: str) -> Dict[str, Any]:
         return {
             "id": None,
             "sap_invoice_doc_entry": doc_entry,
             "sap_invoice_doc_num": doc_num,
+            "invoice_number": "",
+            "eway_bill": "",
+            "invoice_weight": None,
+            "invoice_amount": None,
+            "place_of_supply": "",
+            "product_variety": "",
+            "total_litres": None,
+            "effective_month": None,
+            "budget_delivery_point": "",
+            "service_location_code": None,
+            "service_location_name": "",
+            "sac_entry": None,
+            "sac_code": "",
             "vehicle_id": None,
             "transporter_id": None,
             "driver_id": None,
@@ -141,6 +334,8 @@ class DispatchPlansService:
             "driver_id_proof_number": "",
             "bilty_no": "",
             "bilty_date": None,
+            "bilty_attachment": None,
+            "bilty_attachment_name": "",
             "freight": None,
             "total_freight": None,
             "kanta_weight": None,
@@ -166,6 +361,7 @@ class DispatchPlansService:
             row.get("sap_vehicle_no"),
             row.get("sap_transporter_invoice"),
             row.get("sap_lr_number"),
+            row.get("sap_eway_bill"),
             row.get("gst_vehicle_no"),
             row.get("warehouses"),
             row.get("item_summary"),
@@ -178,6 +374,9 @@ class DispatchPlansService:
             plan.get("driver_name"),
             plan.get("driver_mobile_no"),
             plan.get("driver_license_no"),
+            plan.get("invoice_number"),
+            plan.get("eway_bill"),
+            plan.get("place_of_supply"),
             plan.get("bilty_no"),
             plan.get("remarks"),
         ]

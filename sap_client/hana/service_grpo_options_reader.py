@@ -35,6 +35,10 @@ class HanaServiceGRPOOptionsReader:
                 "branches": self._get_branches(cursor, schema),
                 "tax_codes": self._get_tax_codes(cursor, schema),
                 "gl_accounts": self._get_gl_accounts(cursor, schema),
+                "sac_codes": self._get_sac_codes(cursor, schema),
+                "locations": self._get_locations(cursor, schema),
+                "projects": self._get_budget_delivery_points(cursor, schema),
+                "sub_accounts": self._get_sub_accounts(cursor, schema),
             }
 
         except dbapi.ProgrammingError as e:
@@ -65,7 +69,8 @@ class HanaServiceGRPOOptionsReader:
             f"""
                 SELECT
                     "BPLId" AS branch_id,
-                    "BPLName" AS branch_name
+                    "BPLName" AS branch_name,
+                    IFNULL("State", '') AS state
                 FROM "{schema}"."OBPL"
                 WHERE IFNULL("Disabled", 'N') = 'N'
                 ORDER BY "BPLId"
@@ -75,6 +80,7 @@ class HanaServiceGRPOOptionsReader:
             {
                 "branch_id": int(row[0]),
                 "branch_name": row[1] or str(row[0]),
+                "state": row[2] or "",
             }
             for row in cursor.fetchall()
         ]
@@ -118,4 +124,97 @@ class HanaServiceGRPOOptionsReader:
                 "account_name": row[1] or row[0],
             }
             for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_sac_codes(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "AbsEntry" AS sac_entry,
+                    IFNULL("ServCode", '') AS sac_code,
+                    IFNULL("ServName", '') AS sac_name
+                FROM "{schema}"."OSAC"
+                ORDER BY "ServCode"
+            """
+        )
+        return [
+            {
+                "sac_entry": int(row[0]),
+                "sac_code": row[1] or str(row[0]),
+                "sac_name": row[2] or row[1] or str(row[0]),
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_locations(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "Code" AS location_code,
+                    IFNULL("Location", '') AS location_name,
+                    IFNULL("State", '') AS state
+                FROM "{schema}"."OLCT"
+                ORDER BY "Location"
+            """
+        )
+        return [
+            {
+                "location_code": int(row[0]),
+                "location_name": row[1] or str(row[0]),
+                "state": row[2] or "",
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_budget_delivery_points(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "OcrCode" AS project_code,
+                    IFNULL("OcrName", '') AS project_name
+                FROM "{schema}"."OOCR"
+                WHERE "DimCode" = 3
+                  AND IFNULL("Active", 'Y') = 'Y'
+                ORDER BY "OcrName", "OcrCode"
+            """
+        )
+        return [
+            {
+                "project_code": row[0],
+                "project_name": row[1] or row[0],
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_sub_accounts(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    V."FldValue" AS sub_account_code,
+                    IFNULL(V."Descr", V."FldValue") AS sub_account_name
+                FROM "{schema}"."CUFD" C
+                JOIN "{schema}"."UFD1" V
+                  ON V."TableID" = C."TableID"
+                 AND V."FieldID" = C."FieldID"
+                WHERE C."TableID" = 'PDN1'
+                  AND C."AliasID" = 'Sub_Account'
+                  AND IFNULL(V."FldValue", '') <> ''
+                ORDER BY V."IndexID"
+            """
+        )
+        rows = [
+            {
+                "sub_account_code": row[0],
+                "sub_account_name": row[1] or row[0],
+            }
+            for row in cursor.fetchall()
+        ]
+        return rows or [
+            {"sub_account_code": "SALES", "sub_account_name": "SALES"},
+            {"sub_account_code": "SALES RETURN", "sub_account_name": "SALES RETURN"},
+            {"sub_account_code": "BST", "sub_account_name": "BST"},
         ]

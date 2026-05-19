@@ -1,18 +1,26 @@
 import logging
 import os
+import re
 import tempfile
+from functools import lru_cache
 from typing import List, Dict, Any, Optional
 from decimal import Decimal
+from datetime import date
+from django.core.files import File
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Q
 
 from gate_core.enums import GateEntryStatus
+from dispatch_plans.hana_reader import HanaDispatchBillReader
 from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import VehicleEntry
 from raw_material_gatein.models import POReceipt, POItemReceipt
 from quality_control.enums import InspectionStatus
 from sap_client.client import SAPClient
+from sap_client.context import CompanyContext
 from sap_client.exceptions import SAPConnectionError, SAPDataError, SAPValidationError
+from sap_client.hana.connection import HanaConnection
 
 from .models import (
     GRPOPosting,
@@ -32,9 +40,620 @@ class GRPOService:
     """
     Service for handling GRPO operations.
     """
+    SAP_DOCUMENT_COMMENTS_MAX_LENGTH = 254
+    STATE_NAME_CODES = {
+        "HARYANA": "HR",
+        "DELHI": "DL",
+        "NEW DELHI": "DL",
+        "PUNJAB": "PB",
+        "UTTAR PRADESH": "UP",
+        "RAJASTHAN": "RJ",
+        "HIMACHAL PRADESH": "HP",
+        "UTTARAKHAND": "UK",
+        "CHANDIGARH": "CH",
+    }
 
     def __init__(self, company_code: str):
         self.company_code = company_code
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_sap_table_columns(
+        company_code: str,
+        table_name: str,
+    ) -> Optional[frozenset[str]]:
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                    SELECT "COLUMN_NAME"
+                    FROM "SYS"."TABLE_COLUMNS"
+                    WHERE "SCHEMA_NAME" = ? AND "TABLE_NAME" = ?
+                """,
+                [connection.schema, table_name.upper()],
+            )
+            return frozenset(row[0] for row in cursor.fetchall())
+        except Exception as exc:
+            logger.warning(
+                "Could not read SAP column metadata for %s.%s: %s",
+                company_code,
+                table_name,
+                exc,
+            )
+            return None
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    def _filter_purchase_delivery_note_udfs(self, payload: Dict[str, Any]) -> None:
+        """Drop company-missing UDFs before Service Layer rejects the GRPO."""
+        header_columns = self._get_sap_table_columns(self.company_code, "OPDN")
+        line_columns = self._get_sap_table_columns(self.company_code, "PDN1")
+
+        if header_columns:
+            for key in list(payload):
+                if key.startswith("U_") and key not in header_columns:
+                    logger.info(
+                        "Skipping unsupported OPDN UDF %s for %s",
+                        key,
+                        self.company_code,
+                    )
+                    payload.pop(key, None)
+
+        if line_columns:
+            for line in payload.get("DocumentLines", []):
+                for key in list(line):
+                    if key.startswith("U_") and key not in line_columns:
+                        logger.info(
+                            "Skipping unsupported PDN1 UDF %s for %s",
+                            key,
+                            self.company_code,
+                        )
+                        line.pop(key, None)
+
+    @classmethod
+    def _truncate_sap_document_comments(cls, comments: str) -> str:
+        """Keep SAP document comments within the Service Layer field limit."""
+        comments = (comments or "").strip()
+        if len(comments) <= cls.SAP_DOCUMENT_COMMENTS_MAX_LENGTH:
+            return comments
+        suffix = "..."
+        max_body_length = cls.SAP_DOCUMENT_COMMENTS_MAX_LENGTH - len(suffix)
+        return comments[:max_body_length].rstrip(" |,") + suffix
+
+    @staticmethod
+    def _decimal_or_none(value, decimal_places: str = "0.001") -> Optional[Decimal]:
+        if value in (None, ""):
+            return None
+        decimal_value = Decimal(str(value))
+        return decimal_value.quantize(Decimal(decimal_places))
+
+    @staticmethod
+    def _first_day_of_month(value) -> Optional[date]:
+        if not value:
+            return None
+        if isinstance(value, str):
+            if re.fullmatch(r"\d{4}-\d{2}", value):
+                value = f"{value}-01"
+            try:
+                value = date.fromisoformat(value)
+            except ValueError:
+                return None
+        if not hasattr(value, "year") or not hasattr(value, "month"):
+            return None
+        return date(value.year, value.month, 1)
+
+    @staticmethod
+    def _infer_product_variety(item_summary: str) -> str:
+        summary = (item_summary or "").lower()
+        if any(token in summary for token in ("water", "drink", "beverage", "juice")):
+            return "Beverage"
+        if summary:
+            return "Oil"
+        return ""
+
+    @staticmethod
+    def _infer_service_description(item_summary: str, product_variety: str = "") -> str:
+        summary = (item_summary or "").lower()
+        service_tokens = [
+            (("water",), "Water"),
+            (("drink",), "Drink"),
+            (("juice",), "Juice"),
+            (("beverage",), "Beverage"),
+            (("oil",), "Oil"),
+        ]
+        for tokens, label in service_tokens:
+            if any(token in summary for token in tokens):
+                return label
+        return (product_variety or "").strip() or "Transport"
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_sap_tax_codes(company_code: str) -> Dict[str, Dict[str, Any]]:
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                    SELECT "Code", IFNULL("Name", ''), "Rate"
+                    FROM "{connection.schema}"."OSTC"
+                """
+            )
+            codes = {}
+            for code, name, rate in cursor.fetchall():
+                if not code:
+                    continue
+                rate_value = Decimal(str(rate)) if rate is not None else None
+                codes[str(code).strip().upper()] = {
+                    "code": str(code).strip(),
+                    "name": str(name or "").strip(),
+                    "rate": rate_value,
+                }
+            return codes
+        except Exception as exc:
+            logger.warning("Could not read SAP tax codes for %s: %s", company_code, exc)
+            return {}
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_sap_branch_states(company_code: str) -> Dict[int, str]:
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                    SELECT "BPLId", IFNULL("State", '')
+                    FROM "{connection.schema}"."OBPL"
+                    WHERE IFNULL("Disabled", 'N') = 'N'
+                """
+            )
+            return {
+                int(row[0]): GRPOService._normalize_state(row[1])
+                for row in cursor.fetchall()
+                if row[0] is not None
+            }
+        except Exception as exc:
+            logger.warning("Could not read SAP branch states for %s: %s", company_code, exc)
+            return {}
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    @classmethod
+    def _normalize_state(cls, value: Any) -> str:
+        state = str(value or "").strip().upper()
+        if not state:
+            return ""
+        match = re.search(r"\(([A-Z]{2})\)", state)
+        if match:
+            return match.group(1)
+        if len(state) == 2:
+            return state
+        return cls.STATE_NAME_CODES.get(state, state)
+
+    @staticmethod
+    def _format_tax_rate(rate: Decimal) -> str:
+        normalized = Decimal(str(rate)).normalize()
+        if normalized == normalized.to_integral():
+            return str(int(normalized))
+        return format(normalized, "f").rstrip("0").rstrip(".")
+
+    @classmethod
+    def _tax_rate_for_code(
+        cls,
+        tax_code: str,
+        tax_codes: Dict[str, Dict[str, Any]],
+    ) -> Optional[Decimal]:
+        code = (tax_code or "").strip()
+        if not code:
+            return None
+
+        tax_record = tax_codes.get(code.upper())
+        if tax_record and tax_record.get("rate") is not None:
+            return Decimal(str(tax_record["rate"]))
+
+        match = re.search(r"@(\d+(?:\.\d+)?)", code)
+        if not match:
+            match = re.search(r"(\d+(?:\.\d+)?)", code)
+        if not match:
+            return None
+        return Decimal(match.group(1))
+
+    @staticmethod
+    def _tax_code_details(
+        tax_code: str,
+        tax_codes: Dict[str, Dict[str, Any]],
+    ) -> str:
+        code = (tax_code or "").strip()
+        tax_record = tax_codes.get(code.upper())
+        name = tax_record.get("name", "") if tax_record else ""
+        return f"{code} {name}".upper()
+
+    @classmethod
+    def _is_rcm_tax_code(
+        cls,
+        tax_code: str,
+        tax_codes: Dict[str, Dict[str, Any]],
+    ) -> bool:
+        details = cls._tax_code_details(tax_code, tax_codes)
+        code = (tax_code or "").strip().upper()
+        return (
+            "RCM" in details
+            or code.startswith(("RIGST", "RISGT", "RCGSG"))
+            or code == "GST05R"
+        )
+
+    @classmethod
+    def _is_igst_tax_code(
+        cls,
+        tax_code: str,
+        tax_codes: Dict[str, Dict[str, Any]],
+    ) -> bool:
+        details = cls._tax_code_details(tax_code, tax_codes)
+        return "IGST" in details or (tax_code or "").strip().upper().startswith(
+            ("RIGST", "RISGT")
+        )
+
+    @staticmethod
+    def _first_available_tax_code(
+        tax_codes: Dict[str, Dict[str, Any]],
+        candidates: List[str],
+    ) -> str:
+        if not tax_codes:
+            return candidates[0] if candidates else ""
+        for candidate in candidates:
+            tax_record = tax_codes.get(candidate.upper())
+            if tax_record:
+                return tax_record["code"]
+        return ""
+
+    def _resolve_service_line_tax_code(
+        self,
+        requested_tax_code: Optional[str],
+        branch_state: str,
+        supply_state: str,
+    ) -> str:
+        requested_tax_code = (requested_tax_code or "").strip()
+        if not requested_tax_code:
+            return ""
+
+        branch_state = self._normalize_state(branch_state)
+        supply_state = self._normalize_state(supply_state)
+        if not branch_state or not supply_state:
+            return requested_tax_code
+
+        tax_codes = self._get_sap_tax_codes(self.company_code)
+        tax_rate = self._tax_rate_for_code(requested_tax_code, tax_codes)
+        if tax_rate is None:
+            return requested_tax_code
+
+        is_interstate = branch_state != supply_state
+        is_rcm = self._is_rcm_tax_code(requested_tax_code, tax_codes)
+        is_igst = self._is_igst_tax_code(requested_tax_code, tax_codes)
+        rate_key = self._format_tax_rate(tax_rate)
+
+        if is_interstate:
+            if is_igst:
+                return requested_tax_code
+            candidates = (
+                [f"RIGST@{rate_key}", f"RISGT@{rate_key}", f"IGST@{rate_key}"]
+                if is_rcm
+                else [f"IGST@{rate_key}", f"RIGST@{rate_key}"]
+            )
+            return self._first_available_tax_code(tax_codes, candidates) or requested_tax_code
+
+        if not is_igst:
+            return requested_tax_code
+
+        candidates = (
+            ["GST05R", f"RCGSG@{rate_key}", f"CG+SG@{rate_key}"]
+            if is_rcm and rate_key == "5"
+            else [f"RCGSG@{rate_key}", f"CG+SG@{rate_key}"]
+            if is_rcm
+            else [f"CG+SG@{rate_key}"]
+        )
+        return self._first_available_tax_code(tax_codes, candidates) or requested_tax_code
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _get_active_dimension_codes(
+        company_code: str,
+        dim_code: int,
+    ) -> Optional[Dict[str, str]]:
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                    SELECT "OcrCode", IFNULL("OcrName", '')
+                    FROM "{connection.schema}"."OOCR"
+                    WHERE "DimCode" = ?
+                      AND IFNULL("Active", 'Y') = 'Y'
+                """,
+                [dim_code],
+            )
+            return {
+                str(row[0]).strip(): str(row[1] or row[0]).strip()
+                for row in cursor.fetchall()
+                if row[0]
+            }
+        except Exception as exc:
+            logger.warning(
+                "Could not read active SAP dimension %s distribution rules for %s: %s",
+                dim_code,
+                company_code,
+                exc,
+            )
+            return None
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    @classmethod
+    def _get_active_budget_codes(cls, company_code: str) -> Optional[Dict[str, str]]:
+        return cls._get_active_dimension_codes(company_code, 3)
+
+    def _is_active_budget_code(self, budget_code: str) -> bool:
+        budget_code = (budget_code or "").strip()
+        if not budget_code:
+            return False
+        active_budget_codes = self._get_active_budget_codes(self.company_code)
+        if active_budget_codes is None:
+            return True
+        return budget_code in active_budget_codes
+
+    @staticmethod
+    def _format_effective_month_dimension(value: Optional[date]) -> str:
+        if not value:
+            return ""
+        return value.strftime("%m-%Y")
+
+    def _resolve_active_dimension_code(
+        self,
+        dim_code: int,
+        *candidates: Any,
+    ) -> str:
+        active_codes = self._get_active_dimension_codes(self.company_code, dim_code)
+        cleaned_candidates = [
+            str(candidate or "").strip()
+            for candidate in candidates
+            if str(candidate or "").strip()
+        ]
+        if not cleaned_candidates:
+            return ""
+        if active_codes is None:
+            return cleaned_candidates[0]
+
+        lower_lookup = {
+            code.lower(): code
+            for code in active_codes
+        }
+        name_lookup = {
+            name.lower(): code
+            for code, name in active_codes.items()
+            if name
+        }
+        for candidate in cleaned_candidates:
+            variants = [candidate, candidate.upper()]
+            for variant in variants:
+                if variant in active_codes:
+                    return variant
+                matched_code = lower_lookup.get(variant.lower()) or name_lookup.get(
+                    variant.lower()
+                )
+                if matched_code:
+                    return matched_code
+        return ""
+
+    def _infer_budget_delivery_point(self, dispatch_plan: DispatchPlan) -> str:
+        active_budget_codes = self._get_active_budget_codes(self.company_code) or {}
+        saved_budget = (dispatch_plan.budget_delivery_point or "").strip()
+        if saved_budget in active_budget_codes:
+            return saved_budget
+
+        normalized_saved_budget = saved_budget.lower()
+        if normalized_saved_budget:
+            for code, name in active_budget_codes.items():
+                if normalized_saved_budget in {code.lower(), name.lower()}:
+                    return code
+
+        location_hint = (
+            f"{dispatch_plan.service_location_name} {dispatch_plan.service_location_code or ''}"
+        ).lower()
+        if any(token in location_hint for token in ("mayapuri", "delhi isd")):
+            if "Del Mayp" in active_budget_codes:
+                return "Del Mayp"
+
+        if "Del Bkhp" in active_budget_codes:
+            return "Del Bkhp"
+        return next(iter(active_budget_codes), saved_budget)
+
+    @staticmethod
+    def _infer_service_sub_account(bill_snapshot: Dict[str, Any]) -> str:
+        return "SALES" if bill_snapshot.get("card_code") else ""
+
+    @staticmethod
+    def _service_group_key(dispatch_plan: DispatchPlan) -> tuple:
+        bilty_no = (dispatch_plan.bilty_no or "").strip()
+        if not bilty_no:
+            return ("dispatch-plan", dispatch_plan.id)
+        return (
+            "bilty",
+            bilty_no,
+            dispatch_plan.bilty_date,
+            dispatch_plan.linked_vehicle_entry_id or 0,
+            dispatch_plan.vehicle_id or 0,
+            dispatch_plan.transporter_id or 0,
+            (dispatch_plan.vehicle_no or "").strip().upper(),
+        )
+
+    def _get_service_group_plans(self, dispatch_plan: DispatchPlan) -> List[DispatchPlan]:
+        bilty_no = (dispatch_plan.bilty_no or "").strip()
+        if not bilty_no:
+            return [dispatch_plan]
+
+        queryset = DispatchPlan.objects.filter(
+            company=dispatch_plan.company,
+            booking_status=DispatchPlanStatus.BOOKED,
+            is_active=True,
+            bilty_no=bilty_no,
+            bilty_date=dispatch_plan.bilty_date,
+        )
+        if dispatch_plan.linked_vehicle_entry_id:
+            queryset = queryset.filter(
+                linked_vehicle_entry_id=dispatch_plan.linked_vehicle_entry_id
+            )
+        elif dispatch_plan.vehicle_id:
+            queryset = queryset.filter(vehicle_id=dispatch_plan.vehicle_id)
+        elif dispatch_plan.vehicle_no:
+            queryset = queryset.filter(vehicle_no__iexact=dispatch_plan.vehicle_no)
+
+        if dispatch_plan.transporter_id:
+            queryset = queryset.filter(transporter_id=dispatch_plan.transporter_id)
+        elif dispatch_plan.transporter_name:
+            queryset = queryset.filter(transporter_name__iexact=dispatch_plan.transporter_name)
+
+        return list(
+            queryset.select_related(
+                "company",
+                "vehicle",
+                "transporter",
+                "driver",
+                "linked_vehicle_entry",
+            ).order_by("sap_invoice_doc_num", "sap_invoice_doc_entry", "id")
+        )
+
+    @staticmethod
+    def _line_amount_from_plan(dispatch_plan: DispatchPlan) -> Decimal:
+        amount = dispatch_plan.total_freight
+        if amount is None:
+            amount = dispatch_plan.freight
+        if amount is None:
+            return Decimal("0.00")
+        return Decimal(str(amount)).quantize(Decimal("0.01"))
+
+    @staticmethod
+    def _allocate_amount_by_weight(
+        total_amount: Decimal,
+        weights: List[Decimal],
+    ) -> List[Decimal]:
+        if not weights:
+            return []
+        cleaned_weights = [weight if weight > 0 else Decimal("1") for weight in weights]
+        total_weight = sum(cleaned_weights, Decimal("0"))
+        allocations = []
+        running_total = Decimal("0.00")
+        for index, weight in enumerate(cleaned_weights):
+            if index == len(cleaned_weights) - 1:
+                allocation = total_amount - running_total
+            else:
+                allocation = (total_amount * weight / total_weight).quantize(
+                    Decimal("0.01"),
+                    rounding="ROUND_HALF_UP",
+                )
+                running_total += allocation
+            allocations.append(allocation)
+        return allocations
+
+    def _posted_service_grpo_for_group(
+        self,
+        group_plans: List[DispatchPlan],
+    ) -> Optional[ServiceGRPOPosting]:
+        plan_ids = [plan.id for plan in group_plans]
+        return (
+            ServiceGRPOPosting.objects.filter(
+                status=GRPOStatus.POSTED,
+            )
+            .filter(
+                Q(dispatch_plan_id__in=plan_ids)
+                | Q(lines__dispatch_plan_id__in=plan_ids)
+            )
+            .distinct()
+            .order_by("-created_at")
+            .first()
+        )
+
+    def _latest_service_grpo_for_group(
+        self,
+        group_plans: List[DispatchPlan],
+    ) -> Optional[ServiceGRPOPosting]:
+        plan_ids = [plan.id for plan in group_plans]
+        return (
+            ServiceGRPOPosting.objects.filter(
+                Q(dispatch_plan_id__in=plan_ids)
+                | Q(lines__dispatch_plan_id__in=plan_ids)
+            )
+            .distinct()
+            .order_by("-created_at")
+            .first()
+        )
+
+    def _get_dispatch_bill_snapshot(self, dispatch_plan: DispatchPlan) -> Dict[str, Any]:
+        doc_num = (dispatch_plan.sap_invoice_doc_num or "").strip()
+        if not doc_num:
+            return {}
+        try:
+            reader = HanaDispatchBillReader(CompanyContext(self.company_code))
+            return reader.get_bill_by_number(doc_num) or {}
+        except Exception as exc:
+            logger.warning(
+                "Could not fetch dispatch SAP bill snapshot for service GRPO plan %s: %s",
+                dispatch_plan.id,
+                exc,
+            )
+            return {}
 
     def get_pending_grpo_entries(self) -> List[VehicleEntry]:
         """
@@ -196,7 +815,7 @@ class GRPOService:
         if user_comments:
             parts.append(user_comments)
 
-        return " | ".join(parts)
+        return self._truncate_sap_document_comments(" | ".join(parts))
 
     @transaction.atomic
     def post_grpo(
@@ -542,13 +1161,12 @@ class GRPOService:
         Get booked dispatch plans pending transport service GRPO posting.
         A plan appears here only after the transport booking is marked BOOKED.
         """
-        return (
+        plans = list(
             DispatchPlan.objects.filter(
                 company__code=self.company_code,
                 booking_status=DispatchPlanStatus.BOOKED,
                 is_active=True,
             )
-            .exclude(service_grpo_postings__status=GRPOStatus.POSTED)
             .select_related(
                 "company",
                 "vehicle",
@@ -556,10 +1174,52 @@ class GRPOService:
                 "driver",
                 "linked_vehicle_entry",
             )
-            .prefetch_related("service_grpo_postings")
+            .prefetch_related("service_grpo_postings", "service_grpo_lines")
             .distinct()
             .order_by("-updated_at", "-created_at")
         )
+        posted_plan_ids = set(
+            DispatchPlan.objects.filter(
+                company__code=self.company_code,
+                is_active=True,
+            )
+            .filter(
+                Q(service_grpo_postings__status=GRPOStatus.POSTED)
+                | Q(service_grpo_lines__service_grpo_posting__status=GRPOStatus.POSTED)
+            )
+            .values_list("id", flat=True)
+        )
+
+        grouped = {}
+        posted_group_keys = set()
+        group_counts = {}
+        for plan in plans:
+            key = self._service_group_key(plan)
+            group_counts[key] = group_counts.get(key, 0) + 1
+            if plan.id in posted_plan_ids:
+                posted_group_keys.add(key)
+                grouped.pop(key, None)
+                continue
+            if key in posted_group_keys:
+                continue
+            if key not in grouped:
+                grouped[key] = plan
+
+        result = []
+        for key, plan in grouped.items():
+            setattr(plan, "_service_group_invoice_count", group_counts.get(key, 1))
+            result.append(plan)
+        return result
+
+    @staticmethod
+    def _get_dispatch_bilty_attachment_name(dispatch_plan: DispatchPlan) -> str:
+        if not dispatch_plan.bilty_attachment:
+            return ""
+        filename = (
+            dispatch_plan.bilty_attachment_name
+            or os.path.basename(dispatch_plan.bilty_attachment.name)
+        )
+        return filename or "bilty_attachment"
 
     def get_service_grpo_preview_data(self, dispatch_plan_id: int) -> Dict[str, Any]:
         """Get dispatch booking data required for service GRPO posting."""
@@ -582,31 +1242,98 @@ class GRPOService:
         except DispatchPlan.DoesNotExist:
             raise ValueError(f"Dispatch plan {dispatch_plan_id} not found")
 
-        existing_grpo = dispatch_plan.service_grpo_postings.filter(
-            status=GRPOStatus.POSTED
-        ).first()
+        group_plans = self._get_service_group_plans(dispatch_plan)
+        existing_grpo = self._posted_service_grpo_for_group(group_plans)
         is_ready = (
-            dispatch_plan.booking_status == DispatchPlanStatus.BOOKED
+            all(plan.booking_status == DispatchPlanStatus.BOOKED for plan in group_plans)
             and existing_grpo is None
         )
 
-        amount = dispatch_plan.total_freight
-        if amount is None:
-            amount = dispatch_plan.freight
-        if amount is None:
-            amount = Decimal("0")
+        line_amounts = [self._line_amount_from_plan(plan) for plan in group_plans]
+        amount = sum(line_amounts, Decimal("0.00"))
 
-        bill_no = dispatch_plan.sap_invoice_doc_num or str(
-            dispatch_plan.sap_invoice_doc_entry
-        )
         vehicle_no = dispatch_plan.vehicle_no or (
             dispatch_plan.vehicle.vehicle_number if dispatch_plan.vehicle_id else ""
         )
-        service_description = f"Transport freight for dispatch bill {bill_no}"
-        if vehicle_no:
-            service_description = f"{service_description} - {vehicle_no}"
 
-        latest_grpo = dispatch_plan.service_grpo_postings.order_by("-created_at").first()
+        latest_grpo = self._latest_service_grpo_for_group(group_plans)
+        bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
+        item_summary = bill_snapshot.get("item_summary", "")
+        product_variety = (
+            dispatch_plan.product_variety
+            or self._infer_product_variety(item_summary)
+        )
+        service_description = self._infer_service_description(
+            item_summary,
+            product_variety,
+        )
+        delivery_point = self._infer_budget_delivery_point(dispatch_plan)
+        source_state = bill_snapshot.get("state", "") or dispatch_plan.place_of_supply
+        invoice_lines = []
+        total_litres = Decimal("0.000")
+        invoice_amount_total = Decimal("0.00")
+        for index, plan in enumerate(group_plans):
+            line_snapshot = self._get_dispatch_bill_snapshot(plan)
+            line_item_summary = line_snapshot.get("item_summary", "")
+            line_product_variety = (
+                plan.product_variety
+                or self._infer_product_variety(line_item_summary)
+            )
+            line_total_litres = plan.total_litres
+            if line_total_litres is None and line_snapshot:
+                line_total_litres = self._decimal_or_none(
+                    line_snapshot.get("total_litres"), "0.001"
+                )
+            line_invoice_weight = plan.invoice_weight
+            if line_invoice_weight is None and line_snapshot:
+                line_invoice_weight = self._decimal_or_none(
+                    line_snapshot.get("total_weight"), "0.001"
+                )
+            line_invoice_amount = plan.invoice_amount
+            if line_invoice_amount is None and line_snapshot:
+                line_invoice_amount = self._decimal_or_none(
+                    line_snapshot.get("doc_total"), "0.01"
+                )
+            if line_total_litres is not None:
+                total_litres += Decimal(str(line_total_litres))
+            if line_invoice_amount is not None:
+                invoice_amount_total += Decimal(str(line_invoice_amount))
+
+            invoice_lines.append(
+                {
+                    "dispatch_plan_id": plan.id,
+                    "sap_invoice_doc_entry": plan.sap_invoice_doc_entry,
+                    "sap_invoice_doc_num": plan.sap_invoice_doc_num,
+                    "invoice_number": plan.invoice_number
+                    or str(line_snapshot.get("doc_num") or ""),
+                    "customer_code": line_snapshot.get("card_code", ""),
+                    "customer_name": line_snapshot.get("card_name", ""),
+                    "source_state": line_snapshot.get("state", "") or plan.place_of_supply,
+                    "source_city": line_snapshot.get("city", ""),
+                    "service_description": self._infer_service_description(
+                        line_item_summary,
+                        line_product_variety,
+                    )[:255],
+                    "product_variety": line_product_variety,
+                    "total_litres": line_total_litres,
+                    "invoice_weight": line_invoice_weight,
+                    "invoice_amount": line_invoice_amount,
+                    "freight_amount": line_amounts[index],
+                }
+            )
+        total_litres = total_litres if total_litres != Decimal("0.000") else None
+        invoice_weight = dispatch_plan.invoice_weight
+        invoice_amount = dispatch_plan.invoice_amount
+        if invoice_amount is None and bill_snapshot:
+            invoice_amount = self._decimal_or_none(
+                bill_snapshot.get("doc_total"), "0.01"
+            )
+        if len(group_plans) > 1:
+            invoice_weight = None
+            invoice_amount = None
+        effective_month = dispatch_plan.effective_month or self._first_day_of_month(
+            dispatch_plan.dispatch_date or bill_snapshot.get("doc_date")
+        )
 
         return {
             "dispatch_plan_id": dispatch_plan.id,
@@ -623,10 +1350,44 @@ class GRPOService:
             "bilty_date": dispatch_plan.bilty_date,
             "freight": dispatch_plan.freight,
             "total_freight": dispatch_plan.total_freight,
+            "invoice_count": len(group_plans),
             "created_at": dispatch_plan.created_at,
             "updated_at": dispatch_plan.updated_at,
             "default_amount": amount,
             "default_service_description": service_description[:255],
+            "default_place_of_supply": (
+                "" if len(group_plans) > 1 else dispatch_plan.place_of_supply or source_state or "HR"
+            ),
+            "default_effective_month": effective_month,
+            "default_budget_delivery_point": delivery_point,
+            "default_location_code": dispatch_plan.service_location_code,
+            "default_location_name": dispatch_plan.service_location_name,
+            "default_sac_entry": dispatch_plan.sac_entry,
+            "default_sac_code": dispatch_plan.sac_code,
+            "default_product_variety": product_variety,
+            "default_total_litres": total_litres,
+            "default_sub_account": self._infer_service_sub_account(bill_snapshot),
+            "invoice_number": (
+                "" if len(group_plans) > 1 else dispatch_plan.invoice_number
+                or str(bill_snapshot.get("doc_num") or "")
+            ),
+            "eway_bill": (
+                "" if len(group_plans) > 1 else dispatch_plan.eway_bill
+                or bill_snapshot.get("sap_eway_bill", "")
+            ),
+            "invoice_weight": invoice_weight,
+            "invoice_amount": invoice_amount,
+            "source_state": source_state,
+            "source_city": bill_snapshot.get("city", ""),
+            "item_summary": item_summary,
+            "bilty_attachment": (
+                dispatch_plan.bilty_attachment.url
+                if dispatch_plan.bilty_attachment
+                else None
+            ),
+            "bilty_attachment_name": self._get_dispatch_bilty_attachment_name(
+                dispatch_plan
+            ),
             "grpo_status": existing_grpo.status if existing_grpo else (
                 latest_grpo.status if latest_grpo else None
             ),
@@ -636,6 +1397,7 @@ class GRPOService:
             "total_amount": existing_grpo.sap_doc_total if existing_grpo else (
                 latest_grpo.sap_doc_total if latest_grpo else None
             ),
+            "invoice_lines": invoice_lines,
         }
 
     def _build_service_structured_comments(
@@ -643,27 +1405,107 @@ class GRPOService:
         user,
         dispatch_plan: DispatchPlan,
         user_comments: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build structured comments string for SAP service GRPO."""
         full_name = user.get_full_name() if hasattr(user, "get_full_name") else str(user)
         username = getattr(user, "username", getattr(user, "email", str(user)))
-        bill_no = dispatch_plan.sap_invoice_doc_num or dispatch_plan.sap_invoice_doc_entry
 
         parts = [
-            "App: FactoryApp v2",
+            "App: JI",
             f"User: {full_name} ({username})",
-            f"Service GRPO: Transport",
-            f"Dispatch Bill: {bill_no}",
         ]
 
-        if dispatch_plan.vehicle_no:
-            parts.append(f"Vehicle: {dispatch_plan.vehicle_no}")
-        if dispatch_plan.bilty_no:
-            parts.append(f"Bilty: {dispatch_plan.bilty_no}")
-        if user_comments:
-            parts.append(user_comments)
-
         return " | ".join(parts)
+
+    def _get_service_attachment_sources(
+        self,
+        dispatch_plan: DispatchPlan,
+        attachments: Optional[list],
+        include_bilty_attachment: bool,
+    ) -> List[Dict[str, Any]]:
+        sources = []
+        if include_bilty_attachment and dispatch_plan.bilty_attachment:
+            sources.append(
+                {
+                    "kind": "dispatch_bilty",
+                    "file": dispatch_plan.bilty_attachment,
+                    "filename": self._get_dispatch_bilty_attachment_name(dispatch_plan),
+                }
+            )
+
+        for uploaded_file in attachments or []:
+            sources.append(
+                {
+                    "kind": "uploaded",
+                    "file": uploaded_file,
+                    "filename": uploaded_file.name,
+                }
+            )
+        return sources
+
+    @staticmethod
+    def _copy_attachment_to_temp(file_obj, filename: str) -> str:
+        suffix = os.path.splitext(filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            if hasattr(file_obj, "seek"):
+                try:
+                    file_obj.seek(0)
+                except Exception:
+                    pass
+            if hasattr(file_obj, "chunks"):
+                for chunk in file_obj.chunks():
+                    tmp.write(chunk)
+            else:
+                while True:
+                    chunk = file_obj.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    tmp.write(chunk)
+            tmp_path = tmp.name
+
+        if hasattr(file_obj, "seek"):
+            try:
+                file_obj.seek(0)
+            except Exception:
+                pass
+        return tmp_path
+
+    @staticmethod
+    def _create_service_attachment_record(
+        grpo_posting: ServiceGRPOPosting,
+        att_data: Dict[str, Any],
+        user,
+    ) -> None:
+        source_file = att_data["file"]
+        filename = att_data["filename"]
+
+        if att_data["kind"] == "dispatch_bilty":
+            attachment = ServiceGRPOAttachment(
+                service_grpo_posting=grpo_posting,
+                original_filename=filename,
+                sap_attachment_status=SAPAttachmentStatus.LINKED,
+                sap_absolute_entry=att_data["sap_absolute_entry"],
+                uploaded_by=user,
+            )
+            source_file.open("rb")
+            try:
+                attachment.file.save(filename, File(source_file), save=False)
+            finally:
+                source_file.close()
+            attachment.save()
+            return
+
+        if hasattr(source_file, "seek"):
+            source_file.seek(0)
+        ServiceGRPOAttachment.objects.create(
+            service_grpo_posting=grpo_posting,
+            file=source_file,
+            original_filename=filename,
+            sap_attachment_status=SAPAttachmentStatus.LINKED,
+            sap_absolute_entry=att_data["sap_absolute_entry"],
+            uploaded_by=user,
+        )
 
     @transaction.atomic
     def post_service_grpo(
@@ -676,10 +1518,26 @@ class GRPOService:
         amount: Decimal,
         tax_code: Optional[str] = None,
         gl_account: Optional[str] = None,
+        unit_price: Optional[Decimal] = None,
+        place_of_supply: Optional[str] = None,
+        effective_month: Optional[str] = None,
+        budget_delivery_point: Optional[str] = None,
+        sub_account: Optional[str] = None,
+        location_code: Optional[int] = None,
+        location_name: Optional[str] = None,
+        sac_entry: Optional[int] = None,
+        sac_code: Optional[str] = None,
+        product_variety: Optional[str] = None,
+        total_litres: Optional[Decimal] = None,
+        invoice_number: Optional[str] = None,
+        eway_bill: Optional[str] = None,
+        invoice_weight: Optional[Decimal] = None,
+        invoice_amount: Optional[Decimal] = None,
         comments: Optional[str] = None,
         vendor_ref: Optional[str] = None,
         extra_charges: Optional[List[Dict[str, Any]]] = None,
         attachments: Optional[list] = None,
+        include_bilty_attachment: bool = True,
         doc_date: Optional[str] = None,
         doc_due_date: Optional[str] = None,
         tax_date: Optional[str] = None,
@@ -701,17 +1559,16 @@ class GRPOService:
         except DispatchPlan.DoesNotExist:
             raise ValueError(f"Dispatch plan {dispatch_plan_id} not found")
 
-        if dispatch_plan.booking_status != DispatchPlanStatus.BOOKED:
+        group_plans = self._get_service_group_plans(dispatch_plan)
+        if any(plan.booking_status != DispatchPlanStatus.BOOKED for plan in group_plans):
             raise ValueError(
                 "Service GRPO can be posted only after the vehicle booking is Booked."
             )
 
-        existing_grpo = dispatch_plan.service_grpo_postings.filter(
-            status=GRPOStatus.POSTED
-        ).first()
+        existing_grpo = self._posted_service_grpo_for_group(group_plans)
         if existing_grpo:
             raise ValueError(
-                f"Service GRPO already posted for this dispatch plan. "
+                f"Service GRPO already posted for this bilty group. "
                 f"SAP Doc Num: {existing_grpo.sap_doc_num}"
             )
 
@@ -730,34 +1587,250 @@ class GRPOService:
         if not service_description:
             raise ValueError("Service description is required.")
 
+        unit_price = Decimal(str(unit_price)) if unit_price is not None else amount
+        place_of_supply = (place_of_supply or "").strip()
+        budget_delivery_point = (budget_delivery_point or "").strip()
+        sub_account = (sub_account or "").strip()
+        location_name = (location_name or "").strip()
+        sac_code = (sac_code or "").strip()
+        product_variety = (product_variety or "").strip()
+        invoice_number = (invoice_number or "").strip()
+        eway_bill = (eway_bill or "").strip()
+        total_litres = (
+            Decimal(str(total_litres)) if total_litres not in (None, "") else None
+        )
+        invoice_weight = (
+            Decimal(str(invoice_weight)) if invoice_weight not in (None, "") else None
+        )
+        invoice_amount = (
+            Decimal(str(invoice_amount)) if invoice_amount not in (None, "") else None
+        )
+
+        if effective_month:
+            effective_month = self._first_day_of_month(effective_month)
+        if not effective_month:
+            raise ValueError("Expense Effective Month is required for Service GRPO.")
+        effective_month_dimension = self._resolve_active_dimension_code(
+            2,
+            self._format_effective_month_dimension(effective_month),
+        )
+        if not effective_month_dimension:
+            raise ValueError(
+                "Expense Effective Month is not configured as an active SAP dimension code."
+            )
+        post_budget_as_dimension = self._is_active_budget_code(budget_delivery_point)
+        bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
+        group_line_data = []
+        aggregate_litres = Decimal("0.000")
+        aggregate_invoice_amount = Decimal("0.00")
+        line_weights = []
+
+        for plan in group_plans:
+            line_snapshot = self._get_dispatch_bill_snapshot(plan)
+            line_item_summary = line_snapshot.get("item_summary", "")
+            line_product_variety = (
+                plan.product_variety
+                or self._infer_product_variety(line_item_summary)
+                or product_variety
+            )
+            line_total_litres = plan.total_litres
+            if line_total_litres is None and line_snapshot:
+                line_total_litres = self._decimal_or_none(
+                    line_snapshot.get("total_litres"), "0.001"
+                )
+            line_invoice_weight = plan.invoice_weight
+            if line_invoice_weight is None and line_snapshot:
+                line_invoice_weight = self._decimal_or_none(
+                    line_snapshot.get("total_weight"), "0.001"
+                )
+            line_invoice_amount = plan.invoice_amount
+            if line_invoice_amount is None and line_snapshot:
+                line_invoice_amount = self._decimal_or_none(
+                    line_snapshot.get("doc_total"), "0.01"
+                )
+
+            if len(group_plans) == 1 and total_litres is not None:
+                line_total_litres = total_litres
+            if line_total_litres is not None:
+                aggregate_litres += Decimal(str(line_total_litres))
+            if line_invoice_amount is not None:
+                aggregate_invoice_amount += Decimal(str(line_invoice_amount))
+
+            weight = Decimal(str(line_total_litres or 0))
+            if weight <= 0:
+                weight = Decimal(str(line_invoice_weight or 0))
+            if weight <= 0:
+                weight = Decimal(str(line_invoice_amount or 0))
+            line_weights.append(weight)
+            group_line_data.append(
+                {
+                    "plan": plan,
+                    "snapshot": line_snapshot,
+                    "source_state": (
+                        line_snapshot.get("state")
+                        or plan.place_of_supply
+                        or place_of_supply
+                    ),
+                    "product_variety": line_product_variety,
+                    "total_litres": line_total_litres,
+                    "invoice_weight": line_invoice_weight,
+                    "invoice_amount": line_invoice_amount,
+                    "service_description": (
+                        service_description
+                        if len(group_plans) == 1
+                        else self._infer_service_description(
+                            line_item_summary,
+                            line_product_variety,
+                        )[:255]
+                    ),
+                }
+            )
+
+        saved_line_amounts = [self._line_amount_from_plan(plan) for plan in group_plans]
+        saved_amount_total = sum(saved_line_amounts, Decimal("0.00"))
+        if len(group_plans) == 1:
+            line_amounts = [amount]
+        elif saved_amount_total > 0 and abs(saved_amount_total - amount) <= Decimal("0.01"):
+            line_amounts = saved_line_amounts
+        else:
+            line_amounts = self._allocate_amount_by_weight(amount, line_weights)
+
+        if total_litres is None and aggregate_litres > 0:
+            total_litres = aggregate_litres
+        if invoice_amount is None and aggregate_invoice_amount > 0:
+            invoice_amount = aggregate_invoice_amount
+
         grpo_posting = ServiceGRPOPosting.objects.create(
             dispatch_plan=dispatch_plan,
             vendor_code=vendor_code,
             vendor_name=dispatch_plan.transporter_name,
+            place_of_supply=place_of_supply,
+            effective_month=effective_month,
+            budget_delivery_point=budget_delivery_point,
+            sub_account=sub_account,
+            location_code=location_code,
+            location_name=location_name,
+            sac_entry=sac_entry,
+            sac_code=sac_code,
+            product_variety=product_variety,
+            total_litres=total_litres,
             status=GRPOStatus.PENDING,
             posted_by=user,
         )
 
-        document_line = {
-            "ItemDescription": service_description,
-            "LineTotal": float(amount),
-        }
-        if gl_account:
-            document_line["AccountCode"] = gl_account
-        if tax_code:
-            document_line["TaxCode"] = tax_code
+        company_code = self.company_code.upper()
+        branch_state = self._get_sap_branch_states(self.company_code).get(int(branch_id), "")
+        document_lines = []
+        for index, line_data in enumerate(group_line_data):
+            plan = line_data["plan"]
+            line_snapshot = line_data["snapshot"]
+            line_amount = line_amounts[index]
+            line_unit_price = line_amount
+            line_invoice_number = (
+                plan.invoice_number
+                or str(line_snapshot.get("doc_num") or "")
+                or invoice_number
+            )
+            line_eway_bill = plan.eway_bill or line_snapshot.get("sap_eway_bill", "") or eway_bill
+            line_invoice_weight = line_data["invoice_weight"]
+            line_total_litres = line_data["total_litres"]
+            line_tax_code = self._resolve_service_line_tax_code(
+                requested_tax_code=tax_code,
+                branch_state=branch_state,
+                supply_state=line_data["source_state"],
+            )
+            line_data["tax_code"] = line_tax_code
+            product_dimension = self._resolve_active_dimension_code(
+                1,
+                line_data["product_variety"],
+                line_data["service_description"],
+            )
+            state_dimension = self._resolve_active_dimension_code(
+                5,
+                self._normalize_state(line_data["source_state"]),
+            )
 
-        structured_comments = self._build_service_structured_comments(
-            user, dispatch_plan, comments
-        )
+            document_line = {
+                "ItemDescription": line_data["service_description"],
+                "LineTotal": float(line_amount),
+                "UnitPrice": float(line_unit_price),
+                "U_UNE_SCHI": "N",
+                "U_UNE_CUNT": "Y",
+            }
+            if company_code != "JIVO_MART":
+                document_line["U_UNE_CALI"] = "Y"
+            if gl_account:
+                document_line["AccountCode"] = gl_account
+            if line_tax_code:
+                document_line["TaxCode"] = line_tax_code
+            if sac_entry:
+                document_line["SACEntry"] = int(sac_entry)
+            if location_code:
+                document_line["LocationCode"] = int(location_code)
+            if product_dimension:
+                document_line["CostingCode"] = product_dimension
+            if effective_month_dimension:
+                document_line["CostingCode2"] = effective_month_dimension
+            if post_budget_as_dimension:
+                document_line["CostingCode3"] = budget_delivery_point
+            if state_dimension:
+                document_line["CostingCode5"] = state_dimension
+            if sub_account:
+                document_line["U_Sub_Account"] = sub_account
+            customer_code = (line_snapshot.get("card_code") or "").strip()
+            if customer_code:
+                document_line["U_CardCode"] = customer_code
+            if line_total_litres is not None:
+                document_line["U_UNE_LTS"] = float(line_total_litres)
+                if company_code == "JIVO_MART":
+                    document_line["U_Disp_Qty"] = float(line_total_litres)
+                    document_line["U_Recvd_Qty"] = float(line_total_litres)
+            if dispatch_plan.bilty_no:
+                document_line["U_BilltyNumber"] = dispatch_plan.bilty_no
+            if company_code == "JIVO_BEVERAGES" and dispatch_plan.bilty_date:
+                document_line["U_BiltyDate"] = dispatch_plan.bilty_date.isoformat()
+            if line_invoice_number:
+                document_line["U_ARNO"] = line_invoice_number
 
+            remarks = []
+            if dispatch_plan.bilty_no:
+                remarks.append(f"BILTY NO {dispatch_plan.bilty_no}")
+            if line_data["product_variety"]:
+                remarks.append(f"Variety: {line_data['product_variety']}")
+            if line_eway_bill:
+                remarks.append(f"E-way Bill: {line_eway_bill}")
+            if line_invoice_weight is not None:
+                remarks.append(f"Charged Weight: {line_invoice_weight}")
+            if remarks:
+                document_line["U_Remarks"] = " | ".join(remarks)[:254]
+            document_lines.append(document_line)
+
+        structured_comments = self._build_service_structured_comments(user, dispatch_plan)
+
+        is_multi_invoice = len(group_plans) > 1
         grpo_payload = {
             "DocType": "dDocument_Service",
             "CardCode": vendor_code,
             "BPL_IDAssignedToInvoice": branch_id,
             "Comments": structured_comments,
-            "DocumentLines": [document_line],
+            "DocumentLines": document_lines,
         }
+        if place_of_supply and not is_multi_invoice:
+            grpo_payload["ShipPlace"] = place_of_supply
+        if dispatch_plan.bilty_no:
+            grpo_payload["U_BilltyNumber"] = dispatch_plan.bilty_no
+            grpo_payload["U_LRNUmber"] = dispatch_plan.bilty_no
+        if dispatch_plan.bilty_date:
+            grpo_payload["U_BiltyDate"] = dispatch_plan.bilty_date.isoformat()
+        if dispatch_plan.transporter_name:
+            grpo_payload["U_TransporterName"] = dispatch_plan.transporter_name
+        if dispatch_plan.vehicle_no:
+            grpo_payload["U_VehicleNoM"] = dispatch_plan.vehicle_no
+        if invoice_number and not is_multi_invoice:
+            grpo_payload["U_ARNO"] = invoice_number
+            grpo_payload["U_TransporterInvoice"] = invoice_number
+        if invoice_amount is not None and not is_multi_invoice:
+            grpo_payload["U_TotalAmt"] = float(invoice_amount)
 
         if doc_date:
             grpo_payload["DocDate"] = str(doc_date)
@@ -794,41 +1867,46 @@ class GRPOService:
         sap_client = SAPClient(company_code=self.company_code)
         attachment_records = []
         sap_absolute_entry = None
+        attachment_sources = self._get_service_attachment_sources(
+            dispatch_plan=dispatch_plan,
+            attachments=attachments,
+            include_bilty_attachment=include_bilty_attachment,
+        )
 
-        if attachments:
-            for uploaded_file in attachments:
-                suffix = os.path.splitext(uploaded_file.name)[1]
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                    for chunk in uploaded_file.chunks():
-                        tmp.write(chunk)
-                    tmp_path = tmp.name
-
+        if attachment_sources:
+            for attachment_source in attachment_sources:
+                filename = attachment_source["filename"]
+                file_obj = attachment_source["file"]
+                tmp_path = self._copy_attachment_to_temp(file_obj, filename)
                 try:
                     if sap_absolute_entry:
                         sap_client.add_line_to_existing_attachment(
                             absolute_entry=sap_absolute_entry,
                             file_path=tmp_path,
-                            filename=uploaded_file.name,
+                            filename=filename,
                         )
                         abs_entry = sap_absolute_entry
                     else:
                         sap_result = sap_client.upload_attachment(
                             file_path=tmp_path,
-                            filename=uploaded_file.name,
+                            filename=filename,
                         )
                         abs_entry = sap_result.get("AbsoluteEntry")
                     if abs_entry:
                         sap_absolute_entry = abs_entry
-                        attachment_records.append({
-                            "file": uploaded_file,
-                            "filename": uploaded_file.name,
-                            "sap_absolute_entry": abs_entry,
-                        })
+                        attachment_records.append(
+                            {
+                                **attachment_source,
+                                "sap_absolute_entry": abs_entry,
+                            }
+                        )
                 finally:
                     os.unlink(tmp_path)
 
             if sap_absolute_entry:
                 grpo_payload["AttachmentEntry"] = sap_absolute_entry
+
+        self._filter_purchase_delivery_note_udfs(grpo_payload)
 
         logger.info(
             "Service GRPO payload for dispatch plan %s: %s",
@@ -847,25 +1925,30 @@ class GRPOService:
             grpo_posting.posted_by = user
             grpo_posting.save()
 
-            ServiceGRPOLinePosting.objects.create(
-                service_grpo_posting=grpo_posting,
-                service_description=service_description,
-                amount=amount,
-                tax_code=tax_code or "",
-                gl_account=gl_account or "",
-            )
+            for index, line_data in enumerate(group_line_data):
+                ServiceGRPOLinePosting.objects.create(
+                    service_grpo_posting=grpo_posting,
+                    dispatch_plan=line_data["plan"],
+                    service_description=line_data["service_description"],
+                    amount=line_amounts[index],
+                    unit_price=line_amounts[index],
+                    tax_code=line_data.get("tax_code") or tax_code or "",
+                    gl_account=gl_account or "",
+                    sac_entry=sac_entry,
+                    sac_code=sac_code,
+                    location_code=location_code,
+                    location_name=location_name,
+                    project_code=budget_delivery_point,
+                    sub_account=sub_account,
+                    product_variety=line_data["product_variety"],
+                    total_litres=line_data["total_litres"],
+                )
 
             for att_data in attachment_records:
-                uploaded_file = att_data["file"]
-                if hasattr(uploaded_file, "seek"):
-                    uploaded_file.seek(0)
-                ServiceGRPOAttachment.objects.create(
-                    service_grpo_posting=grpo_posting,
-                    file=uploaded_file,
-                    original_filename=att_data["filename"],
-                    sap_attachment_status=SAPAttachmentStatus.LINKED,
-                    sap_absolute_entry=att_data["sap_absolute_entry"],
-                    uploaded_by=user,
+                self._create_service_attachment_record(
+                    grpo_posting=grpo_posting,
+                    att_data=att_data,
+                    user=user,
                 )
 
             logger.info(
