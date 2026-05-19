@@ -2,6 +2,7 @@ from django.test import SimpleTestCase
 from django.http import QueryDict
 
 from .serializers import DispatchPlanUpdateSerializer
+from .services import DispatchPlansService
 
 
 class DispatchPlanUpdateSerializerTests(SimpleTestCase):
@@ -61,3 +62,13 @@ class DispatchPlanUpdateSerializerTests(SimpleTestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("linked_invoice_doc_entries", serializer.errors)
+
+
+class DispatchPlanInvoiceDefaultsTests(SimpleTestCase):
+    def test_mineral_water_invoice_defaults_to_beverage_variety(self):
+        self.assertEqual(
+            DispatchPlansService._infer_product_variety(
+                "FG0000324 - PET BOTTLE 500 ML JIVO NATURAL MINERAL SPECIAL EDITION"
+            ),
+            "Beverage",
+        )

@@ -243,7 +243,10 @@ class DispatchPlansService:
     @staticmethod
     def _infer_product_variety(item_summary: str) -> str:
         normalized = (item_summary or "").lower()
-        if any(token in normalized for token in ("water", "drink", "beverage", "juice")):
+        if any(
+            token in normalized
+            for token in ("water", "mineral", "drink", "beverage", "juice")
+        ):
             return "Beverage"
         return "Oil" if item_summary.strip() else ""
 

@@ -586,6 +586,18 @@ class GRPOServiceTests(TestCase):
         field = ServiceGRPOPreviewSerializer().fields["default_effective_month"]
         self.assertEqual(field.to_representation(serializer.validated_data["effective_month"]), "2026-05")
 
+    def test_service_grpo_infers_beverage_water_from_mineral_item_summary(self):
+        service = GRPOService(company_code="TC001")
+        item_summary = "FG0000324 - PET BOTTLE 500 ML JIVO NATURAL MINERAL SPECIAL EDITION"
+
+        product_variety = service._infer_product_variety(item_summary)
+
+        self.assertEqual(product_variety, "Beverage")
+        self.assertEqual(
+            service._infer_service_description(item_summary, product_variety),
+            "Water",
+        )
+
 
 class GRPOAPITests(APITestCase):
     """Tests for GRPO API endpoints"""

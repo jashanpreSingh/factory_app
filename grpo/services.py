@@ -159,7 +159,7 @@ class GRPOService:
     @staticmethod
     def _infer_product_variety(item_summary: str) -> str:
         summary = (item_summary or "").lower()
-        if any(token in summary for token in ("water", "drink", "beverage", "juice")):
+        if any(token in summary for token in ("water", "mineral", "drink", "beverage", "juice")):
             return "Beverage"
         if summary:
             return "Oil"
@@ -169,7 +169,7 @@ class GRPOService:
     def _infer_service_description(item_summary: str, product_variety: str = "") -> str:
         summary = (item_summary or "").lower()
         service_tokens = [
-            (("water",), "Water"),
+            (("water", "mineral"), "Water"),
             (("drink",), "Drink"),
             (("juice",), "Juice"),
             (("beverage",), "Beverage"),
@@ -1259,9 +1259,10 @@ class GRPOService:
         latest_grpo = self._latest_service_grpo_for_group(group_plans)
         bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
         item_summary = bill_snapshot.get("item_summary", "")
+        inferred_product_variety = self._infer_product_variety(item_summary)
         product_variety = (
-            dispatch_plan.product_variety
-            or self._infer_product_variety(item_summary)
+            inferred_product_variety
+            or dispatch_plan.product_variety
         )
         service_description = self._infer_service_description(
             item_summary,
@@ -1275,9 +1276,10 @@ class GRPOService:
         for index, plan in enumerate(group_plans):
             line_snapshot = self._get_dispatch_bill_snapshot(plan)
             line_item_summary = line_snapshot.get("item_summary", "")
+            inferred_line_product_variety = self._infer_product_variety(line_item_summary)
             line_product_variety = (
-                plan.product_variety
-                or self._infer_product_variety(line_item_summary)
+                inferred_line_product_variety
+                or plan.product_variety
             )
             line_total_litres = plan.total_litres
             if line_total_litres is None and line_snapshot:
@@ -1620,6 +1622,11 @@ class GRPOService:
             )
         post_budget_as_dimension = self._is_active_budget_code(budget_delivery_point)
         bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
+        inferred_product_variety = self._infer_product_variety(
+            bill_snapshot.get("item_summary", "")
+        )
+        if inferred_product_variety:
+            product_variety = inferred_product_variety
         group_line_data = []
         aggregate_litres = Decimal("0.000")
         aggregate_invoice_amount = Decimal("0.00")
@@ -1628,10 +1635,15 @@ class GRPOService:
         for plan in group_plans:
             line_snapshot = self._get_dispatch_bill_snapshot(plan)
             line_item_summary = line_snapshot.get("item_summary", "")
+            inferred_line_product_variety = self._infer_product_variety(line_item_summary)
             line_product_variety = (
-                plan.product_variety
-                or self._infer_product_variety(line_item_summary)
+                inferred_line_product_variety
+                or plan.product_variety
                 or product_variety
+            )
+            line_service_description = self._infer_service_description(
+                line_item_summary,
+                line_product_variety,
             )
             line_total_litres = plan.total_litres
             if line_total_litres is None and line_snapshot:
@@ -1675,14 +1687,7 @@ class GRPOService:
                     "total_litres": line_total_litres,
                     "invoice_weight": line_invoice_weight,
                     "invoice_amount": line_invoice_amount,
-                    "service_description": (
-                        service_description
-                        if len(group_plans) == 1
-                        else self._infer_service_description(
-                            line_item_summary,
-                            line_product_variety,
-                        )[:255]
-                    ),
+                    "service_description": (line_service_description or service_description)[:255],
                 }
             )
 
