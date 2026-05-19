@@ -14,6 +14,7 @@ from .models import (
     SalesDispatchGateOut,
     SalesDispatchGateOutItem,
     SalesDispatchGatepassSequence,
+    SalesDispatchLock,
     UnitChoice,
 )
 
@@ -81,6 +82,14 @@ class SalesDispatchGateOutAdmin(admin.ModelAdmin):
 class SalesDispatchGatepassSequenceAdmin(admin.ModelAdmin):
     list_display = ("company", "financial_year", "last_number", "updated_at")
     list_filter = ("company", "financial_year")
+
+
+@admin.register(SalesDispatchLock)
+class SalesDispatchLockAdmin(admin.ModelAdmin):
+    list_display = ("company", "is_locked", "changed_by", "changed_at", "updated_at")
+    list_filter = ("company", "is_locked")
+    search_fields = ("company__name", "company__code", "reason")
+    readonly_fields = ("created_at", "updated_at", "changed_at")
 
 
 class JobWorkGateInItemInline(admin.TabularInline):

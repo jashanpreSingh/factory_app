@@ -8,6 +8,7 @@ from gate_core.models import (
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
     SalesDispatchGateOutItem,
+    SalesDispatchLock,
 )
 from gate_core.services.sales_dispatch_gatepass import get_gatepass_readiness
 
@@ -98,7 +99,7 @@ class SalesDispatchGateOutItemSerializer(serializers.ModelSerializer):
 
 
 class SalesDispatchAttachmentSerializer(serializers.ModelSerializer):
-    uploaded_by_name = serializers.CharField(source="uploaded_by.get_full_name", read_only=True)
+    uploaded_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesDispatchAttachment
@@ -121,6 +122,52 @@ class SalesDispatchAttachmentSerializer(serializers.ModelSerializer):
             "uploaded_by_name",
             "uploaded_at",
         ]
+
+    def get_uploaded_by_name(self, obj):
+        return user_display_name(obj.uploaded_by)
+
+
+class SalesDispatchLockSerializer(serializers.ModelSerializer):
+    changed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SalesDispatchLock
+        fields = [
+            "id",
+            "company",
+            "is_locked",
+            "reason",
+            "changed_by",
+            "changed_by_name",
+            "changed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_changed_by_name(self, obj):
+        return user_display_name(obj.changed_by)
+
+
+def user_display_name(user):
+    if not user:
+        return ""
+    get_full_name = getattr(user, "get_full_name", None)
+    if callable(get_full_name):
+        return get_full_name() or getattr(user, "username", "") or str(user)
+    return getattr(user, "full_name", "") or getattr(user, "username", "") or str(user)
+
+
+class SalesDispatchLockUpdateSerializer(serializers.Serializer):
+    is_locked = serializers.BooleanField()
+    reason = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+
+    def validate(self, attrs):
+        if attrs["is_locked"] and not attrs.get("reason", "").strip():
+            raise serializers.ValidationError(
+                {"reason": "Reason is required when locking Docking."}
+            )
+        return attrs
 
 
 class SalesDispatchGateOutSerializer(serializers.ModelSerializer):

@@ -23,6 +23,7 @@ from gate_core.models import (
     SalesDispatchGateOut,
     SalesDispatchGateOutItem,
     SalesDispatchGateOutStatus,
+    SalesDispatchLock,
 )
 from gate_core.serializers_sales_dispatch import (
     SalesDispatchAttachmentSerializer,
@@ -32,6 +33,8 @@ from gate_core.serializers_sales_dispatch import (
     SalesDispatchGateOutSerializer,
     SalesDispatchGateOutUpdateSerializer,
     SalesDispatchGatepassPrintSerializer,
+    SalesDispatchLockSerializer,
+    SalesDispatchLockUpdateSerializer,
     SalesDispatchReasonSerializer,
 )
 from gate_core.services.sales_dispatch_documents import SalesDispatchDocumentService
@@ -62,6 +65,152 @@ def sales_dispatch_queryset(company):
 
 def get_sales_dispatch_or_404(company, entry_id):
     return get_object_or_404(sales_dispatch_queryset(company), id=entry_id)
+
+
+def apply_sales_dispatch_filters(qs, query_params):
+    status_filter = query_params.get("status")
+    document_type = query_params.get("document_type")
+    from_date = query_params.get("from_date")
+    to_date = query_params.get("to_date")
+    search = (query_params.get("search") or "").strip()
+
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    if document_type:
+        qs = qs.filter(document_type=document_type)
+    if from_date:
+        qs = qs.filter(created_at__date__gte=from_date)
+    if to_date:
+        qs = qs.filter(created_at__date__lte=to_date)
+    if search:
+        qs = qs.filter(
+            Q(entry_no__icontains=search)
+            | Q(sap_doc_num__icontains=search)
+            | Q(vehicle_no__icontains=search)
+            | Q(customer_name__icontains=search)
+        )
+    return qs.distinct()
+
+
+def sales_dispatch_locked_response(company):
+    lock = SalesDispatchLock.for_company(company)
+    if not lock.is_locked:
+        return None
+
+    detail = "Docking gatepass printing is locked."
+    if lock.reason:
+        detail = f"{detail} Reason: {lock.reason}"
+    return Response(
+        {
+            "detail": detail,
+            "lock": SalesDispatchLockSerializer(lock).data,
+        },
+        status=423,
+    )
+
+
+class SalesDispatchLockView(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        lock = SalesDispatchLock.for_company(request.company.company)
+        return Response(SalesDispatchLockSerializer(lock).data)
+
+    def patch(self, request):
+        serializer = SalesDispatchLockUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        lock = SalesDispatchLock.for_company(request.company.company)
+        lock.is_locked = data["is_locked"]
+        lock.reason = data.get("reason", "") if data["is_locked"] else ""
+        lock.changed_by = request.user
+        lock.changed_at = timezone.now()
+        lock.updated_by = request.user
+        lock.save(
+            update_fields=[
+                "is_locked",
+                "reason",
+                "changed_by",
+                "changed_at",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return Response(SalesDispatchLockSerializer(lock).data)
+
+
+class SalesDispatchReportView(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        qs = apply_sales_dispatch_filters(
+            sales_dispatch_queryset(request.company.company),
+            request.query_params,
+        )
+        terminal_statuses = [
+            SalesDispatchGateOutStatus.DISPATCHED,
+            SalesDispatchGateOutStatus.CANCELLED,
+            SalesDispatchGateOutStatus.REJECTED,
+        ]
+        active = qs.exclude(status__in=terminal_statuses)
+        missing_photo = active.filter(
+            Q(truck_photo="")
+            | Q(truck_photo__isnull=True)
+            | Q(photo_latitude__isnull=True)
+            | Q(photo_longitude__isnull=True)
+        )
+        gatepass_pending = active.filter(
+            status__in=[
+                SalesDispatchGateOutStatus.DOCKED,
+                SalesDispatchGateOutStatus.PHOTO_ATTACHED,
+                SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
+            ]
+        )
+        printed_not_committed = qs.filter(status=SalesDispatchGateOutStatus.GATEPASS_PRINTED)
+        ready_for_dispatch = qs.filter(status=SalesDispatchGateOutStatus.PRINT_COMMITTED)
+        dispatched = qs.filter(status=SalesDispatchGateOutStatus.DISPATCHED)
+        rejected_cancelled = qs.filter(
+            status__in=[
+                SalesDispatchGateOutStatus.REJECTED,
+                SalesDispatchGateOutStatus.CANCELLED,
+            ]
+        )
+
+        return Response(
+            {
+                "counts": {
+                    "total": qs.count(),
+                    "waiting_inside": active.count(),
+                    "missing_photo": missing_photo.count(),
+                    "gatepass_pending": gatepass_pending.count(),
+                    "printed_not_committed": printed_not_committed.count(),
+                    "ready_for_dispatch": ready_for_dispatch.count(),
+                    "dispatched": dispatched.count(),
+                    "rejected_cancelled": rejected_cancelled.count(),
+                },
+                "waiting_inside": SalesDispatchGateOutSerializer(
+                    active.order_by("created_at")[:20],
+                    many=True,
+                ).data,
+                "missing_photo": SalesDispatchGateOutSerializer(
+                    missing_photo.order_by("created_at")[:20],
+                    many=True,
+                ).data,
+                "gatepass_pending": SalesDispatchGateOutSerializer(
+                    gatepass_pending.order_by("created_at")[:20],
+                    many=True,
+                ).data,
+                "ready_for_dispatch": SalesDispatchGateOutSerializer(
+                    ready_for_dispatch.order_by("created_at")[:20],
+                    many=True,
+                ).data,
+                "rejected_cancelled": SalesDispatchGateOutSerializer(
+                    rejected_cancelled.order_by("-updated_at")[:20],
+                    many=True,
+                ).data,
+            }
+        )
 
 
 class SalesDispatchDocumentListView(APIView):
@@ -126,30 +275,11 @@ class SalesDispatchGateOutListCreateView(APIView):
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def get(self, request):
-        qs = sales_dispatch_queryset(request.company.company)
-        status_filter = request.query_params.get("status")
-        document_type = request.query_params.get("document_type")
-        from_date = request.query_params.get("from_date")
-        to_date = request.query_params.get("to_date")
-        search = (request.query_params.get("search") or "").strip()
-
-        if status_filter:
-            qs = qs.filter(status=status_filter)
-        if document_type:
-            qs = qs.filter(document_type=document_type)
-        if from_date:
-            qs = qs.filter(created_at__date__gte=from_date)
-        if to_date:
-            qs = qs.filter(created_at__date__lte=to_date)
-        if search:
-            qs = qs.filter(
-                Q(entry_no__icontains=search)
-                | Q(sap_doc_num__icontains=search)
-                | Q(vehicle_no__icontains=search)
-                | Q(customer_name__icontains=search)
-            )
-
-        return Response(SalesDispatchGateOutSerializer(qs.distinct(), many=True).data)
+        qs = apply_sales_dispatch_filters(
+            sales_dispatch_queryset(request.company.company),
+            request.query_params,
+        )
+        return Response(SalesDispatchGateOutSerializer(qs, many=True).data)
 
     def post(self, request):
         serializer = SalesDispatchGateOutCreateSerializer(data=request.data)
@@ -436,6 +566,10 @@ class SalesDispatchGatepassPrintView(APIView):
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def post(self, request, entry_id):
+        locked_response = sales_dispatch_locked_response(request.company.company)
+        if locked_response:
+            return locked_response
+
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
         serializer = SalesDispatchGatepassPrintSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -468,6 +602,10 @@ class SalesDispatchCommitPrintView(APIView):
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def post(self, request, entry_id):
+        locked_response = sales_dispatch_locked_response(request.company.company)
+        if locked_response:
+            return locked_response
+
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
         if entry.status != SalesDispatchGateOutStatus.GATEPASS_PRINTED:
             return Response(
@@ -498,6 +636,16 @@ class SalesDispatchMarkDispatchedView(APIView):
         if entry.status != SalesDispatchGateOutStatus.PRINT_COMMITTED:
             return Response(
                 {"detail": "Print must be committed before marking Docking as dispatched."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not entry.gatepass_no or not entry.print_committed_at:
+            return Response(
+                {
+                    "detail": (
+                        "Gatepass number and final print commit timestamp are required "
+                        "before marking Docking as dispatched."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         with transaction.atomic():

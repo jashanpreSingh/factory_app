@@ -53,7 +53,9 @@ from .views_sales_dispatch import (
     SalesDispatchGateOutListCreateView,
     SalesDispatchGatepassPreviewView,
     SalesDispatchGatepassPrintView,
+    SalesDispatchLockView,
     SalesDispatchMarkDispatchedView,
+    SalesDispatchReportView,
     SalesDispatchRejectView,
 )
 
@@ -92,6 +94,8 @@ urlpatterns = [
     # Docking / sales dispatch gate-out URLs
     path('sales-dispatch/documents/', SalesDispatchDocumentListView.as_view(), name='sales_dispatch_documents'),
     path('sales-dispatch/documents/<str:document_type>/<int:doc_entry>/', SalesDispatchDocumentDetailView.as_view(), name='sales_dispatch_document_detail'),
+    path('sales-dispatch/lock/', SalesDispatchLockView.as_view(), name='sales_dispatch_lock'),
+    path('sales-dispatch/reports/', SalesDispatchReportView.as_view(), name='sales_dispatch_reports'),
     path('sales-dispatch/by-vehicle-entry/<int:vehicle_entry_id>/', SalesDispatchGateOutByVehicleEntryView.as_view(), name='sales_dispatch_by_vehicle_entry'),
     path('sales-dispatch/<int:entry_id>/attachments/', SalesDispatchAttachmentListCreateView.as_view(), name='sales_dispatch_attachments'),
     path('sales-dispatch/<int:entry_id>/gatepass/preview/', SalesDispatchGatepassPreviewView.as_view(), name='sales_dispatch_gatepass_preview'),

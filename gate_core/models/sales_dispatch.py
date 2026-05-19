@@ -82,6 +82,46 @@ class SalesDispatchGatepassSequence(models.Model):
             return f"DCK/{company.code}/{financial_year}/{sequence.last_number:06d}"
 
 
+class SalesDispatchLock(BaseModel):
+    """Company-level hold for Docking gatepass printing."""
+
+    company = models.ForeignKey(
+        "company.Company",
+        on_delete=models.PROTECT,
+        related_name="sales_dispatch_locks",
+    )
+    is_locked = models.BooleanField(default=False)
+    reason = models.TextField(blank=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales_dispatch_locks_changed",
+    )
+    changed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company"],
+                name="unique_sales_dispatch_lock_company",
+            )
+        ]
+        permissions = [
+            ("can_manage_sales_dispatch_lock", "Can manage sales dispatch lock"),
+        ]
+
+    def __str__(self):
+        state = "locked" if self.is_locked else "unlocked"
+        return f"{self.company} Docking {state}"
+
+    @classmethod
+    def for_company(cls, company):
+        lock, _ = cls.objects.get_or_create(company=company)
+        return lock
+
+
 class SalesDispatchGateOut(BaseModel):
     """Docking gate-out record for finished-goods invoice or stock-transfer dispatch."""
 

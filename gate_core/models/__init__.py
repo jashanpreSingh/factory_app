@@ -17,4 +17,5 @@ from .sales_dispatch import (
     SalesDispatchGateOutItem,
     SalesDispatchGateOutStatus,
     SalesDispatchGatepassSequence,
+    SalesDispatchLock,
 )
