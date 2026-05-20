@@ -12,6 +12,7 @@ from .models import (
     RejectedQCReturnItem,
     SalesDispatchAttachment,
     SalesDispatchGateOut,
+    SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
     SalesDispatchGatepassSequence,
     SalesDispatchLock,
@@ -52,8 +53,17 @@ class SalesDispatchGateOutItemInline(admin.TabularInline):
     model = SalesDispatchGateOutItem
     extra = 0
     readonly_fields = (
-        "line_num", "item_code", "item_name", "quantity", "uom",
+        "document", "line_num", "item_code", "item_name", "quantity", "uom",
         "warehouse_code", "from_warehouse", "to_warehouse",
+    )
+
+
+class SalesDispatchGateOutDocumentInline(admin.TabularInline):
+    model = SalesDispatchGateOutDocument
+    extra = 0
+    readonly_fields = (
+        "document_type", "sap_doc_entry", "sap_doc_num", "customer_name",
+        "sap_branch_id", "sap_doc_total", "dispatch_plan",
     )
 
 
@@ -75,7 +85,24 @@ class SalesDispatchGateOutAdmin(admin.ModelAdmin):
         "vehicle_no", "driver_name", "customer_name", "gatepass_no",
     )
     readonly_fields = ("entry_no", "gatepass_no", "created_at", "updated_at")
-    inlines = [SalesDispatchGateOutItemInline, SalesDispatchAttachmentInline]
+    inlines = [
+        SalesDispatchGateOutDocumentInline,
+        SalesDispatchGateOutItemInline,
+        SalesDispatchAttachmentInline,
+    ]
+
+
+@admin.register(SalesDispatchGateOutDocument)
+class SalesDispatchGateOutDocumentAdmin(admin.ModelAdmin):
+    list_display = (
+        "sales_dispatch", "company", "document_type", "sap_doc_num",
+        "customer_name", "sap_branch_id", "created_at",
+    )
+    list_filter = ("company", "document_type", "sap_branch_id")
+    search_fields = (
+        "sales_dispatch__entry_no", "sap_doc_num", "customer_name", "customer_code",
+    )
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(SalesDispatchGatepassSequence)

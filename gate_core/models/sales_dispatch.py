@@ -359,6 +359,24 @@ class SalesDispatchGateOut(BaseModel):
         return f"{prefix}-{next_number:04d}"
 
     def build_qr_payload(self):
+        documents = []
+        if self.pk:
+            documents = [
+                {
+                    "document_type": document.document_type,
+                    "sap_doc_entry": document.sap_doc_entry,
+                    "sap_doc_num": document.sap_doc_num,
+                }
+                for document in self.documents.all().order_by("id")
+            ]
+        if not documents:
+            documents = [
+                {
+                    "document_type": self.document_type,
+                    "sap_doc_entry": self.sap_doc_entry,
+                    "sap_doc_num": self.sap_doc_num,
+                }
+            ]
         return json.dumps(
             {
                 "entry_no": self.entry_no,
@@ -366,6 +384,7 @@ class SalesDispatchGateOut(BaseModel):
                 "document_type": self.document_type,
                 "sap_doc_entry": self.sap_doc_entry,
                 "sap_doc_num": self.sap_doc_num,
+                "documents": documents,
                 "vehicle_no": self.vehicle_no,
                 "random_code": self.random_code,
             },
@@ -396,10 +415,87 @@ class SalesDispatchGateOut(BaseModel):
         )
 
 
+class SalesDispatchGateOutDocument(BaseModel):
+    """SAP document carried by a Docking truck/load."""
+
+    sales_dispatch = models.ForeignKey(
+        SalesDispatchGateOut,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    company = models.ForeignKey(
+        "company.Company",
+        on_delete=models.PROTECT,
+        related_name="sales_dispatch_gate_out_documents",
+    )
+    dispatch_plan = models.ForeignKey(
+        "dispatch_plans.DispatchPlan",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_dispatch_gate_out_documents",
+    )
+    document_type = models.CharField(
+        max_length=30,
+        choices=SalesDispatchDocumentType.choices,
+    )
+    sap_doc_entry = models.IntegerField()
+    sap_doc_num = models.CharField(max_length=50, blank=True)
+    sap_doc_date = models.DateField(null=True, blank=True)
+    sap_doc_total = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    sap_branch_id = models.IntegerField(null=True, blank=True)
+    sap_branch_name = models.CharField(max_length=150, blank=True)
+    sap_reference = models.CharField(max_length=150, blank=True)
+    sap_comments = models.TextField(blank=True)
+
+    customer_code = models.CharField(max_length=50, blank=True)
+    customer_name = models.CharField(max_length=200, blank=True)
+    ship_to_code = models.CharField(max_length=100, blank=True)
+    ship_to_address = models.TextField(blank=True)
+    place_of_supply = models.CharField(max_length=150, blank=True)
+    bp_gstin = models.CharField(max_length=30, blank=True)
+    eway_bill = models.CharField(max_length=100, blank=True)
+
+    from_warehouse = models.CharField(max_length=50, blank=True)
+    to_warehouse = models.CharField(max_length=50, blank=True)
+    warehouses = models.TextField(blank=True)
+    item_summary = models.TextField(blank=True)
+    base_refs = models.TextField(blank=True)
+    total_quantity = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
+    total_litres = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
+    total_boxes = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
+    total_weight = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [
+            models.Index(fields=["company", "document_type", "sap_doc_entry"]),
+            models.Index(fields=["sales_dispatch", "document_type"]),
+            models.Index(fields=["sap_doc_num"]),
+            models.Index(fields=["customer_name"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sales_dispatch", "document_type", "sap_doc_entry"],
+                name="unique_sales_dispatch_child_document",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.sales_dispatch.entry_no} - {self.sap_doc_num or self.sap_doc_entry}"
+
+
 class SalesDispatchGateOutItem(BaseModel):
     sales_dispatch = models.ForeignKey(
         SalesDispatchGateOut,
         on_delete=models.CASCADE,
+        related_name="items",
+    )
+    document = models.ForeignKey(
+        SalesDispatchGateOutDocument,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="items",
     )
     line_num = models.IntegerField()
@@ -428,6 +524,9 @@ class SalesDispatchGateOutItem(BaseModel):
                 fields=["sales_dispatch", "line_num"],
                 name="unique_sales_dispatch_line",
             )
+        ]
+        indexes = [
+            models.Index(fields=["sales_dispatch", "document", "line_num"]),
         ]
 
     def __str__(self):

@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -11,6 +12,7 @@ from driver_management.models import Driver, VehicleEntry
 from gate_core.models import (
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
+    SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
     SalesDispatchGateOutStatus,
     SalesDispatchLock,
@@ -49,6 +51,59 @@ class SalesDispatchAPITests(APITestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
         self.company_header = {"HTTP_COMPANY_CODE": self.company.code}
+
+    def sap_document(
+        self,
+        doc_entry,
+        *,
+        doc_num=None,
+        branch_id=1,
+        card_code=None,
+        card_name=None,
+        eway_bill="EWB-1",
+        doc_total=Decimal("100.00"),
+    ):
+        return {
+            "document_type": SalesDispatchDocumentType.INVOICE,
+            "doc_entry": doc_entry,
+            "doc_num": doc_num or str(doc_entry),
+            "doc_date": timezone.localdate(),
+            "doc_total": doc_total,
+            "branch_id": branch_id,
+            "branch_name": "Jivo Oil",
+            "card_code": card_code or f"CUST{doc_entry}",
+            "card_name": card_name or f"Customer {doc_entry}",
+            "ship_to_code": "SHIP",
+            "ship_to_address": "Test Address",
+            "place_of_supply": "HR",
+            "bp_gstin": "GSTIN",
+            "eway_bill": eway_bill,
+            "vehicle_no": self.vehicle.vehicle_number,
+            "transporter_name": self.transporter.name,
+            "bilty_no": "BLT-1",
+            "bilty_date": timezone.localdate(),
+            "from_warehouse": "",
+            "to_warehouse": "",
+            "warehouses": "FG0000318",
+            "item_summary": f"ITEM-{doc_entry} - Test Item",
+            "base_refs": str(doc_entry),
+            "total_quantity": Decimal("10.000"),
+            "total_litres": Decimal("5.000"),
+            "total_boxes": Decimal("1.000"),
+            "total_weight": Decimal("80.000"),
+            "items": [
+                {
+                    "line_num": 0,
+                    "item_code": f"ITEM-{doc_entry}",
+                    "item_name": "Test Item",
+                    "quantity": Decimal("10.000"),
+                    "uom": "BOX",
+                    "warehouse_code": "FG0000318",
+                    "total_weight": Decimal("80.000"),
+                }
+            ],
+            "plan": None,
+        }
 
     def create_sales_dispatch(
         self,
@@ -278,3 +333,193 @@ class SalesDispatchAPITests(APITestCase):
         self.assertIn("Gatepass number", response.data["detail"])
         entry.refresh_from_db()
         self.assertEqual(entry.status, SalesDispatchGateOutStatus.PRINT_COMMITTED)
+
+    @patch("gate_core.views_sales_dispatch.SalesDispatchDocumentService.get_document")
+    def test_create_sales_dispatch_keeps_single_document_payload_compatible(self, get_document):
+        get_document.return_value = self.sap_document(626050342, doc_num="626050342")
+
+        response = self.client.post(
+            "/api/v1/gate-core/sales-dispatch/",
+            {
+                "document_type": SalesDispatchDocumentType.INVOICE,
+                "sap_doc_entry": 626050342,
+                "vehicle_id": self.vehicle.id,
+                "driver_id": self.driver.id,
+            },
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["document_count"], 1)
+        self.assertEqual(len(response.data["documents"]), 1)
+        entry = SalesDispatchGateOut.objects.get(id=response.data["id"])
+        document = entry.documents.get()
+        self.assertEqual(document.sap_doc_entry, 626050342)
+        self.assertEqual(entry.items.get().document_id, document.id)
+
+    @patch("gate_core.views_sales_dispatch.SalesDispatchDocumentService.get_document")
+    def test_create_sales_dispatch_accepts_multi_invoice_documents(self, get_document):
+        docs = {
+            626050342: self.sap_document(
+                626050342,
+                doc_num="626050342",
+                card_code="CUST-A",
+                card_name="Customer A",
+                eway_bill="EWB-A",
+                doc_total=Decimal("100.00"),
+            ),
+            1808192112: self.sap_document(
+                1808192112,
+                doc_num="1808192112",
+                card_code="CUST-B",
+                card_name="Customer B",
+                eway_bill="EWB-B",
+                doc_total=Decimal("250.00"),
+            ),
+        }
+        get_document.side_effect = lambda document_type, doc_entry: docs[doc_entry]
+
+        response = self.client.post(
+            "/api/v1/gate-core/sales-dispatch/",
+            {
+                "documents": [
+                    {
+                        "document_type": SalesDispatchDocumentType.INVOICE,
+                        "sap_doc_entry": 626050342,
+                    },
+                    {
+                        "document_type": SalesDispatchDocumentType.INVOICE,
+                        "sap_doc_entry": 1808192112,
+                    },
+                ],
+                "vehicle_id": self.vehicle.id,
+                "driver_id": self.driver.id,
+            },
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["document_count"], 2)
+        self.assertEqual(response.data["document_numbers"], ["626050342", "1808192112"])
+        self.assertEqual(response.data["sap_doc_total"], "350.00")
+        self.assertEqual(response.data["total_weight"], "160.000")
+        self.assertCountEqual(
+            [warning["code"] for warning in response.data["warnings"]],
+            ["MULTIPLE_CUSTOMERS", "MULTIPLE_EWAY_BILLS"],
+        )
+        entry = SalesDispatchGateOut.objects.get(id=response.data["id"])
+        self.assertEqual(entry.documents.count(), 2)
+        self.assertEqual(entry.items.count(), 2)
+        self.assertEqual(
+            list(entry.items.order_by("line_num").values_list("line_num", flat=True)),
+            [0, 1],
+        )
+
+    @patch("gate_core.views_sales_dispatch.SalesDispatchDocumentService.get_document")
+    def test_create_sales_dispatch_blocks_multi_invoice_branch_mismatch(self, get_document):
+        docs = {
+            1: self.sap_document(1, branch_id=1),
+            2: self.sap_document(2, branch_id=2),
+        }
+        get_document.side_effect = lambda document_type, doc_entry: docs[doc_entry]
+
+        response = self.client.post(
+            "/api/v1/gate-core/sales-dispatch/",
+            {
+                "documents": [
+                    {
+                        "document_type": SalesDispatchDocumentType.INVOICE,
+                        "sap_doc_entry": 1,
+                    },
+                    {
+                        "document_type": SalesDispatchDocumentType.INVOICE,
+                        "sap_doc_entry": 2,
+                    },
+                ],
+                "vehicle_id": self.vehicle.id,
+                "driver_id": self.driver.id,
+            },
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("same SAP branch", response.data["detail"])
+        self.assertEqual(SalesDispatchGateOut.objects.count(), 0)
+
+    def test_mark_dispatched_updates_all_document_dispatch_plans(self):
+        first_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=70001,
+            sap_invoice_doc_num="70001",
+            booking_status=DispatchPlanStatus.BOOKED,
+            vehicle=self.vehicle,
+            transporter=self.transporter,
+            driver=self.driver,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        second_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=70002,
+            sap_invoice_doc_num="70002",
+            booking_status=DispatchPlanStatus.BOOKED,
+            vehicle=self.vehicle,
+            transporter=self.transporter,
+            driver=self.driver,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        entry = self.create_sales_dispatch(
+            "22",
+            status_value=SalesDispatchGateOutStatus.PRINT_COMMITTED,
+            dispatch_plan=first_plan,
+            with_photo=True,
+            with_item=True,
+            with_weighment=True,
+        )
+        entry.gatepass_no = "DCK/JIVO_OIL/2026-27/000022"
+        entry.print_committed_at = timezone.now()
+        entry.save(update_fields=["gatepass_no", "print_committed_at"])
+        first_document = SalesDispatchGateOutDocument.objects.create(
+            sales_dispatch=entry,
+            company=self.company,
+            dispatch_plan=first_plan,
+            document_type=SalesDispatchDocumentType.INVOICE,
+            sap_doc_entry=70001,
+            sap_doc_num="70001",
+        )
+        second_document = SalesDispatchGateOutDocument.objects.create(
+            sales_dispatch=entry,
+            company=self.company,
+            dispatch_plan=second_plan,
+            document_type=SalesDispatchDocumentType.INVOICE,
+            sap_doc_entry=70002,
+            sap_doc_num="70002",
+        )
+        entry.items.update(document=first_document)
+        SalesDispatchGateOutItem.objects.create(
+            sales_dispatch=entry,
+            document=second_document,
+            line_num=1,
+            item_code="ITEM-2",
+            item_name="Second Item",
+            quantity=Decimal("1.000"),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/dispatch/",
+            {},
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        first_plan.refresh_from_db()
+        second_plan.refresh_from_db()
+        self.assertEqual(first_plan.booking_status, DispatchPlanStatus.DISPATCHED)
+        self.assertEqual(second_plan.booking_status, DispatchPlanStatus.DISPATCHED)

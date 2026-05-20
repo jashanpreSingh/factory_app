@@ -14,6 +14,7 @@ from .sales_dispatch import (
     SalesDispatchAttachmentType,
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
+    SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
     SalesDispatchGateOutStatus,
     SalesDispatchGatepassSequence,

@@ -7,6 +7,7 @@ from gate_core.models import (
     SalesDispatchAttachmentType,
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
+    SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
     SalesDispatchLock,
 )
@@ -72,10 +73,14 @@ class SalesDispatchDocumentSerializer(serializers.Serializer):
 
 
 class SalesDispatchGateOutItemSerializer(serializers.ModelSerializer):
+    document_sap_doc_num = serializers.CharField(source="document.sap_doc_num", read_only=True)
+
     class Meta:
         model = SalesDispatchGateOutItem
         fields = [
             "id",
+            "document",
+            "document_sap_doc_num",
             "line_num",
             "item_code",
             "item_name",
@@ -94,6 +99,46 @@ class SalesDispatchGateOutItemSerializer(serializers.ModelSerializer):
             "total_litres",
             "total_boxes",
             "total_weight",
+        ]
+        read_only_fields = fields
+
+
+class SalesDispatchGateOutDocumentSerializer(serializers.ModelSerializer):
+    items = SalesDispatchGateOutItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SalesDispatchGateOutDocument
+        fields = [
+            "id",
+            "dispatch_plan",
+            "document_type",
+            "sap_doc_entry",
+            "sap_doc_num",
+            "sap_doc_date",
+            "sap_doc_total",
+            "sap_branch_id",
+            "sap_branch_name",
+            "sap_reference",
+            "sap_comments",
+            "customer_code",
+            "customer_name",
+            "ship_to_code",
+            "ship_to_address",
+            "place_of_supply",
+            "bp_gstin",
+            "eway_bill",
+            "from_warehouse",
+            "to_warehouse",
+            "warehouses",
+            "item_summary",
+            "base_refs",
+            "total_quantity",
+            "total_litres",
+            "total_boxes",
+            "total_weight",
+            "items",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = fields
 
@@ -174,8 +219,12 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
     vehicle_entry_no = serializers.CharField(source="vehicle_entry.entry_no", read_only=True)
     vehicle_entry_status = serializers.CharField(source="vehicle_entry.status", read_only=True)
     items = SalesDispatchGateOutItemSerializer(many=True, read_only=True)
+    documents = SalesDispatchGateOutDocumentSerializer(many=True, read_only=True)
     attachments = SalesDispatchAttachmentSerializer(many=True, read_only=True)
     gatepass_readiness = serializers.SerializerMethodField()
+    document_count = serializers.SerializerMethodField()
+    document_numbers = serializers.SerializerMethodField()
+    primary_document = serializers.SerializerMethodField()
     gross_weight = serializers.SerializerMethodField()
     tare_weight = serializers.SerializerMethodField()
     net_weight = serializers.SerializerMethodField()
@@ -193,6 +242,10 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
             "vehicle",
             "transporter",
             "driver",
+            "documents",
+            "document_count",
+            "document_numbers",
+            "primary_document",
             "document_type",
             "sap_doc_entry",
             "sap_doc_num",
@@ -277,6 +330,27 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
     def get_gatepass_readiness(self, obj):
         return get_gatepass_readiness(obj)
 
+    def get_document_count(self, obj):
+        documents = getattr(obj, "documents", None)
+        if documents is None:
+            return 1
+        return documents.count() or 1
+
+    def get_document_numbers(self, obj):
+        documents = list(obj.documents.all())
+        numbers = [document.sap_doc_num for document in documents if document.sap_doc_num]
+        return numbers or ([obj.sap_doc_num] if obj.sap_doc_num else [])
+
+    def get_primary_document(self, obj):
+        document = obj.documents.all().first()
+        if not document:
+            return {
+                "document_type": obj.document_type,
+                "sap_doc_entry": obj.sap_doc_entry,
+                "sap_doc_num": obj.sap_doc_num,
+            }
+        return SalesDispatchGateOutDocumentSerializer(document).data
+
     def _weighment_value(self, obj, field):
         weighment = getattr(obj.vehicle_entry, "weighment", None)
         return getattr(weighment, field, None) if weighment else None
@@ -292,8 +366,16 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
 
 
 class SalesDispatchGateOutCreateSerializer(serializers.Serializer):
-    document_type = serializers.ChoiceField(choices=SalesDispatchDocumentType.choices)
-    sap_doc_entry = serializers.IntegerField()
+    document_type = serializers.ChoiceField(
+        choices=SalesDispatchDocumentType.choices,
+        required=False,
+    )
+    sap_doc_entry = serializers.IntegerField(required=False)
+    documents = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        allow_empty=False,
+    )
     vehicle_id = serializers.IntegerField()
     driver_id = serializers.IntegerField()
     dispatch_plan_id = serializers.IntegerField(required=False, allow_null=True)
@@ -316,6 +398,61 @@ class SalesDispatchGateOutCreateSerializer(serializers.Serializer):
     )
     dock_incharge = serializers.CharField(required=False, allow_blank=True, default="")
     remarks = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        documents = attrs.get("documents")
+        if documents:
+            normalized_documents = []
+            seen = set()
+            for index, raw_document in enumerate(documents):
+                document_type = raw_document.get("document_type") or attrs.get("document_type")
+                sap_doc_entry = raw_document.get("sap_doc_entry") or raw_document.get("doc_entry")
+                if not document_type or sap_doc_entry in (None, ""):
+                    raise serializers.ValidationError(
+                        {
+                            "documents": (
+                                "Each document requires document_type and sap_doc_entry."
+                            )
+                        }
+                    )
+                try:
+                    sap_doc_entry = int(sap_doc_entry)
+                except (TypeError, ValueError) as exc:
+                    raise serializers.ValidationError(
+                        {"documents": f"Document {index + 1} has an invalid SAP DocEntry."}
+                    ) from exc
+                key = (str(document_type).upper(), sap_doc_entry)
+                if key in seen:
+                    raise serializers.ValidationError(
+                        {"documents": "Duplicate SAP documents are not allowed."}
+                    )
+                seen.add(key)
+                normalized_documents.append(
+                    {
+                        "document_type": document_type,
+                        "sap_doc_entry": sap_doc_entry,
+                        "dispatch_plan_id": raw_document.get("dispatch_plan_id"),
+                    }
+                )
+            attrs["documents"] = normalized_documents
+            attrs["document_type"] = normalized_documents[0]["document_type"]
+            attrs["sap_doc_entry"] = normalized_documents[0]["sap_doc_entry"]
+            if not attrs.get("dispatch_plan_id"):
+                attrs["dispatch_plan_id"] = normalized_documents[0].get("dispatch_plan_id")
+            return attrs
+
+        if not attrs.get("document_type") or attrs.get("sap_doc_entry") in (None, ""):
+            raise serializers.ValidationError(
+                "document_type and sap_doc_entry are required."
+            )
+        attrs["documents"] = [
+            {
+                "document_type": attrs["document_type"],
+                "sap_doc_entry": attrs["sap_doc_entry"],
+                "dispatch_plan_id": attrs.get("dispatch_plan_id"),
+            }
+        ]
+        return attrs
 
 
 class SalesDispatchGateOutUpdateSerializer(serializers.Serializer):

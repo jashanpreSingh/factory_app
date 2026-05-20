@@ -21,6 +21,7 @@ from gate_core.models import (
     SalesDispatchAttachmentType,
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
+    SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
     SalesDispatchGateOutStatus,
     SalesDispatchLock,
@@ -59,7 +60,7 @@ def sales_dispatch_queryset(company):
             "transporter",
             "driver",
         )
-        .prefetch_related("items", "attachments")
+        .prefetch_related("documents", "items", "attachments")
     )
 
 
@@ -77,7 +78,7 @@ def apply_sales_dispatch_filters(qs, query_params):
     if status_filter:
         qs = qs.filter(status=status_filter)
     if document_type:
-        qs = qs.filter(document_type=document_type)
+        qs = qs.filter(Q(document_type=document_type) | Q(documents__document_type=document_type))
     if from_date:
         qs = qs.filter(created_at__date__gte=from_date)
     if to_date:
@@ -86,8 +87,10 @@ def apply_sales_dispatch_filters(qs, query_params):
         qs = qs.filter(
             Q(entry_no__icontains=search)
             | Q(sap_doc_num__icontains=search)
+            | Q(documents__sap_doc_num__icontains=search)
             | Q(vehicle_no__icontains=search)
             | Q(customer_name__icontains=search)
+            | Q(documents__customer_name__icontains=search)
         )
     return qs.distinct()
 
@@ -287,8 +290,17 @@ class SalesDispatchGateOutListCreateView(APIView):
         data = serializer.validated_data
 
         service = SalesDispatchDocumentService(request.company.company)
+        document_inputs = data["documents"]
+        documents = []
         try:
-            document = service.get_document(data["document_type"], data["sap_doc_entry"])
+            for document_input in document_inputs:
+                document = service.get_document(
+                    document_input["document_type"],
+                    document_input["sap_doc_entry"],
+                )
+                if not document:
+                    raise NotFound("Selected Docking document was not found in SAP")
+                documents.append(document)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except SAPConnectionError:
@@ -302,42 +314,25 @@ class SalesDispatchGateOutListCreateView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        if not document:
-            raise NotFound("Selected Docking document was not found in SAP")
+        validation_error = self._validate_document_set(request.company.company, documents)
+        if validation_error:
+            return validation_error
 
-        duplicate = SalesDispatchGateOut.objects.filter(
-            company=request.company.company,
-            document_type=document["document_type"],
-            sap_doc_entry=document["doc_entry"],
-            is_active=True,
-            status__in=[
-                SalesDispatchGateOutStatus.DOCKED,
-                SalesDispatchGateOutStatus.PHOTO_ATTACHED,
-                SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
-                SalesDispatchGateOutStatus.GATEPASS_PRINTED,
-                SalesDispatchGateOutStatus.PRINT_COMMITTED,
-                SalesDispatchGateOutStatus.DISPATCHED,
-            ],
-        ).first()
-        if duplicate:
-            return Response(
-                {
-                    "detail": f"This SAP document is already docked as {duplicate.entry_no}.",
-                    "linked_sales_dispatch_id": duplicate.id,
-                    "linked_entry_no": duplicate.entry_no,
-                    "linked_entry_id": duplicate.vehicle_entry_id,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        duplicate_response = self._duplicate_response(request.company.company, documents)
+        if duplicate_response:
+            return duplicate_response
 
         vehicle = get_object_or_404(Vehicle, id=data["vehicle_id"])
         driver = get_object_or_404(Driver, id=data["driver_id"])
         transporter = vehicle.transporter
-        dispatch_plan = None
-        if data.get("dispatch_plan_id"):
+        dispatch_plans_by_doc_entry = {}
+        for document_input, document in zip(document_inputs, documents):
+            dispatch_plan_id = document_input.get("dispatch_plan_id")
+            if not dispatch_plan_id:
+                continue
             dispatch_plan = get_object_or_404(
                 DispatchPlan,
-                id=data["dispatch_plan_id"],
+                id=dispatch_plan_id,
                 company=request.company.company,
                 is_active=True,
             )
@@ -347,6 +342,11 @@ class SalesDispatchGateOutListCreateView(APIView):
                         {"detail": "Dispatch plan does not match selected invoice."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+            dispatch_plans_by_doc_entry[document["doc_entry"]] = dispatch_plan
+
+        primary_document = documents[0]
+        dispatch_plan = dispatch_plans_by_doc_entry.get(primary_document["doc_entry"])
+        warnings = self._document_warnings(documents)
 
         with transaction.atomic():
             vehicle_entry = VehicleEntry.objects.create(
@@ -368,10 +368,10 @@ class SalesDispatchGateOutListCreateView(APIView):
                 vehicle=vehicle,
                 transporter=transporter,
                 driver=driver,
-                **self._document_snapshot(document),
+                **self._header_snapshot(documents),
                 **self._transport_snapshot(vehicle, driver, transporter),
-                bilty_no=data.get("bilty_no") or document.get("bilty_no", ""),
-                bilty_date=data.get("bilty_date") or document.get("bilty_date"),
+                bilty_no=data.get("bilty_no") or primary_document.get("bilty_no", ""),
+                bilty_date=data.get("bilty_date") or primary_document.get("bilty_date"),
                 freight=data.get("freight"),
                 total_freight=data.get("total_freight"),
                 dock_incharge=data.get("dock_incharge", ""),
@@ -382,12 +382,173 @@ class SalesDispatchGateOutListCreateView(APIView):
                 created_by=request.user,
                 updated_by=request.user,
             )
-            self._create_items(entry, document, request.user)
+            next_line_num = 0
+            for document in documents:
+                document_row = SalesDispatchGateOutDocument.objects.create(
+                    sales_dispatch=entry,
+                    company=request.company.company,
+                    dispatch_plan=dispatch_plans_by_doc_entry.get(document["doc_entry"]),
+                    created_by=request.user,
+                    updated_by=request.user,
+                    **self._document_snapshot(document),
+                )
+                next_line_num = self._create_items(
+                    entry,
+                    document_row,
+                    document,
+                    request.user,
+                    next_line_num,
+                )
 
-        return Response(
-            SalesDispatchGateOutSerializer(entry).data,
-            status=status.HTTP_201_CREATED,
+        response_data = SalesDispatchGateOutSerializer(entry).data
+        response_data["warnings"] = warnings
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+    @staticmethod
+    def _active_statuses():
+        return [
+            SalesDispatchGateOutStatus.DOCKED,
+            SalesDispatchGateOutStatus.PHOTO_ATTACHED,
+            SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
+            SalesDispatchGateOutStatus.GATEPASS_PRINTED,
+            SalesDispatchGateOutStatus.PRINT_COMMITTED,
+            SalesDispatchGateOutStatus.DISPATCHED,
+        ]
+
+    def _validate_document_set(self, company, documents):
+        document_types = {document["document_type"] for document in documents}
+        if len(document_types) > 1:
+            return Response(
+                {"detail": "Invoice and stock transfer documents cannot be mixed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        document_type = next(iter(document_types))
+        if document_type == SalesDispatchDocumentType.STOCK_TRANSFER and len(documents) > 1:
+            return Response(
+                {"detail": "Stock transfer Docking supports one SAP document for now."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        branch_ids = {
+            document.get("branch_id")
+            for document in documents
+            if document.get("branch_id") is not None
+        }
+        if len(branch_ids) > 1:
+            return Response(
+                {"detail": "Selected invoices must belong to the same SAP branch."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def _duplicate_response(self, company, documents):
+        for document in documents:
+            duplicate_document = (
+                SalesDispatchGateOutDocument.objects
+                .filter(
+                    company=company,
+                    document_type=document["document_type"],
+                    sap_doc_entry=document["doc_entry"],
+                    is_active=True,
+                    sales_dispatch__is_active=True,
+                    sales_dispatch__status__in=self._active_statuses(),
+                )
+                .select_related("sales_dispatch")
+                .first()
+            )
+            duplicate = duplicate_document.sales_dispatch if duplicate_document else None
+            if not duplicate:
+                duplicate = SalesDispatchGateOut.objects.filter(
+                    company=company,
+                    document_type=document["document_type"],
+                    sap_doc_entry=document["doc_entry"],
+                    is_active=True,
+                    status__in=self._active_statuses(),
+                ).first()
+            if duplicate:
+                return Response(
+                    {
+                        "detail": (
+                            f"SAP document {document.get('doc_num') or document['doc_entry']} "
+                            f"is already docked as {duplicate.entry_no}."
+                        ),
+                        "linked_sales_dispatch_id": duplicate.id,
+                        "linked_entry_no": duplicate.entry_no,
+                        "linked_entry_id": duplicate.vehicle_entry_id,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return None
+
+    @staticmethod
+    def _document_warnings(documents):
+        warnings = []
+        customer_names = {
+            (document.get("card_name") or document.get("card_code") or "").strip()
+            for document in documents
+            if (document.get("card_name") or document.get("card_code") or "").strip()
+        }
+        eway_bills = {
+            (document.get("eway_bill") or "").strip()
+            for document in documents
+            if (document.get("eway_bill") or "").strip()
+        }
+        if len(customer_names) > 1:
+            warnings.append(
+                {
+                    "code": "MULTIPLE_CUSTOMERS",
+                    "message": "Selected invoices belong to different customers.",
+                }
+            )
+        if len(eway_bills) > 1:
+            warnings.append(
+                {
+                    "code": "MULTIPLE_EWAY_BILLS",
+                    "message": "Selected invoices have different e-way bills.",
+                }
+            )
+        return warnings
+
+    @staticmethod
+    def _join_unique(values):
+        result = []
+        for value in values:
+            value = str(value or "").strip()
+            if value and value not in result:
+                result.append(value)
+        return ", ".join(result)
+
+    @staticmethod
+    def _sum_documents(documents, key, places="0.001"):
+        values = [decimal_or_none(document.get(key), places) for document in documents]
+        values = [value for value in values if value is not None]
+        if not values:
+            return None
+        return sum(values, Decimal("0"))
+
+    def _header_snapshot(self, documents):
+        primary = documents[0]
+        snapshot = self._document_snapshot(primary)
+        snapshot["sap_doc_num"] = self._join_unique(document.get("doc_num", "") for document in documents)
+        snapshot["sap_doc_total"] = self._sum_documents(documents, "doc_total", "0.01")
+        snapshot["sap_reference"] = self._join_unique(
+            document.get("sap_reference") or document.get("base_refs", "")
+            for document in documents
         )
+        snapshot["customer_code"] = self._join_unique(document.get("card_code", "") for document in documents)
+        snapshot["customer_name"] = self._join_unique(document.get("card_name", "") for document in documents)
+        snapshot["eway_bill"] = self._join_unique(document.get("eway_bill", "") for document in documents)
+        snapshot["warehouses"] = self._join_unique(document.get("warehouses", "") for document in documents)
+        snapshot["item_summary"] = " | ".join(
+            document.get("item_summary", "")
+            for document in documents
+            if document.get("item_summary", "")
+        )
+        snapshot["base_refs"] = self._join_unique(document.get("base_refs", "") for document in documents)
+        snapshot["total_quantity"] = self._sum_documents(documents, "total_quantity")
+        snapshot["total_litres"] = self._sum_documents(documents, "total_litres")
+        snapshot["total_boxes"] = self._sum_documents(documents, "total_boxes")
+        snapshot["total_weight"] = self._sum_documents(documents, "total_weight")
+        return snapshot
 
     @staticmethod
     def _document_snapshot(document):
@@ -435,17 +596,21 @@ class SalesDispatchGateOutListCreateView(APIView):
         }
 
     @staticmethod
-    def _create_items(entry, document, user):
-        items = [
-            SalesDispatchGateOutItem(
-                sales_dispatch=entry,
-                created_by=user,
-                updated_by=user,
-                **item,
+    def _create_items(entry, document_row, document, user, start_line_num=0):
+        items = []
+        for index, item in enumerate(SalesDispatchDocumentService.iter_items(document)):
+            item["line_num"] = start_line_num + index
+            items.append(
+                SalesDispatchGateOutItem(
+                    sales_dispatch=entry,
+                    document=document_row,
+                    created_by=user,
+                    updated_by=user,
+                    **item,
+                )
             )
-            for item in SalesDispatchDocumentService.iter_items(document)
-        ]
         SalesDispatchGateOutItem.objects.bulk_create(items)
+        return start_line_num + len(items)
 
 
 class SalesDispatchGateOutDetailView(APIView):
@@ -665,10 +830,21 @@ class SalesDispatchMarkDispatchedView(APIView):
             entry.vehicle_entry.status = "COMPLETED"
             entry.vehicle_entry.updated_by = request.user
             entry.vehicle_entry.save(update_fields=["status", "updated_by", "updated_at"])
+            dispatch_plans = list(
+                DispatchPlan.objects
+                .filter(sales_dispatch_gate_out_documents__sales_dispatch=entry)
+                .distinct()
+            )
             if entry.dispatch_plan_id:
-                entry.dispatch_plan.booking_status = DispatchPlanStatus.DISPATCHED
-                entry.dispatch_plan.updated_by = request.user
-                entry.dispatch_plan.save(update_fields=["booking_status", "updated_by", "updated_at"])
+                dispatch_plans.append(entry.dispatch_plan)
+            seen_plan_ids = set()
+            for dispatch_plan in dispatch_plans:
+                if dispatch_plan.id in seen_plan_ids:
+                    continue
+                seen_plan_ids.add(dispatch_plan.id)
+                dispatch_plan.booking_status = DispatchPlanStatus.DISPATCHED
+                dispatch_plan.updated_by = request.user
+                dispatch_plan.save(update_fields=["booking_status", "updated_by", "updated_at"])
         return Response(SalesDispatchGateOutSerializer(entry).data)
 
 
