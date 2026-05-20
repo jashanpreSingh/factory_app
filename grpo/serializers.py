@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import (
     GRPOPosting,
@@ -124,10 +126,11 @@ class ExtraChargeInputSerializer(serializers.Serializer):
     """Serializer for additional expense charges on GRPO"""
     expense_code = serializers.IntegerField(
         required=True,
+        min_value=1,
         help_text="SAP Expense Code (from Additional Expenses setup)"
     )
     amount = serializers.DecimalField(
-        max_digits=18, decimal_places=2, required=True, min_value=0,
+        max_digits=18, decimal_places=2, required=True, min_value=Decimal("0.01"),
         help_text="Total amount for this charge"
     )
     remarks = serializers.CharField(
@@ -448,6 +451,14 @@ class ServiceGRPOSubAccountOptionSerializer(serializers.Serializer):
     sub_account_name = serializers.CharField()
 
 
+class ServiceGRPOExpenseCodeOptionSerializer(serializers.Serializer):
+    expense_code = serializers.IntegerField()
+    expense_name = serializers.CharField()
+    expense_account = serializers.CharField(allow_blank=True)
+    revenue_account = serializers.CharField(allow_blank=True)
+    sac_code = serializers.CharField(allow_blank=True)
+
+
 class ServiceGRPOOptionsSerializer(serializers.Serializer):
     branches = ServiceGRPOBranchOptionSerializer(many=True)
     tax_codes = ServiceGRPOTaxCodeOptionSerializer(many=True)
@@ -456,6 +467,7 @@ class ServiceGRPOOptionsSerializer(serializers.Serializer):
     locations = ServiceGRPOLocationOptionSerializer(many=True)
     projects = ServiceGRPOProjectOptionSerializer(many=True)
     sub_accounts = ServiceGRPOSubAccountOptionSerializer(many=True)
+    expense_codes = ServiceGRPOExpenseCodeOptionSerializer(many=True)
 
 
 class GRPOLinePostingSerializer(serializers.ModelSerializer):

@@ -729,6 +729,92 @@ class GRPOSerializerTests(TestCase):
         self.assertEqual(vd["items"][0]["unit_price"], Decimal("50.00"))
         self.assertEqual(vd["items"][0]["variety"], "Grade-A")
 
+    def test_extra_charge_rejects_zero_expense_code(self):
+        """Extra charges must use a real SAP Additional Expense code."""
+        from grpo.serializers import ServiceGRPOPostRequestSerializer
+
+        data = {
+            "dispatch_plan_id": 8,
+            "vendor_code": "VENDA001571",
+            "branch_id": 2,
+            "service_description": "Oil",
+            "amount": "8480.00",
+            "extra_charges": [
+                {
+                    "expense_code": 0,
+                    "amount": "2130.00",
+                    "remarks": "unloading",
+                }
+            ],
+        }
+
+        serializer = ServiceGRPOPostRequestSerializer(data=data)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("extra_charges", serializer.errors)
+        self.assertEqual(
+            serializer.errors["extra_charges"][0]["expense_code"][0].code,
+            "min_value",
+        )
+
+    def test_extra_charge_rejects_zero_amount(self):
+        """Empty extra-charge rows should be rejected before SAP posting."""
+        from grpo.serializers import GRPOPostRequestSerializer
+
+        data = {
+            "vehicle_entry_id": 1,
+            "po_receipt_id": 2,
+            "items": [{"po_item_receipt_id": 10, "accepted_qty": "95.000"}],
+            "branch_id": 1,
+            "extra_charges": [
+                {
+                    "expense_code": 3,
+                    "amount": "0.00",
+                    "remarks": "Freight",
+                }
+            ],
+        }
+
+        serializer = GRPOPostRequestSerializer(data=data)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("extra_charges", serializer.errors)
+        self.assertEqual(
+            serializer.errors["extra_charges"][0]["amount"][0].code,
+            "min_value",
+        )
+
+    def test_service_grpo_options_serializer_includes_expense_codes(self):
+        """Service GRPO options should expose SAP additional expense codes."""
+        from grpo.serializers import ServiceGRPOOptionsSerializer
+
+        data = {
+            "branches": [],
+            "tax_codes": [],
+            "gl_accounts": [],
+            "sac_codes": [],
+            "locations": [],
+            "projects": [],
+            "sub_accounts": [],
+            "expense_codes": [
+                {
+                    "expense_code": 3,
+                    "expense_name": "FREIGHT OUTWARD",
+                    "expense_account": "5670001",
+                    "revenue_account": "4200009",
+                    "sac_code": "00996791",
+                }
+            ],
+        }
+
+        serializer = ServiceGRPOOptionsSerializer(data)
+
+        self.assertEqual(serializer.data["expense_codes"][0]["expense_code"], 3)
+        self.assertEqual(
+            serializer.data["expense_codes"][0]["expense_name"],
+            "FREIGHT OUTWARD",
+        )
+
     def test_grpo_post_request_serializer_minimal(self):
         """Test minimal GRPO post request (only required fields)"""
         from grpo.serializers import GRPOPostRequestSerializer
