@@ -44,7 +44,7 @@ class StockDashboardAPI(APIView):
         warehouse - comma-separated warehouse codes
         item_group - SAP item group name
         status - comma-separated healthy, low, critical, unset
-        movement_status - comma-separated planned, recent, slow
+        movement_status - comma-separated recent, slow
     """
 
     permission_classes = [IsAuthenticated, HasCompanyContext, CanViewStockDashboard]

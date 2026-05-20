@@ -73,17 +73,13 @@ class HanaStockDashboardReader:
 
     # Maps each status to its SQL condition based on the health thresholds.
     # Slow-moving rows are excluded from all stock health statuses.
-    _UNGROUPED_PLANNED_QTY_SQL = 'IFNULL(plan."OpenPlanQty", 0)'
-    _UNGROUPED_REQUIRED_SQL = f'(w."MinStock" + {_UNGROUPED_PLANNED_QTY_SQL})'
-    _UNGROUPED_HAS_PLAN_SQL = 'IFNULL(plan."OpenPlanCount", 0) > 0'
-    _UNGROUPED_NO_PLAN_SQL = 'IFNULL(plan."OpenPlanCount", 0) = 0'
+    _UNGROUPED_REQUIRED_SQL = 'w."MinStock"'
     _UNGROUPED_DAYS_SQL = 'DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE)'
     _UNGROUPED_SLOW_SQL = (
-        f'{_UNGROUPED_NO_PLAN_SQL} AND '
-        f'(mov."LastConsumptionDate" IS NULL OR {_UNGROUPED_DAYS_SQL} > {SLOW_MOVING_DAYS})'
+        f'mov."LastConsumptionDate" IS NULL OR {_UNGROUPED_DAYS_SQL} > {SLOW_MOVING_DAYS}'
     )
     _UNGROUPED_NOT_SLOW_SQL = f'NOT ({_UNGROUPED_SLOW_SQL})'
-    _UNGROUPED_SLOW_OPERATIONAL_SQL = f'{_UNGROUPED_REQUIRED_SQL} > 0 AND {_UNGROUPED_SLOW_SQL}'
+    _UNGROUPED_SLOW_OPERATIONAL_SQL = f'{_UNGROUPED_REQUIRED_SQL} > 0 AND ({_UNGROUPED_SLOW_SQL})'
     _STATUS_SQL = {
         "unset":    f'{_UNGROUPED_REQUIRED_SQL} = 0 AND {_UNGROUPED_NOT_SLOW_SQL}',
         "healthy":  f'{_UNGROUPED_REQUIRED_SQL} > 0 AND w."OnHand" >= {_UNGROUPED_REQUIRED_SQL} AND {_UNGROUPED_NOT_SLOW_SQL}',
@@ -92,16 +88,13 @@ class HanaStockDashboardReader:
     }
 
     # Status conditions for aggregated (grouped) queries - uses SUM aliases.
-    _GROUPED_REQUIRED_SQL = "(min_stock + planned_qty)"
-    _GROUPED_HAS_PLAN_SQL = "has_open_plan > 0"
-    _GROUPED_NO_PLAN_SQL = "IFNULL(has_open_plan, 0) = 0"
+    _GROUPED_REQUIRED_SQL = "min_stock"
     _GROUPED_DAYS_SQL = "days_since_last_consumption"
     _GROUPED_SLOW_SQL = (
-        f"{_GROUPED_NO_PLAN_SQL} AND "
-        f"({_GROUPED_DAYS_SQL} IS NULL OR {_GROUPED_DAYS_SQL} > {SLOW_MOVING_DAYS})"
+        f"{_GROUPED_DAYS_SQL} IS NULL OR {_GROUPED_DAYS_SQL} > {SLOW_MOVING_DAYS}"
     )
     _GROUPED_NOT_SLOW_SQL = f"NOT ({_GROUPED_SLOW_SQL})"
-    _GROUPED_SLOW_OPERATIONAL_SQL = f"{_GROUPED_REQUIRED_SQL} > 0 AND {_GROUPED_SLOW_SQL}"
+    _GROUPED_SLOW_OPERATIONAL_SQL = f"{_GROUPED_REQUIRED_SQL} > 0 AND ({_GROUPED_SLOW_SQL})"
 
     _GROUPED_STATUS_SQL = {
         "unset":    f"{_GROUPED_REQUIRED_SQL} = 0 AND {_GROUPED_NOT_SLOW_SQL}",
@@ -118,7 +111,6 @@ class HanaStockDashboardReader:
         "warehouse":    'w."WhsCode"',
         "on_hand":      'w."OnHand"',
         "min_stock":    'w."MinStock"',
-        "planned_qty":   'IFNULL(plan."OpenPlanQty", 0)',
         # health_ratio is computed, so we use the ratio expression directly
         "health_ratio": f'CASE WHEN {_UNGROUPED_REQUIRED_SQL} > 0 THEN w."OnHand" / {_UNGROUPED_REQUIRED_SQL} ELSE 0 END',
     }
@@ -130,7 +122,6 @@ class HanaStockDashboardReader:
         "warehouse":    "warehouse_count",
         "on_hand":      "on_hand",
         "min_stock":    "min_stock",
-        "planned_qty":   "planned_qty",
         "health_ratio": f"CASE WHEN {_GROUPED_REQUIRED_SQL} > 0 THEN on_hand / {_GROUPED_REQUIRED_SQL} ELSE 0 END",
     }
 
@@ -154,25 +145,6 @@ class HanaStockDashboardReader:
                 GROUP BY n."ItemCode"
             ) mov
                 ON mov."ItemCode" = w."ItemCode"
-            LEFT JOIN (
-                SELECT
-                    c."ItemCode",
-                    IFNULL(c."wareHouse", '') AS "WhsCode",
-                    COUNT(*) AS "OpenPlanCount",
-                    SUM(IFNULL(c."PlannedQty", 0) - IFNULL(c."IssuedQty", 0)) AS "OpenPlanQty"
-                FROM "{schema}"."OWOR" po
-                JOIN "{schema}"."WOR1" c
-                    ON po."DocEntry" = c."DocEntry"
-                LEFT JOIN "{schema}"."OITM" cm
-                    ON c."ItemCode" = cm."ItemCode"
-                WHERE po."Status" IN ('P', 'R')
-                  AND c."ItemType" = 4
-                  AND cm."InvntItem" = 'Y'
-                  AND (IFNULL(c."PlannedQty", 0) - IFNULL(c."IssuedQty", 0)) > 0
-                GROUP BY c."ItemCode", IFNULL(c."wareHouse", '')
-            ) plan
-                ON plan."ItemCode" = w."ItemCode"
-                AND plan."WhsCode" = w."WhsCode"
         """
 
     def _build_base_where(self, filters: Dict[str, Any]) -> Tuple[List[str], List]:
@@ -247,22 +219,16 @@ class HanaStockDashboardReader:
             return ""
 
         if grouped:
-            has_plan = "has_open_plan > 0"
-            no_plan = "IFNULL(has_open_plan, 0) = 0"
             days = "days_since_last_consumption"
         else:
-            has_plan = 'IFNULL(plan."OpenPlanCount", 0) > 0'
-            no_plan = 'IFNULL(plan."OpenPlanCount", 0) = 0'
             days = 'DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE)'
 
         sql_map = {
-            "planned": has_plan,
             "recent": (
-                f'{no_plan} AND {days} IS NOT NULL '
+                f'{days} IS NOT NULL '
                 f'AND {days} <= {SLOW_MOVING_DAYS}'
             ),
             "slow": (
-                f'{no_plan} AND '
                 f'( {days} IS NULL OR {days} > {SLOW_MOVING_DAYS} )'
             ),
         }
@@ -290,12 +256,7 @@ class HanaStockDashboardReader:
                 CASE
                     WHEN mov."LastConsumptionDate" IS NULL THEN NULL
                     ELSE DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE)
-                END AS "DaysSinceLastConsumption",
-                CASE
-                    WHEN IFNULL(plan."OpenPlanCount", 0) > 0 THEN 1
-                    ELSE 0
-                END AS "HasOpenPlan",
-                IFNULL(plan."OpenPlanQty", 0) AS "PlannedQty"
+                END AS "DaysSinceLastConsumption"
             FROM "{schema}"."OITW" w
             JOIN "{schema}"."OITM" m
                 ON w."ItemCode" = m."ItemCode"
@@ -310,7 +271,7 @@ class HanaStockDashboardReader:
     def _build_stats_query(self, filters: Dict[str, Any]) -> Tuple[str, List]:
         """
         Counts items using the same thresholds as the service layer:
-          healthy:  on_hand >= benchmark + planned quantity
+          healthy:  on_hand >= benchmark
           low:      on_hand < required quantity and on_hand >= required * 0.6
           critical: on_hand < required * 0.6
         """
@@ -393,12 +354,7 @@ class HanaStockDashboardReader:
                 CASE
                     WHEN mov."LastConsumptionDate" IS NULL THEN NULL
                     ELSE DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE)
-                END AS "DaysSinceLastConsumption",
-                CASE
-                    WHEN IFNULL(plan."OpenPlanCount", 0) > 0 THEN 1
-                    ELSE 0
-                END AS "HasOpenPlan",
-                IFNULL(plan."OpenPlanQty", 0) AS "PlannedQty"
+                END AS "DaysSinceLastConsumption"
             FROM "{schema}"."OITW" w
             JOIN "{schema}"."OITM" m
                 ON w."ItemCode" = m."ItemCode"
@@ -438,16 +394,7 @@ class HanaStockDashboardReader:
                     MIN(CASE
                         WHEN mov."LastConsumptionDate" IS NULL THEN NULL
                         ELSE DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE)
-                    END) AS days_since_last_consumption,
-                    MAX(CASE
-                        WHEN IFNULL(plan."OpenPlanCount", 0) > 0 THEN 1
-                        ELSE 0
-                    END) AS has_open_plan,
-                    SUM(CASE
-                        WHEN w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) > 0
-                        THEN 1 ELSE 0
-                    END) AS planned_without_benchmark,
-                    SUM(IFNULL(plan."OpenPlanQty", 0)) AS planned_qty
+                    END) AS days_since_last_consumption
                 FROM "{schema}"."OITW" w
                 JOIN "{schema}"."OITM" m ON w."ItemCode" = m."ItemCode"
                 LEFT JOIN "{schema}"."OITB" grp
@@ -487,19 +434,10 @@ class HanaStockDashboardReader:
                 SELECT
                     SUM(w."OnHand")   AS on_hand,
                     SUM(w."MinStock") AS min_stock,
-                    SUM(IFNULL(plan."OpenPlanQty", 0)) AS planned_qty,
                     MIN(CASE
                         WHEN mov."LastConsumptionDate" IS NULL THEN NULL
                         ELSE DAYS_BETWEEN(mov."LastConsumptionDate", CURRENT_DATE)
-                    END) AS days_since_last_consumption,
-                    MAX(CASE
-                        WHEN IFNULL(plan."OpenPlanCount", 0) > 0 THEN 1
-                        ELSE 0
-                    END) AS has_open_plan,
-                    SUM(CASE
-                        WHEN w."MinStock" = 0 AND IFNULL(plan."OpenPlanCount", 0) > 0
-                        THEN 1 ELSE 0
-                    END) AS planned_without_benchmark
+                    END) AS days_since_last_consumption
                 FROM "{schema}"."OITW" w
                 JOIN "{schema}"."OITM" m ON w."ItemCode" = m."ItemCode"
                 LEFT JOIN "{schema}"."OITB" grp
@@ -524,9 +462,6 @@ class HanaStockDashboardReader:
             "low_warehouses": int(row[7] or 0),
             "last_consumption_date": self._format_date(row[8]),
             "days_since_last_consumption": int(row[9]) if row[9] is not None else None,
-            "has_open_plan": bool(row[10]),
-            "planned_without_benchmark": int(row[11] or 0),
-            "planned_qty": float(row[12] or 0),
         }
 
     # ------------------------------------------------------------------
@@ -546,8 +481,6 @@ class HanaStockDashboardReader:
             "uom": row[5] or "",
             "last_consumption_date": self._format_date(row[6]),
             "days_since_last_consumption": int(row[7]) if row[7] is not None else None,
-            "has_open_plan": bool(row[8]),
-            "planned_qty": float(row[9] or 0),
         }
 
     @staticmethod

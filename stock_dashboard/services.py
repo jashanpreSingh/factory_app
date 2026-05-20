@@ -95,8 +95,6 @@ class StockDashboardService:
             row["stock_status"] = self._stock_status(
                 row["on_hand"],
                 row["min_stock"],
-                planned_qty=row.get("planned_qty", 0),
-                has_open_plan=row.get("has_open_plan", False),
                 movement_status=row["movement_status"],
             )
             row["health_ratio"] = self._health_ratio(row)
@@ -108,9 +106,6 @@ class StockDashboardService:
             row["stock_status"] = self._stock_status(
                 row["on_hand"],
                 row["min_stock"],
-                planned_qty=row.get("planned_qty", 0),
-                has_open_plan=row.get("has_open_plan", False),
-                planned_without_benchmark=row.get("planned_without_benchmark", 0) > 0,
                 movement_status=row["movement_status"],
             )
             row["health_ratio"] = self._health_ratio(row)
@@ -132,14 +127,11 @@ class StockDashboardService:
     def _stock_status(
         on_hand: float,
         min_stock: float,
-        planned_qty: float = 0,
-        has_open_plan: bool = False,
-        planned_without_benchmark: bool = False,
         movement_status: str | None = None,
     ) -> str:
         if movement_status == "slow":
             return "none"
-        required_qty = min_stock + planned_qty
+        required_qty = min_stock
         if required_qty <= 0:
             return "unset"
         if on_hand >= required_qty:
@@ -150,14 +142,11 @@ class StockDashboardService:
 
     @staticmethod
     def _health_ratio(row: Dict) -> float:
-        required_qty = row["min_stock"] + row.get("planned_qty", 0)
+        required_qty = row["min_stock"]
         return round(row["on_hand"] / required_qty, 2) if required_qty > 0 else 0.0
 
     @staticmethod
     def _movement_status(row: Dict) -> str:
-        if row.get("has_open_plan"):
-            return "planned"
-
         days_since_consumption = row.get("days_since_last_consumption")
         if (
             days_since_consumption is not None

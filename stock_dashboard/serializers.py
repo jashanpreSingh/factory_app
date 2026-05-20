@@ -63,13 +63,13 @@ class StockDashboardFilterSerializer(serializers.Serializer):
     movement_status = serializers.CharField(
         required=False,
         default="",
-        help_text="Comma-separated movement statuses to filter by (planned,recent,slow)",
+        help_text="Comma-separated movement statuses to filter by (recent,slow)",
     )
 
     def validate_movement_status(self, value):
         if not value:
             return []
-        allowed = {"planned", "recent", "slow"}
+        allowed = {"recent", "slow"}
         statuses = [s.strip() for s in value.split(",") if s.strip()]
         invalid = set(statuses) - allowed
         if invalid:
@@ -85,7 +85,6 @@ class StockDashboardFilterSerializer(serializers.Serializer):
             "warehouse",
             "on_hand",
             "min_stock",
-            "planned_qty",
             "health_ratio",
         ],
         default="health_ratio",
@@ -113,7 +112,6 @@ class StockItemSerializer(serializers.Serializer):
     warehouse = serializers.CharField(default="")
     on_hand = serializers.FloatField()
     min_stock = serializers.FloatField()
-    planned_qty = serializers.FloatField(default=0)
     uom = serializers.CharField()
     stock_status = serializers.CharField()
     health_ratio = serializers.FloatField()
@@ -129,7 +127,6 @@ class StockItemSerializer(serializers.Serializer):
         allow_null=True,
         default=None,
     )
-    has_open_plan = serializers.BooleanField(default=False)
     # Grouped-only fields
     warehouse_count = serializers.IntegerField(default=1)
     has_warning = serializers.BooleanField(default=False)
