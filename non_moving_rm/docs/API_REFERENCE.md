@@ -58,10 +58,10 @@ Reads the selected company's SAP HANA schema directly and returns item-level dat
 
 | Parameter    | Type | Required | Min | Description                                  |
 |-------------|------|----------|-----|----------------------------------------------|
-| `age`       | int  | Yes      | 1   | Minimum days since last movement              |
+| `age`       | int  | Yes      | 0   | Minimum days since last movement; `0` returns all stock |
 | `item_group`| int  | No       | 0   | Item group code from OITB; omit or pass `0` for all groups |
 
-The API returns only rows where `days_since_last_movement >= age`. The HANA query is scoped to the company selected by the `Company-Code` header, and the service layer re-applies the threshold before building `data` and `summary`.
+The API returns only rows where `days_since_last_movement >= age`. Use `age=0` to include all stock, including recently moved stock. The HANA query is scoped to the company selected by the `Company-Code` header, and the service layer re-applies the threshold before building `data` and `summary`.
 
 **Response (200):**
 

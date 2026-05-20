@@ -37,10 +37,10 @@ class NonMovingRMReportAPI(APIView):
     Reads the selected company's SAP schema with Age and optional ItemGroup
     parameters and returns detailed item-level data with summary aggregations.
 
-    GET /api/v1/non-moving-rm/report/?age=45&item_group=105
+    GET /api/v1/non-moving-rm/report/?age=0&item_group=105
 
     Query parameters:
-        age         - (required) Number of days since last movement (e.g. 45, 90, 180)
+        age         - (required) Number of days since last movement; use 0 for all stock
         item_group  - (optional) Item group code from OITB (e.g. 105, 106); omit or 0 for all
     """
 

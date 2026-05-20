@@ -17,8 +17,8 @@ class NonMovingRMFilterSerializer(serializers.Serializer):
 
     age = serializers.IntegerField(
         required=True,
-        min_value=1,
-        help_text="Number of days since last movement (e.g. 45, 90, 180)",
+        min_value=0,
+        help_text="Number of days since last movement; use 0 to include all stock",
     )
     item_group = serializers.IntegerField(
         required=False,

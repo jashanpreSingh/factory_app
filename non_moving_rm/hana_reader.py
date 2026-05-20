@@ -84,8 +84,7 @@ WITH StockItems AS (
     INNER JOIN "{schema}"."OITM" T0 ON T0."ItemCode" = T1."ItemCode"
     INNER JOIN "{schema}"."OITB" T6 ON T6."ItmsGrpCod" = T0."ItmsGrpCod"
     INNER JOIN "{schema}"."OWHS" T5 ON T5."WhsCode" = T1."WhsCode"
-    WHERE T1."OnHand" > 0
-      AND COALESCE(T5."Inactive", 'N') <> 'Y'
+    WHERE COALESCE(T5."Inactive", 'N') <> 'Y'
       {item_group_filter}
 ),
 LastMovement AS (

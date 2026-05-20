@@ -148,6 +148,7 @@ class TestHanaNonMovingRMReaderRowMapping(TestCase):
         self.assertIn('"TEST"."OITM"', query)
         self.assertIn('"TEST"."OINM"', query)
         self.assertIn('"TEST"."OITB"', query)
+        self.assertNotIn('T1."OnHand" > 0', query)
         self.assertNotIn("REPORT_BP_NON_MOVING", query)
         self.assertNotIn("JIVO_OIL_HANADB", query)
         self.assertNotIn("JIVO_BEVERAGES_HANADB", query)
@@ -158,6 +159,12 @@ class TestHanaNonMovingRMReaderRowMapping(TestCase):
 
         self.assertNotIn('T0."ItmsGrpCod" = ?', query)
         self.assertEqual(params, [-365, "OIL", 365, 365])
+
+    def test_build_report_query_accepts_zero_age_for_all_stock(self):
+        query, params = self.reader._build_report_query(age=0, item_group=105)
+
+        self.assertIn('DAYS_BETWEEN(T2."LastMovementDate", CURRENT_DATE) >= ?', query)
+        self.assertEqual(params, [105, 0, "OIL", 0, 0])
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +228,20 @@ class TestNonMovingRMService(TestCase):
             all(row["days_since_last_movement"] >= 45 for row in result["data"])
         )
 
+    def test_get_report_zero_age_keeps_latest_moved_rows(self):
+        service = self._make_service()
+        service.reader.get_non_moving_report.return_value = [
+            {"branch": "B1", "value": 100.0, "quantity": 10.0, "days_since_last_movement": 0},
+            {"branch": "B1", "value": 200.0, "quantity": 20.0, "days_since_last_movement": 29},
+            {"branch": "B2", "value": 300.0, "quantity": 30.0, "days_since_last_movement": 46},
+        ]
+
+        result = service.get_report(age=0, item_group=105)
+
+        self.assertEqual(len(result["data"]), 3)
+        self.assertEqual(result["summary"]["total_items"], 3)
+        self.assertEqual(result["summary"]["total_value"], 600.0)
+
     def test_get_report_branch_summary(self):
         service = self._make_service()
         service.reader.get_non_moving_report.return_value = [
@@ -270,9 +291,9 @@ class TestNonMovingRMFilterSerializer(TestCase):
         self.Serializer = NonMovingRMFilterSerializer
 
     def test_valid_params(self):
-        s = self.Serializer(data={"age": 45, "item_group": 105})
+        s = self.Serializer(data={"age": 30, "item_group": 105})
         self.assertTrue(s.is_valid(), s.errors)
-        self.assertEqual(s.validated_data["age"], 45)
+        self.assertEqual(s.validated_data["age"], 30)
         self.assertEqual(s.validated_data["item_group"], 105)
 
     def test_missing_age_invalid(self):
@@ -290,10 +311,10 @@ class TestNonMovingRMFilterSerializer(TestCase):
         self.assertFalse(s.is_valid())
         self.assertIn("item_group", s.errors)
 
-    def test_age_zero_invalid(self):
+    def test_age_zero_valid_for_all_stock(self):
         s = self.Serializer(data={"age": 0, "item_group": 105})
-        self.assertFalse(s.is_valid())
-        self.assertIn("age", s.errors)
+        self.assertTrue(s.is_valid(), s.errors)
+        self.assertEqual(s.validated_data["age"], 0)
 
     def test_negative_age_invalid(self):
         s = self.Serializer(data={"age": -10, "item_group": 105})
@@ -444,10 +465,20 @@ class TestNonMovingRMAPIViews(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("errors", response.data)
 
-    def test_report_invalid_age_returns_400(self):
+    @patch("non_moving_rm.views.NonMovingRMService")
+    def test_report_accepts_zero_age_for_all_stock(self, MockService):
+        MockService.return_value.get_report.return_value = self._mock_report_response()
         response = self.client.get(
             "/api/v1/non-moving-rm/report/",
             {"age": 0, "item_group": 105},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        MockService.return_value.get_report.assert_called_once_with(age=0, item_group=105)
+
+    def test_report_negative_age_returns_400(self):
+        response = self.client.get(
+            "/api/v1/non-moving-rm/report/",
+            {"age": -1, "item_group": 105},
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
