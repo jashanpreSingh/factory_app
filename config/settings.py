@@ -212,6 +212,55 @@ COMPANY_DB = {
     "JIVO_BEVERAGES": config('COMPANY_DB_JIVO_BEVERAGES'),
 }
 
+SAP_ATTACHMENT_DIRECT_COPY_PATHS = {
+    "JIVO_OIL": config("SAP_ATTACHMENT_DIRECT_COPY_PATH_JIVO_OIL", default=""),
+    "JIVO_MART": config("SAP_ATTACHMENT_DIRECT_COPY_PATH_JIVO_MART", default=""),
+    "JIVO_BEVERAGES": config(
+        "SAP_ATTACHMENT_DIRECT_COPY_PATH_JIVO_BEVERAGES",
+        default="",
+    ),
+}
+SAP_ATTACHMENT_DIRECT_COPY_USERNAME = config(
+    "SAP_ATTACHMENT_DIRECT_COPY_USERNAME",
+    default="",
+)
+SAP_ATTACHMENT_DIRECT_COPY_PASSWORD = config(
+    "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD",
+    default="",
+)
+SAP_ATTACHMENT_DIRECT_COPY_CREDENTIALS = {
+    "JIVO_OIL": {
+        "username": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL",
+            default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME,
+        ),
+        "password": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL",
+            default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD,
+        ),
+    },
+    "JIVO_MART": {
+        "username": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_MART",
+            default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME,
+        ),
+        "password": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_MART",
+            default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD,
+        ),
+    },
+    "JIVO_BEVERAGES": {
+        "username": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_BEVERAGES",
+            default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME,
+        ),
+        "password": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_BEVERAGES",
+            default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD,
+        ),
+    },
+}
+
 # Firebase Cloud Messaging
 FCM_CREDENTIALS_PATH = config('FCM_CREDENTIALS_PATH', default='firebase-service-account.json')
 
