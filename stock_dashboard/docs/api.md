@@ -7,6 +7,7 @@ The stock dashboard API powers the frontend Stock Benchmark page. It reads SAP H
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | GET | `/api/v1/dashboards/stock/` | Stock benchmark rows, pagination, and meta counts |
+| GET | `/api/v1/dashboards/stock/as-of/` | Experimental SAP movement reconstruction for a prior posting date |
 | GET | `/api/v1/dashboards/stock/<item_code>/warehouses/` | Per-warehouse detail for an expanded grouped item |
 
 All endpoints require:
@@ -30,6 +31,16 @@ All endpoints require:
 | `sort_dir` | string | `asc` or `desc`. |
 | `page` | integer | Page number, minimum 1. |
 | `page_size` | integer | Page size, minimum 1, maximum 200. |
+
+`GET /api/v1/dashboards/stock/as-of/`
+
+Supports the same filters as the live Stock Benchmark endpoint, plus:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `as_of_date` | date | Required. SAP posting date to reconstruct through, formatted `YYYY-MM-DD`. Future dates are rejected. |
+
+This endpoint is a proof path for historical Stock Benchmark data. It reconstructs `on_hand`, last consumption date, movement status, health ratio, and stock status from SAP movement history up to the selected date. Benchmark (`MinStock`), item name, UOM, and item group still come from current SAP master data.
 
 `GET /api/v1/dashboards/stock/<item_code>/warehouses/`
 
@@ -80,6 +91,29 @@ The SAP field behind Benchmark is `MinStock`; the API field remains `min_stock` 
 | `slow` | No outbound consumption exists or the last outbound consumption is older than 30 days. |
 
 Consumption age is checked by item code across SAP inventory movement, not only the selected Stock Benchmark warehouses.
+
+## As-Of Reconstruction Rules
+
+The experimental as-of endpoint uses SAP `OINM` as an inventory audit trail:
+
+```text
+as_of_on_hand = current OITW.OnHand - SUM(OINM.InQty - OINM.OutQty where DocDate > as_of_date)
+```
+
+Movement age is also calculated as of the selected posting date:
+
+```text
+last_consumption_date = MAX(OINM.DocDate where OutQty > 0 and DocDate <= as_of_date)
+days_since_last_consumption = DAYS_BETWEEN(last_consumption_date, as_of_date)
+```
+
+Limitations:
+
+- The endpoint reconstructs by SAP posting date, not exact time of day.
+- Benchmark (`OITW.MinStock`) is current unless SAP change-log support is added later.
+- Item names, UOMs, and item groups are current SAP master data.
+- Historical open production demand is not reconstructed in this proof endpoint.
+- The response uses ungrouped item-warehouse rows so warehouse filtering can be validated directly.
 
 ## Grouped Rows
 

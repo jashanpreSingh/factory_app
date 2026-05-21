@@ -78,6 +78,50 @@ class StockDashboardService:
             },
         }
 
+    def get_as_of_stock_levels(self, filters: Dict[str, Any]) -> Dict:
+        """
+        Returns SAP movement reconstructed Stock Benchmark rows for a prior date.
+
+        This proof endpoint keeps benchmark and item master values current, while
+        reconstructing on-hand and movement age from SAP OINM posting history.
+        """
+        page = int(filters.get("page", 1))
+        page_size = int(filters.get("page_size", 50))
+        as_of_date = filters["as_of_date"]
+
+        warehouses = self.reader.get_warehouses()
+        filtered_stats = self.reader.get_as_of_stock_stats(filters, as_of_date)
+        filtered_total = filtered_stats["total_items"]
+        total_pages = max(1, (filtered_total + page_size - 1) // page_size)
+
+        rows = self.reader.get_as_of_stock_levels(
+            filters,
+            as_of_date=as_of_date,
+            page=page,
+            page_size=page_size,
+        )
+        self._enrich_rows(rows)
+
+        return {
+            "data": rows,
+            "meta": {
+                "total_items": filtered_total,
+                "healthy_count": filtered_stats["healthy_count"],
+                "low_stock_count": filtered_stats["low_count"],
+                "critical_stock_count": filtered_stats["critical_count"],
+                "warehouses": warehouses,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "as_of_date": as_of_date.isoformat(),
+                "reconstruction_note": (
+                    "On-hand and movement age are reconstructed from SAP OINM. "
+                    "Benchmark and item master fields are current SAP values."
+                ),
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+            },
+        }
+
     def get_item_detail(self, item_code: str, warehouses: List[str]) -> Dict:
         """Returns per-warehouse breakdown for a single item (expand detail)."""
         rows = self.reader.get_item_warehouses(item_code, warehouses)

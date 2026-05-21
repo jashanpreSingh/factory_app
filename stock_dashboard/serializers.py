@@ -5,6 +5,7 @@ DRF serializers for validating query parameters and shaping API responses.
 All data is read-only (no database writes), so only plain Serializer classes are used.
 """
 
+from django.utils import timezone
 from rest_framework import serializers
 
 
@@ -99,6 +100,20 @@ class StockDashboardFilterSerializer(serializers.Serializer):
     page_size = serializers.IntegerField(required=False, default=50, min_value=1, max_value=200)
 
 
+class StockDashboardAsOfFilterSerializer(StockDashboardFilterSerializer):
+    """Validates query parameters for historical SAP movement reconstruction."""
+
+    as_of_date = serializers.DateField(
+        required=True,
+        help_text="Reconstruct stock as of this SAP posting date (YYYY-MM-DD).",
+    )
+
+    def validate_as_of_date(self, value):
+        if value > timezone.localdate():
+            raise serializers.ValidationError("as_of_date cannot be in the future.")
+        return value
+
+
 # ---------------------------------------------------------------------------
 # Response Serializers (Output Shape)
 # ---------------------------------------------------------------------------
@@ -142,6 +157,9 @@ class StockDashboardMetaSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     page_size = serializers.IntegerField()
     total_pages = serializers.IntegerField()
+    # Present only on the experimental SAP reconstruction endpoint.
+    as_of_date = serializers.CharField(required=False)
+    reconstruction_note = serializers.CharField(required=False)
 
 
 class StockDashboardResponseSerializer(serializers.Serializer):

@@ -1,10 +1,12 @@
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 from django.test import SimpleTestCase
+from django.utils import timezone
 
 from .hana_reader import HanaStockDashboardReader
-from .serializers import StockDashboardFilterSerializer
+from .serializers import StockDashboardAsOfFilterSerializer, StockDashboardFilterSerializer
 from .services import StockDashboardService
 
 
@@ -34,6 +36,25 @@ class StockDashboardFilterSerializerTests(SimpleTestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("movement_status", serializer.errors)
+
+    def test_as_of_filter_accepts_historical_date(self):
+        historical = timezone.localdate() - timedelta(days=1)
+        serializer = StockDashboardAsOfFilterSerializer(
+            data={"as_of_date": historical.isoformat(), "movement_status": "recent,slow"}
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["as_of_date"], historical)
+        self.assertEqual(serializer.validated_data["movement_status"], ["recent", "slow"])
+
+    def test_as_of_filter_rejects_future_date(self):
+        future = timezone.localdate() + timedelta(days=1)
+        serializer = StockDashboardAsOfFilterSerializer(
+            data={"as_of_date": future.isoformat()}
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("as_of_date", serializer.errors)
 
 
 class HanaStockDashboardReaderQueryTests(SimpleTestCase):
@@ -120,6 +141,32 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
             query,
         )
         self.assertIn('AND NOT (mov."LastConsumptionDate" IS NULL', query)
+
+    def test_as_of_query_reconstructs_on_hand_from_future_movements(self):
+        as_of_date = date(2026, 5, 1)
+        query, params = self.reader._build_as_of_query(
+            {"item_group": "PACKAGING MATERIAL", "movement_status": ["slow"]},
+            as_of_date,
+        )
+
+        self.assertIn('n."DocDate" > ?', query)
+        self.assertIn('n."DocDate" <= ?', query)
+        self.assertIn('IFNULL(w."OnHand", 0)', query)
+        self.assertIn('IFNULL(future_mov."FutureNetQty", 0)', query)
+        self.assertIn('DAYS_BETWEEN(mov."LastConsumptionDate", ?)', query)
+        self.assertIn("days_since_last_consumption > 30", query)
+        self.assertEqual(params[:3], [as_of_date, as_of_date, as_of_date])
+        self.assertEqual(params[3:], ["PACKAGING MATERIAL"])
+
+    def test_as_of_stats_query_uses_reconstructed_aliases(self):
+        query, _ = self.reader._build_as_of_stats_query(
+            {"status": ["critical"]},
+            date(2026, 5, 1),
+        )
+
+        self.assertIn("on_hand < min_stock * 0.6", query)
+        self.assertIn("NOT (days_since_last_consumption IS NULL", query)
+        self.assertIn("FROM (", query)
 
     def test_grouped_stats_query_filters_by_item_group_name(self):
         query, params = self.reader._build_grouped_stats_query(
@@ -267,6 +314,43 @@ class StockDashboardServiceTests(SimpleTestCase):
         self.assertEqual(result["meta"]["healthy_count"], 2)
         self.assertEqual(result["meta"]["low_stock_count"], 1)
         self.assertEqual(result["meta"]["critical_stock_count"], 4)
+
+    def test_as_of_stock_levels_use_reconstructed_reader_methods(self):
+        as_of_date = date(2026, 5, 1)
+        reader = Mock()
+        reader.get_warehouses.return_value = ["BH-PM"]
+        reader.get_as_of_stock_stats.return_value = {
+            "total_items": 1,
+            "healthy_count": 0,
+            "low_count": 1,
+            "critical_count": 0,
+        }
+        reader.get_as_of_stock_levels.return_value = [
+            {
+                "item_code": "PM0001",
+                "item_name": "Bottle",
+                "warehouse": "BH-PM",
+                "on_hand": 75,
+                "min_stock": 100,
+                "uom": "PCS",
+                "days_since_last_consumption": 12,
+            }
+        ]
+        service = self.make_service(reader)
+        filters = {"as_of_date": as_of_date, "page": 1, "page_size": 50}
+
+        result = service.get_as_of_stock_levels(filters)
+
+        reader.get_as_of_stock_stats.assert_called_once_with(filters, as_of_date)
+        reader.get_as_of_stock_levels.assert_called_once_with(
+            filters,
+            as_of_date=as_of_date,
+            page=1,
+            page_size=50,
+        )
+        self.assertEqual(result["meta"]["as_of_date"], "2026-05-01")
+        self.assertEqual(result["data"][0]["stock_status"], "low")
+        self.assertEqual(result["data"][0]["movement_status"], "recent")
 
     def test_item_without_benchmark_is_unset(self):
         service = self.make_service(Mock())

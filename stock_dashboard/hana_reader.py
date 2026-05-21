@@ -67,6 +67,37 @@ class HanaStockDashboardReader:
             "critical_count": int(row[3] or 0),
         }
 
+    def get_as_of_stock_levels(
+        self,
+        filters: Dict[str, Any],
+        as_of_date,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> List[Dict]:
+        """
+        Reconstructs one page of item-warehouse rows as of a prior SAP posting date.
+
+        This uses current OITW.OnHand minus OINM net movements after the selected
+        date. Benchmark and item master fields remain current SAP master data.
+        """
+        query, params = self._build_as_of_query(filters, as_of_date)
+        offset = (page - 1) * page_size
+        paginated_query = f"{query} LIMIT ? OFFSET ?"
+        rows = self._execute(paginated_query, params + [page_size, offset])
+        return [self._map_row(r) for r in rows]
+
+    def get_as_of_stock_stats(self, filters: Dict[str, Any], as_of_date) -> Dict:
+        """Returns stats for the SAP movement reconstruction query."""
+        query, params = self._build_as_of_stats_query(filters, as_of_date)
+        rows = self._execute(query, params)
+        row = rows[0] if rows else (0, 0, 0, 0)
+        return {
+            "total_items": int(row[0] or 0),
+            "healthy_count": int(row[1] or 0),
+            "low_count": int(row[2] or 0),
+            "critical_count": int(row[3] or 0),
+        }
+
     # ------------------------------------------------------------------
     # Query Builders
     # ------------------------------------------------------------------
@@ -102,6 +133,19 @@ class HanaStockDashboardReader:
         "low":      f"{_GROUPED_REQUIRED_SQL} > 0 AND on_hand < {_GROUPED_REQUIRED_SQL} AND on_hand >= {_GROUPED_REQUIRED_SQL} * 0.6 AND {_GROUPED_NOT_SLOW_SQL}",
         "critical": f"{_GROUPED_REQUIRED_SQL} > 0 AND on_hand < {_GROUPED_REQUIRED_SQL} * 0.6 AND {_GROUPED_NOT_SLOW_SQL}",
     }
+    _AS_OF_REQUIRED_SQL = "min_stock"
+    _AS_OF_DAYS_SQL = "days_since_last_consumption"
+    _AS_OF_SLOW_SQL = (
+        f"{_AS_OF_DAYS_SQL} IS NULL OR {_AS_OF_DAYS_SQL} > {SLOW_MOVING_DAYS}"
+    )
+    _AS_OF_NOT_SLOW_SQL = f"NOT ({_AS_OF_SLOW_SQL})"
+    _AS_OF_SLOW_OPERATIONAL_SQL = f"{_AS_OF_REQUIRED_SQL} > 0 AND ({_AS_OF_SLOW_SQL})"
+    _AS_OF_STATUS_SQL = {
+        "unset":    f"{_AS_OF_REQUIRED_SQL} = 0 AND {_AS_OF_NOT_SLOW_SQL}",
+        "healthy":  f"{_AS_OF_REQUIRED_SQL} > 0 AND on_hand >= {_AS_OF_REQUIRED_SQL} AND {_AS_OF_NOT_SLOW_SQL}",
+        "low":      f"{_AS_OF_REQUIRED_SQL} > 0 AND on_hand < {_AS_OF_REQUIRED_SQL} AND on_hand >= {_AS_OF_REQUIRED_SQL} * 0.6 AND {_AS_OF_NOT_SLOW_SQL}",
+        "critical": f"{_AS_OF_REQUIRED_SQL} > 0 AND on_hand < {_AS_OF_REQUIRED_SQL} * 0.6 AND {_AS_OF_NOT_SLOW_SQL}",
+    }
     _DEFAULT_OPERATIONAL_STATUSES = {"healthy", "low", "critical"}
 
     # Maps frontend sort column names to SQL expressions
@@ -125,11 +169,26 @@ class HanaStockDashboardReader:
         "health_ratio": f"CASE WHEN {_GROUPED_REQUIRED_SQL} > 0 THEN on_hand / {_GROUPED_REQUIRED_SQL} ELSE 0 END",
     }
 
+    _SORT_COL_AS_OF = {
+        "item_code":    "item_code",
+        "item_name":    "item_name",
+        "warehouse":    "warehouse",
+        "on_hand":      "on_hand",
+        "min_stock":    "min_stock",
+        "health_ratio": f"CASE WHEN {_AS_OF_REQUIRED_SQL} > 0 THEN on_hand / {_AS_OF_REQUIRED_SQL} ELSE 0 END",
+    }
+
     def _build_order_by(self, filters: Dict[str, Any], grouped: bool = False) -> str:
         col = filters.get("sort_by", "health_ratio")
         direction = filters.get("sort_dir", "asc").upper()
         col_map = self._SORT_COL_GROUPED if grouped else self._SORT_COL_SQL
         sql_col = col_map.get(col, col_map["health_ratio"])
+        return f"ORDER BY {sql_col} {direction}"
+
+    def _build_as_of_order_by(self, filters: Dict[str, Any]) -> str:
+        col = filters.get("sort_by", "health_ratio")
+        direction = filters.get("sort_dir", "asc").upper()
+        sql_col = self._SORT_COL_AS_OF.get(col, self._SORT_COL_AS_OF["health_ratio"])
         return f"ORDER BY {sql_col} {direction}"
 
     def _movement_joins(self, schema: str) -> str:
@@ -142,6 +201,33 @@ class HanaStockDashboardReader:
                 FROM "{schema}"."OINM" n
                 WHERE n."OutQty" > 0
                   AND n."TransType" IN ({consumption_types})
+                GROUP BY n."ItemCode"
+            ) mov
+                ON mov."ItemCode" = w."ItemCode"
+        """
+
+    def _as_of_movement_joins(self, schema: str) -> str:
+        consumption_types = ", ".join(str(t) for t in self._CONSUMPTION_TRANS_TYPES)
+        return f"""
+            LEFT JOIN (
+                SELECT
+                    n."ItemCode",
+                    n."Warehouse",
+                    SUM(IFNULL(n."InQty", 0) - IFNULL(n."OutQty", 0)) AS "FutureNetQty"
+                FROM "{schema}"."OINM" n
+                WHERE n."DocDate" > ?
+                GROUP BY n."ItemCode", n."Warehouse"
+            ) future_mov
+                ON future_mov."ItemCode" = w."ItemCode"
+               AND future_mov."Warehouse" = w."WhsCode"
+            LEFT JOIN (
+                SELECT
+                    n."ItemCode",
+                    MAX(n."DocDate") AS "LastConsumptionDate"
+                FROM "{schema}"."OINM" n
+                WHERE n."OutQty" > 0
+                  AND n."TransType" IN ({consumption_types})
+                  AND n."DocDate" <= ?
                 GROUP BY n."ItemCode"
             ) mov
                 ON mov."ItemCode" = w."ItemCode"
@@ -203,6 +289,27 @@ class HanaStockDashboardReader:
             ]
             if self._includes_default_operational_statuses(status_list):
                 conditions.append(f"({self._GROUPED_SLOW_OPERATIONAL_SQL})")
+            if conditions:
+                clauses.append(f'({" OR ".join(conditions)})')
+
+        movement_clause = self._movement_where_clause(filters, grouped=True)
+        if movement_clause:
+            clauses.append(movement_clause)
+
+        return f'WHERE {" AND ".join(clauses)}' if clauses else ""
+
+    def _post_as_of_where_clause(self, filters: Dict[str, Any]) -> str:
+        """Builds filters that apply after as-of stock reconstruction."""
+        clauses = []
+        status_list = filters.get("status", [])
+        if status_list:
+            conditions = [
+                f"({self._AS_OF_STATUS_SQL[s]})"
+                for s in status_list
+                if s in self._AS_OF_STATUS_SQL
+            ]
+            if self._includes_default_operational_statuses(status_list):
+                conditions.append(f"({self._AS_OF_SLOW_OPERATIONAL_SQL})")
             if conditions:
                 clauses.append(f'({" OR ".join(conditions)})')
 
@@ -307,6 +414,99 @@ class HanaStockDashboardReader:
                 ON m."ItmsGrpCod" = grp."ItmsGrpCod"
             {self._movement_joins(schema)}
             {where}
+        """
+        return query, params
+
+    def _build_as_of_base_query(self, filters: Dict[str, Any], as_of_date) -> Tuple[str, List]:
+        """
+        Builds the unfiltered reconstructed row query used by as-of data and stats.
+
+        On-hand is reconstructed as:
+          current OITW.OnHand - net OINM movements posted after as_of_date.
+        """
+        schema = self.connection.schema
+        base_clauses, base_params = self._build_base_where(filters)
+        base_where = f'WHERE {" AND ".join(base_clauses)}' if base_clauses else ""
+
+        query = f"""
+            SELECT
+                w."ItemCode" AS item_code,
+                m."ItemName" AS item_name,
+                w."WhsCode" AS warehouse,
+                (
+                    IFNULL(w."OnHand", 0)
+                    - IFNULL(future_mov."FutureNetQty", 0)
+                ) AS on_hand,
+                IFNULL(w."MinStock", 0) AS min_stock,
+                IFNULL(m."InvntryUom", '') AS uom,
+                mov."LastConsumptionDate" AS last_consumption_date,
+                CASE
+                    WHEN mov."LastConsumptionDate" IS NULL THEN NULL
+                    ELSE DAYS_BETWEEN(mov."LastConsumptionDate", ?)
+                END AS days_since_last_consumption
+            FROM "{schema}"."OITW" w
+            JOIN "{schema}"."OITM" m
+                ON w."ItemCode" = m."ItemCode"
+            LEFT JOIN "{schema}"."OITB" grp
+                ON m."ItmsGrpCod" = grp."ItmsGrpCod"
+            {self._as_of_movement_joins(schema)}
+            {base_where}
+        """
+        return query, [as_of_date, as_of_date, as_of_date] + base_params
+
+    def _build_as_of_query(self, filters: Dict[str, Any], as_of_date) -> Tuple[str, List]:
+        base_query, params = self._build_as_of_base_query(filters, as_of_date)
+        post_where = self._post_as_of_where_clause(filters)
+        order_by = self._build_as_of_order_by(filters)
+
+        query = f"""
+            SELECT
+                item_code,
+                item_name,
+                warehouse,
+                on_hand,
+                min_stock,
+                uom,
+                last_consumption_date,
+                days_since_last_consumption
+            FROM (
+                {base_query}
+            ) s
+            {post_where}
+            {order_by}
+        """
+        return query, params
+
+    def _build_as_of_stats_query(self, filters: Dict[str, Any], as_of_date) -> Tuple[str, List]:
+        base_query, params = self._build_as_of_base_query(filters, as_of_date)
+        post_where = self._post_as_of_where_clause(filters)
+
+        query = f"""
+            SELECT
+                COUNT(*) AS total_items,
+                SUM(CASE
+                    WHEN {self._AS_OF_REQUIRED_SQL} > 0
+                         AND on_hand >= {self._AS_OF_REQUIRED_SQL}
+                         AND {self._AS_OF_NOT_SLOW_SQL}
+                    THEN 1 ELSE 0
+                END) AS healthy_count,
+                SUM(CASE
+                    WHEN {self._AS_OF_REQUIRED_SQL} > 0
+                         AND on_hand < {self._AS_OF_REQUIRED_SQL}
+                         AND on_hand >= {self._AS_OF_REQUIRED_SQL} * 0.6
+                         AND {self._AS_OF_NOT_SLOW_SQL}
+                    THEN 1 ELSE 0
+                END) AS low_count,
+                SUM(CASE
+                    WHEN {self._AS_OF_REQUIRED_SQL} > 0
+                         AND on_hand < {self._AS_OF_REQUIRED_SQL} * 0.6
+                         AND {self._AS_OF_NOT_SLOW_SQL}
+                    THEN 1 ELSE 0
+                END) AS critical_count
+            FROM (
+                {base_query}
+            ) s
+            {post_where}
         """
         return query, params
 
