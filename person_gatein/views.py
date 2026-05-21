@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from company.permissions import HasCompanyContext
 from django.db.models import Count, Q
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from datetime import datetime, timedelta
 
 from .models import *
@@ -305,39 +306,75 @@ def dashboard_stats(request):
     try:
         today = timezone.now().date()
         now = timezone.now()
+        from_date = parse_date(request.query_params.get("from_date") or "")
+        to_date = parse_date(request.query_params.get("to_date") or "")
+        has_range_filter = bool(from_date or to_date)
+
+        range_entries = EntryLog.objects.all()
+        if from_date:
+            range_entries = range_entries.filter(entry_time__date__gte=from_date)
+        if to_date:
+            range_entries = range_entries.filter(entry_time__date__lte=to_date)
+
+        today_entries = EntryLog.objects.filter(entry_time__date=today)
+        current_entries = EntryLog.objects.filter(status="IN")
+        if has_range_filter:
+            current_entries = range_entries.filter(status="IN")
+            period_entries = range_entries
+        else:
+            period_entries = today_entries
 
         # Current counts
-        total_inside = EntryLog.objects.filter(status="IN").count()
-        visitors_inside = EntryLog.objects.filter(status="IN", visitor__isnull=False).count()
-        labours_inside = EntryLog.objects.filter(status="IN", labour__isnull=False).count()
+        total_inside = current_entries.count()
+        visitors_inside = current_entries.filter(visitor__isnull=False).count()
+        labours_inside = current_entries.filter(labour__isnull=False).count()
 
         # Today's counts
-        today_entries = EntryLog.objects.filter(entry_time__date=today)
         today_total = today_entries.count()
         today_visitors = today_entries.filter(visitor__isnull=False).count()
         today_labours = today_entries.filter(labour__isnull=False).count()
         today_exits = today_entries.filter(status="OUT").count()
 
+        period_total = period_entries.count()
+        period_visitors = period_entries.filter(visitor__isnull=False).count()
+        period_labours = period_entries.filter(labour__isnull=False).count()
+        period_exits = period_entries.filter(status="OUT").count()
+
+        current_filter = Q(entries_in__status="IN")
+        person_type_inside_filter = Q(entrylog__status="IN")
+        period_person_type_filter = Q()
+        if has_range_filter:
+            if from_date:
+                current_filter &= Q(entries_in__entry_time__date__gte=from_date)
+                person_type_inside_filter &= Q(entrylog__entry_time__date__gte=from_date)
+                period_person_type_filter &= Q(entrylog__entry_time__date__gte=from_date)
+            if to_date:
+                current_filter &= Q(entries_in__entry_time__date__lte=to_date)
+                person_type_inside_filter &= Q(entrylog__entry_time__date__lte=to_date)
+                period_person_type_filter &= Q(entrylog__entry_time__date__lte=to_date)
+        else:
+            period_person_type_filter &= Q(entrylog__entry_time__date=today)
+
         # Gate-wise current count
         gate_stats = Gate.objects.filter(is_active=True).annotate(
-            inside_count=Count('entries_in', filter=Q(entries_in__status="IN"))
+            inside_count=Count('entries_in', filter=current_filter)
         ).values('id', 'name', 'inside_count')
 
         # Person type wise count
         person_type_stats = PersonType.objects.filter(is_active=True).annotate(
-            inside_count=Count('entrylog', filter=Q(entrylog__status="IN")),
-            today_count=Count('entrylog', filter=Q(entrylog__entry_time__date=today))
+            inside_count=Count('entrylog', filter=person_type_inside_filter),
+            today_count=Count('entrylog', filter=period_person_type_filter)
         ).values('id', 'name', 'inside_count', 'today_count')
 
         # Entries exceeding 8 hours
         eight_hours_ago = now - timedelta(hours=8)
-        long_duration_entries = EntryLog.objects.filter(
+        long_duration_entries = current_entries.filter(
             status="IN",
             entry_time__lt=eight_hours_ago
         ).count()
 
         # Recent entries (last 10)
-        recent_entries = EntryLog.objects.order_by("-entry_time")[:10]
+        recent_entries = (range_entries if has_range_filter else EntryLog.objects.all()).order_by("-entry_time")[:10]
         recent_serializer = EntryLogSerializer(recent_entries, many=True)
 
         return Response({
@@ -352,6 +389,12 @@ def dashboard_stats(request):
                 "visitors": today_visitors,
                 "labours": today_labours,
                 "exits": today_exits
+            },
+            "range": {
+                "total_entries": period_total,
+                "visitors": period_visitors,
+                "labours": period_labours,
+                "exits": period_exits
             },
             "gate_wise": list(gate_stats),
             "person_type_wise": list(person_type_stats),
