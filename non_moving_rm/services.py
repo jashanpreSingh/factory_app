@@ -11,9 +11,12 @@ from typing import Any, Dict, List
 
 from sap_client.context import CompanyContext
 
-from .hana_reader import HanaNonMovingRMReader
+from .hana_reader import COMPANY_BRANCH_LABELS, HanaNonMovingRMReader
 
 logger = logging.getLogger(__name__)
+
+PROCEDURE_SOURCE_COMPANY_CODE = "JIVO_BEVERAGES"
+PROCEDURE_SOURCE_SCHEMA = "JIVO_BEVERAGES_HANADB"
 
 
 class NonMovingRMService:
@@ -28,7 +31,11 @@ class NonMovingRMService:
     def __init__(self, company_code: str):
         self.company_code = company_code
         self.context = CompanyContext(company_code)
-        self.reader = HanaNonMovingRMReader(self.context)
+        self.report_context = CompanyContext(PROCEDURE_SOURCE_COMPANY_CODE)
+        self.reader = HanaNonMovingRMReader(
+            self.report_context,
+            schema_override=PROCEDURE_SOURCE_SCHEMA,
+        )
 
     # ------------------------------------------------------------------
     # Report — Non-Moving RM Data
@@ -38,9 +45,10 @@ class NonMovingRMService:
         """
         Returns non-moving raw material report with summary stats.
         """
+        rows = self.reader.get_non_moving_report(age, item_group)
         rows = [
-            row for row in self.reader.get_non_moving_report(age, item_group)
-            if self._meets_age_threshold(row, age)
+            row for row in rows
+            if self._matches_company_branch(row) and self._meets_age_threshold(row, age)
         ]
 
         total_items = len(rows)
@@ -102,7 +110,16 @@ class NonMovingRMService:
 
     @staticmethod
     def _meets_age_threshold(row: Dict, age: int) -> bool:
+        if age <= 0:
+            return True
         days_since_last_movement = row.get("days_since_last_movement")
         if days_since_last_movement is None:
             return True
-        return int(days_since_last_movement) >= age
+        return int(days_since_last_movement) > age
+
+    def _matches_company_branch(self, row: Dict) -> bool:
+        branch = row.get("branch")
+        expected_branch = COMPANY_BRANCH_LABELS.get(self.company_code)
+        if not expected_branch:
+            return True
+        return branch == expected_branch

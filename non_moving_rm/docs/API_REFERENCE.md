@@ -52,7 +52,7 @@ Returns all SAP item groups from the OITB table. Use this to populate the item g
 GET /api/v1/non-moving-rm/report/?age=<days>&item_group=<code>
 ```
 
-Reads the selected company's SAP HANA schema directly and returns item-level data with summary aggregations.
+Calls SAP procedure `REPORT_BP_NON_MOVING_RM` from `JIVO_BEVERAGES_HANADB` and returns item-level data with summary aggregations. The service filters the procedure output to the branch represented by the selected `Company-Code`.
 
 **Query Parameters:**
 
@@ -61,14 +61,14 @@ Reads the selected company's SAP HANA schema directly and returns item-level dat
 | `age`       | int  | Yes      | 0   | Minimum days since last movement; `0` returns all stock |
 | `item_group`| int  | No       | 0   | Item group code from OITB; omit or pass `0` for all groups |
 
-The API returns only rows where `days_since_last_movement >= age`. Use `age=0` to include all stock, including recently moved stock. The HANA query is scoped to the company selected by the `Company-Code` header, and the service layer re-applies the threshold before building `data` and `summary`.
+The API returns only rows where `days_since_last_movement > age`. Use `age=0` to include all stock, including recently moved stock. This matches the Excel workbook's "more than N days" filter.
 
 **Response (200):**
 
 | Field                                  | Type    | Description                                    |
 |----------------------------------------|---------|------------------------------------------------|
 | `data`                                 | array   | List of non-moving items                       |
-| `data[].branch`                        | string  | SAP branch/warehouse code                      |
+| `data[].branch`                        | string  | SAP branch code                                |
 | `data[].item_code`                     | string  | SAP item code                                  |
 | `data[].item_name`                     | string  | Item description                               |
 | `data[].item_group_name`               | string  | Item group name                                |
@@ -136,17 +136,9 @@ The API returns only rows where `days_since_last_movement >= age`. Use `age=0` t
 
 ## HANA Data Reference
 
-The report no longer calls `REPORT_BP_NON_MOVING_RM`. It is built from the company schema resolved by `Company-Code`.
+The report calls `JIVO_BEVERAGES_HANADB.REPORT_BP_NON_MOVING_RM(age, item_group)` so dashboard totals match the workbook generated from the same SAP procedure.
 
-| Table | Purpose |
-|-------|---------|
-| `OITW` | Current on-hand quantity by item and warehouse |
-| `OITM` | Item master, item name, sub group, and fallback price |
-| `OITB` | Item group names and item group filter |
-| `OWHS` | Warehouse metadata and inactive warehouse exclusion |
-| `OINM` | Last movement date, calculated price, and recent consumption |
-
-The age filter is applied against the last non-transfer stock movement (`TransType <> 67`) per item and warehouse. Items with no movement history are aged from the SAP item `CreateDate`.
+The procedure output is item-level, not warehouse-level. `Company-Code` is used to filter the returned `Branch` value (`JIVO_OIL` -> `OIL`, `JIVO_BEVERAGES` -> `BEV`) before summary totals are computed.
 
 ### OITB (Item Groups Table)
 
