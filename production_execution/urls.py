@@ -31,6 +31,7 @@ from .views import (
     # Reports
     DailyProductionReportAPI, YieldReportAPI,
     LineClearanceReportAPI, AnalyticsAPI,
+    ProductionMovementFilterOptionsAPI, ProductionMovementReportAPI,
     # SAP Orders & BOM
     SAPProductionOrderListAPI, SAPProductionOrderDetailAPI, SAPItemSearchAPI,
     SAPItemBOMAPI,
@@ -159,6 +160,16 @@ urlpatterns = [
     path('reports/yield/<int:run_id>/', YieldReportAPI.as_view(), name='pe-report-yield'),
     path('reports/line-clearance/', LineClearanceReportAPI.as_view(), name='pe-report-clearance'),
     path('reports/analytics/', AnalyticsAPI.as_view(), name='pe-report-analytics'),
+    path(
+        'reports/production-movement/filter-options/',
+        ProductionMovementFilterOptionsAPI.as_view(),
+        name='pe-report-production-movement-options',
+    ),
+    path(
+        'reports/production-movement/',
+        ProductionMovementReportAPI.as_view(),
+        name='pe-report-production-movement',
+    ),
 
     # ------------------------------------------------------------------
     # SAP Orders (proxy)
