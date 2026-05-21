@@ -9,6 +9,7 @@ from gate_core.models import (
     SalesDispatchGateOut,
     SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
+    SalesDispatchGatepassPrintLog,
     SalesDispatchLock,
 )
 from gate_core.services.sales_dispatch_gatepass import get_gatepass_readiness
@@ -215,12 +216,39 @@ class SalesDispatchLockUpdateSerializer(serializers.Serializer):
         return attrs
 
 
+class SalesDispatchGatepassPrintLogSerializer(serializers.ModelSerializer):
+    printed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SalesDispatchGatepassPrintLog
+        fields = [
+            "id",
+            "sales_dispatch",
+            "gatepass_no",
+            "entry_status",
+            "copy_number",
+            "print_type",
+            "reprint_reason",
+            "printed_by",
+            "printed_by_name",
+            "printed_at",
+            "printer_name",
+            "ip_address",
+            "user_agent",
+        ]
+        read_only_fields = fields
+
+    def get_printed_by_name(self, obj):
+        return user_display_name(obj.printed_by)
+
+
 class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
     vehicle_entry_no = serializers.CharField(source="vehicle_entry.entry_no", read_only=True)
     vehicle_entry_status = serializers.CharField(source="vehicle_entry.status", read_only=True)
     items = SalesDispatchGateOutItemSerializer(many=True, read_only=True)
     documents = SalesDispatchGateOutDocumentSerializer(many=True, read_only=True)
     attachments = SalesDispatchAttachmentSerializer(many=True, read_only=True)
+    gatepass_print_logs = SalesDispatchGatepassPrintLogSerializer(many=True, read_only=True)
     gatepass_readiness = serializers.SerializerMethodField()
     document_count = serializers.SerializerMethodField()
     document_numbers = serializers.SerializerMethodField()
@@ -322,6 +350,7 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
             "gatepass_readiness",
             "items",
             "attachments",
+            "gatepass_print_logs",
             "created_at",
             "updated_at",
         ]
@@ -523,6 +552,12 @@ class SalesDispatchGatepassPrintSerializer(serializers.Serializer):
     seal_number = serializers.CharField(required=False, allow_blank=True, default="")
     pgi_reference = serializers.CharField(required=False, allow_blank=True, default="")
     eway_bill = serializers.CharField(required=False, allow_blank=True, default="")
+    printer_name = serializers.CharField(required=False, allow_blank=True, default="", max_length=100)
+
+
+class SalesDispatchGatepassReprintSerializer(serializers.Serializer):
+    reprint_reason = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
+    printer_name = serializers.CharField(required=False, allow_blank=True, default="", max_length=100)
 
 
 class SalesDispatchReasonSerializer(serializers.Serializer):

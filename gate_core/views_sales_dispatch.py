@@ -24,6 +24,8 @@ from gate_core.models import (
     SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
     SalesDispatchGateOutStatus,
+    SalesDispatchGatepassPrintLog,
+    SalesDispatchGatepassPrintType,
     SalesDispatchLock,
 )
 from gate_core.serializers_sales_dispatch import (
@@ -33,7 +35,9 @@ from gate_core.serializers_sales_dispatch import (
     SalesDispatchGateOutCreateSerializer,
     SalesDispatchGateOutSerializer,
     SalesDispatchGateOutUpdateSerializer,
+    SalesDispatchGatepassPrintLogSerializer,
     SalesDispatchGatepassPrintSerializer,
+    SalesDispatchGatepassReprintSerializer,
     SalesDispatchLockSerializer,
     SalesDispatchLockUpdateSerializer,
     SalesDispatchReasonSerializer,
@@ -61,11 +65,29 @@ def sales_dispatch_queryset(company):
             "driver",
         )
         .prefetch_related("documents", "items", "attachments")
+        .prefetch_related("gatepass_print_logs")
     )
 
 
 def get_sales_dispatch_or_404(company, entry_id):
     return get_object_or_404(sales_dispatch_queryset(company), id=entry_id)
+
+
+def get_sales_dispatch_for_update_or_404(company, entry_id):
+    return get_object_or_404(
+        SalesDispatchGateOut.objects.select_for_update().filter(
+            company=company,
+            is_active=True,
+        ),
+        id=entry_id,
+    )
+
+
+def print_request_context(request):
+    return {
+        "ip_address": request.META.get("REMOTE_ADDR") or None,
+        "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+    }
 
 
 def apply_sales_dispatch_filters(qs, query_params):
@@ -735,32 +757,122 @@ class SalesDispatchGatepassPrintView(APIView):
         if locked_response:
             return locked_response
 
-        entry = get_sales_dispatch_or_404(request.company.company, entry_id)
         serializer = SalesDispatchGatepassPrintSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if entry.status in (
-            SalesDispatchGateOutStatus.PRINT_COMMITTED,
-            SalesDispatchGateOutStatus.DISPATCHED,
-            SalesDispatchGateOutStatus.CANCELLED,
-            SalesDispatchGateOutStatus.REJECTED,
-        ):
-            return Response(
-                {"detail": "Gatepass cannot be printed in this Docking status."},
-                status=status.HTTP_400_BAD_REQUEST,
+
+        with transaction.atomic():
+            entry = get_sales_dispatch_for_update_or_404(request.company.company, entry_id)
+            if (
+                entry.gatepass_no
+                or entry.printed_at
+                or entry.gatepass_print_logs.filter(
+                    print_type=SalesDispatchGatepassPrintType.ORIGINAL,
+                ).exists()
+            ):
+                return Response(
+                    {
+                        "detail": (
+                            "Original gatepass print is already recorded. "
+                            "Use the audited reprint workflow."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if entry.status in (
+                SalesDispatchGateOutStatus.GATEPASS_PRINTED,
+                SalesDispatchGateOutStatus.PRINT_COMMITTED,
+                SalesDispatchGateOutStatus.DISPATCHED,
+                SalesDispatchGateOutStatus.CANCELLED,
+                SalesDispatchGateOutStatus.REJECTED,
+            ):
+                return Response(
+                    {"detail": "Gatepass cannot be printed in this Docking status."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                ensure_gatepass_ready(entry)
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+            for field in (
+                "uom",
+                "physical_quantity",
+                "seal_number",
+                "pgi_reference",
+                "eway_bill",
+            ):
+                value = serializer.validated_data.get(field)
+                if value not in (None, ""):
+                    setattr(entry, field, value)
+            entry.updated_by = request.user
+            entry.save()
+            entry.assign_gatepass(request.user)
+            SalesDispatchGatepassPrintLog.record_print(
+                sales_dispatch=entry,
+                print_type=SalesDispatchGatepassPrintType.ORIGINAL,
+                user=request.user,
+                printer_name=serializer.validated_data.get("printer_name", ""),
+                **print_request_context(request),
             )
+            getattr(entry, "_prefetched_objects_cache", {}).pop("gatepass_print_logs", None)
 
-        try:
-            ensure_gatepass_ready(entry)
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-        for field, value in serializer.validated_data.items():
-            if value not in (None, ""):
-                setattr(entry, field, value)
-        entry.updated_by = request.user
-        entry.save()
-        entry.assign_gatepass(request.user)
         return Response(SalesDispatchGateOutSerializer(entry).data)
+
+
+class SalesDispatchGatepassReprintView(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, entry_id):
+        locked_response = sales_dispatch_locked_response(request.company.company)
+        if locked_response:
+            return locked_response
+
+        serializer = SalesDispatchGatepassReprintSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            entry = get_sales_dispatch_for_update_or_404(request.company.company, entry_id)
+            if not entry.gatepass_no or not entry.printed_at:
+                return Response(
+                    {"detail": "Original gatepass must be printed before a reprint."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if entry.status in (
+                SalesDispatchGateOutStatus.CANCELLED,
+                SalesDispatchGateOutStatus.REJECTED,
+            ):
+                return Response(
+                    {"detail": "Gatepass cannot be reprinted in this Docking status."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            SalesDispatchGatepassPrintLog.record_print(
+                sales_dispatch=entry,
+                print_type=SalesDispatchGatepassPrintType.REPRINT,
+                user=request.user,
+                reprint_reason=serializer.validated_data["reprint_reason"],
+                printer_name=serializer.validated_data.get("printer_name", ""),
+                **print_request_context(request),
+            )
+            entry.updated_by = request.user
+            entry.save(update_fields=["updated_by", "updated_at"])
+            getattr(entry, "_prefetched_objects_cache", {}).pop("gatepass_print_logs", None)
+
+        return Response(SalesDispatchGateOutSerializer(entry).data)
+
+
+class SalesDispatchGatepassPrintHistoryView(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, entry_id):
+        entry = get_sales_dispatch_or_404(request.company.company, entry_id)
+        return Response(
+            SalesDispatchGatepassPrintLogSerializer(
+                entry.gatepass_print_logs.select_related("printed_by"),
+                many=True,
+            ).data
+        )
 
 
 class SalesDispatchCommitPrintView(APIView):

@@ -36,6 +36,11 @@ class SalesDispatchAttachmentType(models.TextChoices):
     OTHER = "OTHER", "Other"
 
 
+class SalesDispatchGatepassPrintType(models.TextChoices):
+    ORIGINAL = "ORIGINAL", "Original"
+    REPRINT = "REPRINT", "Reprint"
+
+
 ACTIVE_DOCUMENT_STATUSES = [
     SalesDispatchGateOutStatus.DOCKED,
     SalesDispatchGateOutStatus.PHOTO_ATTACHED,
@@ -412,6 +417,101 @@ class SalesDispatchGateOut(BaseModel):
                 "updated_by",
                 "updated_at",
             ]
+        )
+
+
+class SalesDispatchGatepassPrintLog(BaseModel):
+    """Append-only audit trail for Docking gatepass prints and reprints."""
+
+    company = models.ForeignKey(
+        "company.Company",
+        on_delete=models.PROTECT,
+        related_name="sales_dispatch_gatepass_print_logs",
+    )
+    sales_dispatch = models.ForeignKey(
+        SalesDispatchGateOut,
+        on_delete=models.CASCADE,
+        related_name="gatepass_print_logs",
+    )
+    gatepass_no = models.CharField(max_length=80)
+    entry_status = models.CharField(max_length=30, blank=True)
+    copy_number = models.PositiveIntegerField(default=1)
+    print_type = models.CharField(
+        max_length=20,
+        choices=SalesDispatchGatepassPrintType.choices,
+        default=SalesDispatchGatepassPrintType.ORIGINAL,
+    )
+    reprint_reason = models.TextField(blank=True, default="")
+    printed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales_dispatch_gatepass_print_logs",
+    )
+    printed_at = models.DateTimeField(auto_now_add=True)
+    printer_name = models.CharField(max_length=100, blank=True, default="")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=500, blank=True, default="")
+
+    class Meta:
+        ordering = ["-printed_at", "-id"]
+        indexes = [
+            models.Index(fields=["company", "print_type", "printed_at"]),
+            models.Index(fields=["sales_dispatch", "print_type"]),
+            models.Index(fields=["gatepass_no"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sales_dispatch"],
+                condition=Q(print_type=SalesDispatchGatepassPrintType.ORIGINAL),
+                name="unique_original_sales_dispatch_gatepass_print",
+            ),
+            models.UniqueConstraint(
+                fields=["sales_dispatch", "copy_number"],
+                name="unique_sales_dispatch_gatepass_copy_number",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.gatepass_no} {self.print_type} #{self.copy_number}"
+
+    @classmethod
+    def next_copy_number(cls, sales_dispatch):
+        last_log = (
+            cls.objects
+            .filter(sales_dispatch=sales_dispatch)
+            .order_by("-copy_number")
+            .first()
+        )
+        return (last_log.copy_number + 1) if last_log else 1
+
+    @classmethod
+    def record_print(
+        cls,
+        *,
+        sales_dispatch,
+        print_type,
+        user,
+        reprint_reason="",
+        printer_name="",
+        ip_address=None,
+        user_agent="",
+    ):
+        return cls.objects.create(
+            company=sales_dispatch.company,
+            sales_dispatch=sales_dispatch,
+            gatepass_no=sales_dispatch.gatepass_no or "",
+            entry_status=sales_dispatch.status,
+            copy_number=cls.next_copy_number(sales_dispatch),
+            print_type=print_type,
+            reprint_reason=reprint_reason,
+            printed_by=user,
+            printer_name=printer_name or "",
+            ip_address=ip_address or None,
+            user_agent=(user_agent or "")[:500],
+            created_by=user,
+            updated_by=user,
         )
 
 

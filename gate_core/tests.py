@@ -15,6 +15,8 @@ from gate_core.models import (
     SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
     SalesDispatchGateOutStatus,
+    SalesDispatchGatepassPrintLog,
+    SalesDispatchGatepassPrintType,
     SalesDispatchLock,
 )
 from vehicle_management.models import Transporter, Vehicle
@@ -231,6 +233,103 @@ class SalesDispatchAPITests(APITestCase):
         self.assertIsNone(print_entry.gatepass_no)
         self.assertEqual(print_entry.status, SalesDispatchGateOutStatus.READY_FOR_GATEPASS)
         self.assertEqual(commit_entry.status, SalesDispatchGateOutStatus.GATEPASS_PRINTED)
+
+    def test_gatepass_original_print_is_logged_once(self):
+        entry = self.create_sales_dispatch(
+            "3",
+            status_value=SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
+            with_photo=True,
+            with_item=True,
+            with_weighment=True,
+        )
+
+        response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/",
+            {"uom": "LTR", "physical_quantity": "80.000", "printer_name": "Dock Printer"},
+            format="json",
+            **self.company_header,
+        )
+        second_response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/",
+            {},
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, SalesDispatchGateOutStatus.GATEPASS_PRINTED)
+        self.assertTrue(entry.gatepass_no)
+        self.assertEqual(second_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("reprint workflow", second_response.data["detail"])
+        self.assertEqual(entry.gatepass_print_logs.count(), 1)
+        log = entry.gatepass_print_logs.get()
+        self.assertEqual(log.print_type, SalesDispatchGatepassPrintType.ORIGINAL)
+        self.assertEqual(log.copy_number, 1)
+        self.assertEqual(log.gatepass_no, entry.gatepass_no)
+        self.assertEqual(log.printer_name, "Dock Printer")
+
+    def test_gatepass_reprint_requires_reason_and_is_logged(self):
+        entry = self.create_sales_dispatch(
+            "4",
+            status_value=SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
+            with_photo=True,
+            with_item=True,
+            with_weighment=True,
+        )
+        self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/",
+            {},
+            format="json",
+            **self.company_header,
+        )
+
+        missing_reason_response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/reprint/",
+            {"reprint_reason": ""},
+            format="json",
+            **self.company_header,
+        )
+        reprint_response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/reprint/",
+            {"reprint_reason": "Original copy damaged", "printer_name": "Security Printer"},
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(missing_reason_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(reprint_response.status_code, status.HTTP_200_OK)
+        logs = list(entry.gatepass_print_logs.order_by("copy_number"))
+        self.assertEqual(len(logs), 2)
+        self.assertEqual(logs[0].print_type, SalesDispatchGatepassPrintType.ORIGINAL)
+        self.assertEqual(logs[1].print_type, SalesDispatchGatepassPrintType.REPRINT)
+        self.assertEqual(logs[1].copy_number, 2)
+        self.assertEqual(logs[1].reprint_reason, "Original copy damaged")
+        self.assertEqual(logs[1].printer_name, "Security Printer")
+
+    def test_gatepass_print_history_endpoint_returns_logs(self):
+        entry = self.create_sales_dispatch(
+            "5",
+            status_value=SalesDispatchGateOutStatus.GATEPASS_PRINTED,
+        )
+        entry.gatepass_no = "DCK/JIVO_OIL/2026-27/000005"
+        entry.printed_by = self.user
+        entry.printed_at = timezone.now()
+        entry.save(update_fields=["gatepass_no", "printed_by", "printed_at"])
+        SalesDispatchGatepassPrintLog.record_print(
+            sales_dispatch=entry,
+            print_type=SalesDispatchGatepassPrintType.ORIGINAL,
+            user=self.user,
+        )
+
+        response = self.client.get(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/prints/",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["gatepass_no"], entry.gatepass_no)
 
     def test_reports_return_operational_counts(self):
         self.create_sales_dispatch("10", status_value=SalesDispatchGateOutStatus.DOCKED)

@@ -14,6 +14,7 @@ from .models import (
     SalesDispatchGateOut,
     SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
+    SalesDispatchGatepassPrintLog,
     SalesDispatchGatepassSequence,
     SalesDispatchLock,
     UnitChoice,
@@ -73,6 +74,26 @@ class SalesDispatchAttachmentInline(admin.TabularInline):
     readonly_fields = ("uploaded_at", "uploaded_by", "original_filename")
 
 
+class SalesDispatchGatepassPrintLogInline(admin.TabularInline):
+    model = SalesDispatchGatepassPrintLog
+    extra = 0
+    readonly_fields = (
+        "gatepass_no",
+        "entry_status",
+        "copy_number",
+        "print_type",
+        "reprint_reason",
+        "printed_by",
+        "printed_at",
+        "printer_name",
+        "ip_address",
+    )
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(SalesDispatchGateOut)
 class SalesDispatchGateOutAdmin(admin.ModelAdmin):
     list_display = (
@@ -89,6 +110,7 @@ class SalesDispatchGateOutAdmin(admin.ModelAdmin):
         SalesDispatchGateOutDocumentInline,
         SalesDispatchGateOutItemInline,
         SalesDispatchAttachmentInline,
+        SalesDispatchGatepassPrintLogInline,
     ]
 
 
@@ -109,6 +131,48 @@ class SalesDispatchGateOutDocumentAdmin(admin.ModelAdmin):
 class SalesDispatchGatepassSequenceAdmin(admin.ModelAdmin):
     list_display = ("company", "financial_year", "last_number", "updated_at")
     list_filter = ("company", "financial_year")
+
+
+@admin.register(SalesDispatchGatepassPrintLog)
+class SalesDispatchGatepassPrintLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "gatepass_no",
+        "company",
+        "sales_dispatch",
+        "print_type",
+        "copy_number",
+        "printed_by",
+        "printed_at",
+        "printer_name",
+    )
+    list_filter = ("company", "print_type", "printed_at")
+    search_fields = (
+        "gatepass_no",
+        "sales_dispatch__entry_no",
+        "sales_dispatch__vehicle_no",
+        "printed_by__email",
+        "printed_by__full_name",
+        "reprint_reason",
+    )
+    readonly_fields = (
+        "company",
+        "sales_dispatch",
+        "gatepass_no",
+        "entry_status",
+        "copy_number",
+        "print_type",
+        "reprint_reason",
+        "printed_by",
+        "printed_at",
+        "printer_name",
+        "ip_address",
+        "user_agent",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(SalesDispatchLock)

@@ -17,6 +17,8 @@ from .sales_dispatch import (
     SalesDispatchGateOutDocument,
     SalesDispatchGateOutItem,
     SalesDispatchGateOutStatus,
+    SalesDispatchGatepassPrintLog,
+    SalesDispatchGatepassPrintType,
     SalesDispatchGatepassSequence,
     SalesDispatchLock,
 )
