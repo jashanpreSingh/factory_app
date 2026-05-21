@@ -88,11 +88,37 @@ class ProductionMovementReaderTests(SimpleTestCase):
 
         self.assertNotIn('INNER JOIN ProductionWarehouses P', query)
 
+    def test_build_stock_balance_query_uses_date_boundaries_and_warehouse(self):
+        reader = ProductionMovementReader.__new__(ProductionMovementReader)
+        reader.connection = type("Connection", (), {"schema": "TEST_SCHEMA"})()
+
+        query, params = reader._build_stock_balances_query(
+            {
+                "date_from": date(2026, 5, 21),
+                "date_to": date(2026, 5, 21),
+                "warehouse": "BH-PC",
+                "production_only": True,
+            }
+        )
+
+        self.assertIn('O."DocDate" < ?', query)
+        self.assertIn('O."DocDate" <= ?', query)
+        self.assertIn('INNER JOIN ProductionWarehouses P', query)
+        self.assertIn('O."Warehouse" = ?', query)
+        self.assertEqual(
+            params,
+            [date(2026, 5, 21), date(2026, 5, 21), date(2026, 5, 21), "BH-PC"],
+        )
+
 
 class ProductionMovementServiceTests(SimpleTestCase):
     def test_report_summarizes_in_and_out_movements(self):
         service = ProductionMovementService.__new__(ProductionMovementService)
         service.reader = MagicMock()
+        service.reader.get_stock_balances.return_value = {
+            "opening_qty": 500.0,
+            "closing_qty": 585.0,
+        }
         service.reader.get_movements.return_value = [
             _movement(),
             _movement(
@@ -120,9 +146,11 @@ class ProductionMovementServiceTests(SimpleTestCase):
         self.assertEqual(result["summary"]["total_entries"], 3)
         self.assertEqual(result["summary"]["inward_entries"], 2)
         self.assertEqual(result["summary"]["outward_entries"], 1)
+        self.assertEqual(result["summary"]["opening_qty"], 500.0)
         self.assertEqual(result["summary"]["total_in_qty"], 125.0)
         self.assertEqual(result["summary"]["total_out_qty"], 40.0)
         self.assertEqual(result["summary"]["net_qty"], 85.0)
+        self.assertEqual(result["summary"]["closing_qty"], 585.0)
         self.assertEqual(result["summary"]["total_value"], 6000.0)
         self.assertEqual(result["summary"]["warehouse_count"], 2)
         self.assertEqual(result["warehouse_summary"][0]["warehouse"], "BH-PM")

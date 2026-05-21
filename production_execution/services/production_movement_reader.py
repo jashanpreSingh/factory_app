@@ -69,6 +69,16 @@ ORDER BY W."WhsCode" ASC
         rows = self._execute(query, params)
         return [self._map_movement_row(row) for row in rows]
 
+    def get_stock_balances(self, filters: Dict[str, Any]) -> Dict[str, float]:
+        query, params = self._build_stock_balances_query(filters)
+        rows = self._execute(query, params)
+        if not rows:
+            return {"opening_qty": 0.0, "closing_qty": 0.0}
+        return {
+            "opening_qty": round(float(rows[0][0] or 0), 3),
+            "closing_qty": round(float(rows[0][1] or 0), 3),
+        }
+
     def _build_movements_query(self, filters: Dict[str, Any]):
         schema = self.connection.schema
         clauses = [
@@ -158,6 +168,68 @@ LEFT JOIN "{schema}"."OWHS" W
     ON W."WhsCode" = O."Warehouse"
 WHERE {where}
 ORDER BY O."DocDate" DESC, O."TransNum" DESC
+"""
+        return query, params
+
+    def _build_stock_balances_query(self, filters: Dict[str, Any]):
+        schema = self.connection.schema
+        params: List[Any] = [
+            filters["date_from"],
+            filters["date_to"],
+            filters["date_to"],
+        ]
+        clauses = [
+            '(COALESCE(O."InQty", 0) <> 0 OR COALESCE(O."OutQty", 0) <> 0)',
+            'O."DocDate" <= ?',
+        ]
+
+        production_join = ""
+        if filters.get("production_only", True):
+            production_join = """
+INNER JOIN ProductionWarehouses P
+    ON P."WhsCode" = O."Warehouse"
+"""
+
+        if filters.get("warehouse"):
+            clauses.append('O."Warehouse" = ?')
+            params.append(filters["warehouse"])
+
+        where = " AND ".join(clauses)
+
+        query = f"""
+WITH ProductionWarehouses AS (
+    SELECT DISTINCT "Warehouse" AS "WhsCode"
+    FROM "{schema}"."OWOR"
+    WHERE COALESCE("Warehouse", '') <> ''
+    UNION
+    SELECT DISTINCT "wareHouse" AS "WhsCode"
+    FROM "{schema}"."WOR1"
+    WHERE COALESCE("wareHouse", '') <> ''
+)
+SELECT
+    ROUND(
+        COALESCE(SUM(
+            CASE
+                WHEN O."DocDate" < ?
+                THEN COALESCE(O."InQty", 0) - COALESCE(O."OutQty", 0)
+                ELSE 0
+            END
+        ), 0),
+        3
+    ) AS "OpeningQty",
+    ROUND(
+        COALESCE(SUM(
+            CASE
+                WHEN O."DocDate" <= ?
+                THEN COALESCE(O."InQty", 0) - COALESCE(O."OutQty", 0)
+                ELSE 0
+            END
+        ), 0),
+        3
+    ) AS "ClosingQty"
+FROM "{schema}"."OINM" O
+{production_join}
+WHERE {where}
 """
         return query, params
 
