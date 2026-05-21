@@ -194,48 +194,88 @@ class ScanService:
     # ==================================================================
 
     def _parse_barcode(self, raw: str) -> dict:
-        """Try to parse QR JSON payload, or detect type from prefix."""
-        # Try JSON (QR code)
+        """Parse lightweight reference barcodes, with legacy JSON fallback."""
+        raw_stripped = (raw or '').strip()
+        if not raw_stripped:
+            return {
+                'entity_type': EntityType.UNKNOWN,
+                'barcode': '',
+                'error': 'Empty barcode value.',
+            }
+
+        # Legacy QR payloads used JSON with many item details. Keep this only as
+        # a compatibility fallback; new labels encode plain BOX-/PLT- references.
         try:
-            data = json.loads(raw)
+            data = json.loads(raw_stripped)
             if isinstance(data, dict):
                 barcode_type = data.get('type', '').upper()
                 if barcode_type == 'BOX':
                     return {
                         'entity_type': EntityType.BOX,
-                        'barcode': data.get('box_barcode', ''),
-                        **data,
+                        'barcode': data.get('box_barcode') or data.get('barcode') or '',
+                        'legacy_format': True,
                     }
-                elif barcode_type == 'PALLET':
+                if barcode_type == 'PALLET':
                     return {
                         'entity_type': EntityType.PALLET,
-                        'barcode': data.get('pallet_id', ''),
-                        **data,
+                        'barcode': data.get('pallet_id') or data.get('barcode') or '',
+                        'legacy_format': True,
                     }
+                barcode = str(data.get('barcode') or '').strip()
+                if barcode:
+                    parsed = self._parse_barcode(barcode)
+                    parsed['legacy_format'] = True
+                    return parsed
+                return {
+                    'entity_type': EntityType.UNKNOWN,
+                    'barcode': raw_stripped,
+                    'legacy_format': True,
+                    'error': 'Unsupported legacy barcode format.',
+                }
         except (json.JSONDecodeError, TypeError):
             pass
 
-        # Detect from prefix
-        raw_stripped = raw.strip()
         raw_upper = raw_stripped.upper()
 
-        # Our app's barcode format: BOX-YYYYMMDD-Line-NNNN or PLT-YYYYMMDD-Line-NNN
+        # Current lightweight barcode format: only the unique box/pallet ID.
         if raw_upper.startswith('BOX-'):
             return {'entity_type': EntityType.BOX, 'barcode': raw_stripped}
-        elif raw_upper.startswith('PLT-'):
+        if raw_upper.startswith('PLT-'):
             return {'entity_type': EntityType.PALLET, 'barcode': raw_stripped}
 
-        # 1D barcode format from label printer: B{box_barcode_no_special} or P{pallet_id_no_special}
-        # e.g. BBOX20260420Line_20001 → box_barcode = BOX-20260420-Line_2-0001
+        # Explicit compact references are accepted for scanner integrations.
+        if raw_upper.startswith('BOX_ID:'):
+            return {
+                'entity_type': EntityType.BOX,
+                'barcode': raw_stripped.split(':', 1)[1].strip(),
+            }
+        if raw_upper.startswith('PALLET_ID:'):
+            return {
+                'entity_type': EntityType.PALLET,
+                'barcode': raw_stripped.split(':', 1)[1].strip(),
+            }
+
+        # Older 1D printer values: B{box_barcode_no_special} / P{pallet_id_no_special}.
         if raw_upper.startswith('BBOX'):
             return {'entity_type': EntityType.BOX, 'barcode': raw_stripped}
-        elif raw_upper.startswith('PPLT'):
+        if raw_upper.startswith('PPLT'):
             return {'entity_type': EntityType.PALLET, 'barcode': raw_stripped}
 
-        return {'entity_type': EntityType.UNKNOWN, 'barcode': raw_stripped}
+        return {
+            'entity_type': EntityType.UNKNOWN,
+            'barcode': raw_stripped,
+            'error': 'Invalid barcode format.',
+        }
 
     def _lookup_box(self, barcode: str):
         stripped = barcode.strip()
+        if stripped.isdigit():
+            try:
+                return Box.objects.select_related('pallet').get(
+                    id=int(stripped), company=self.company
+                )
+            except Box.DoesNotExist:
+                pass
         # Try exact match first
         try:
             return Box.objects.select_related('pallet').get(
@@ -257,6 +297,11 @@ class ScanService:
 
     def _lookup_pallet(self, barcode: str):
         stripped = barcode.strip()
+        if stripped.isdigit():
+            try:
+                return Pallet.objects.get(id=int(stripped), company=self.company)
+            except Pallet.DoesNotExist:
+                pass
         try:
             return Pallet.objects.get(
                 pallet_id=stripped, company=self.company

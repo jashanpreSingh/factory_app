@@ -1,9 +1,10 @@
-import json
 import logging
+
+from django.db.models import Sum
 
 from ..models import (
     Box, Pallet, LabelPrintLog,
-    LabelType, PrintType, BoxStatus, PalletStatus,
+    BoxStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,14 +33,13 @@ class LabelService:
         except Box.DoesNotExist:
             raise ValueError(f"Box {box_id} not found.")
 
-        qr_payload = box.barcode_data or self._build_box_qr(box)
         box_number = self._get_box_number(box)
 
         return {
             'type': 'BOX',
             'id': box.id,
             'barcode': box.box_barcode,
-            'qr_payload': json.dumps(qr_payload),
+            'qr_payload': box.box_barcode,
             'pallet_id': box.pallet.pallet_id if box.pallet_id else '',
             'box_number': box_number,
             'box_count': box.pallet.box_count if box.pallet_id else None,
@@ -62,13 +62,15 @@ class LabelService:
         except Pallet.DoesNotExist:
             raise ValueError(f"Pallet {pallet_id} not found.")
 
-        qr_payload = pallet.barcode_data or self._build_pallet_qr(pallet)
+        weights = pallet.boxes.filter(
+            status__in=[BoxStatus.ACTIVE, BoxStatus.PARTIAL]
+        ).aggregate(g_weight=Sum('g_weight'), n_weight=Sum('n_weight'))
 
         return {
             'type': 'PALLET',
             'id': pallet.id,
             'barcode': pallet.pallet_id,
-            'qr_payload': json.dumps(qr_payload),
+            'qr_payload': pallet.pallet_id,
             'item_code': pallet.item_code,
             'item_name': pallet.item_name,
             'batch_number': pallet.batch_number,
@@ -80,6 +82,8 @@ class LabelService:
             'exp_date': str(pallet.exp_date),
             'production_line': pallet.production_line,
             'warehouse': pallet.current_warehouse,
+            'g_weight': str(weights['g_weight']) if weights['g_weight'] is not None else '',
+            'n_weight': str(weights['n_weight']) if weights['n_weight'] is not None else '',
         }
 
     def get_bulk_label_data(self, items: list[dict]) -> list[dict]:
@@ -139,33 +143,10 @@ class LabelService:
     # ==================================================================
 
     def _build_box_qr(self, box: Box) -> dict:
-        return {
-            'type': 'BOX',
-            'box_barcode': box.box_barcode,
-            'pallet_id': box.pallet.pallet_id if box.pallet_id else '',
-            'box_number': self._get_box_number(box),
-            'box_count': box.pallet.box_count if box.pallet_id else None,
-            'item_code': box.item_code,
-            'batch': box.batch_number,
-            'qty': str(box.qty),
-            'uom': box.uom,
-            'mfg_date': str(box.mfg_date),
-            'exp_date': str(box.exp_date),
-        }
+        return {'barcode': box.box_barcode}
 
     def _build_pallet_qr(self, pallet: Pallet) -> dict:
-        return {
-            'type': 'PALLET',
-            'pallet_id': pallet.pallet_id,
-            'item_code': pallet.item_code,
-            'batch': pallet.batch_number,
-            'box_count': pallet.box_count,
-            'max_box_count': pallet.max_box_count,
-            'total_qty': str(pallet.total_qty),
-            'uom': pallet.uom,
-            'mfg_date': str(pallet.mfg_date),
-            'exp_date': str(pallet.exp_date),
-        }
+        return {'barcode': pallet.pallet_id}
 
     @staticmethod
     def _get_box_number(box: Box) -> int | None:
