@@ -85,7 +85,10 @@ class BarcodeWorkflowTests(TestCase):
             BoxMovement.objects.filter(movement_type=BoxMovementType.CREATE).count(),
             3,
         )
-        self.assertTrue(all(box.barcode_data['type'] == 'BOX' for box in boxes))
+        self.assertEqual(
+            [box.barcode_data for box in boxes],
+            [{'barcode': box.box_barcode} for box in boxes],
+        )
 
         sequence = BarcodeSequence.objects.get(
             company=self.company,
@@ -162,7 +165,7 @@ class BarcodeWorkflowTests(TestCase):
             Box.objects.filter(pallet=pallet, current_warehouse='FG01').count(),
             3,
         )
-        self.assertEqual(pallet.barcode_data['type'], 'PALLET')
+        self.assertEqual(pallet.barcode_data, {'barcode': pallet.pallet_id})
 
     def test_add_boxes_to_pallet_rejects_mismatched_item_context(self):
         boxes = self._generate_boxes(count=1)
@@ -404,6 +407,61 @@ class BarcodeWorkflowTests(TestCase):
 
         other_box.refresh_from_db()
         self.assertIsNone(other_box.pallet)
+
+    def test_box_transfer_between_pallets_requires_available_target_space(self):
+        source_boxes = self._generate_boxes(count=2, qty='5.00', batch='BATCH-MERGE')
+        target_box = self._generate_boxes(count=1, qty='5.00', batch='BATCH-MERGE')[0]
+
+        source = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        source = self.service.add_boxes_to_pallet(
+            source.id,
+            [box.id for box in source_boxes],
+            user=self.user,
+        )
+        target = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG02',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+                'max_box_count': 2,
+            },
+            user=self.user,
+        )
+        target = self.service.add_boxes_to_pallet(target.id, [target_box.id], user=self.user)
+
+        transferred = self.service.transfer_boxes(
+            [source_boxes[0].id],
+            to_warehouse=target.current_warehouse,
+            to_pallet_id=target.id,
+            user=self.user,
+        )
+
+        self.assertEqual(transferred[0].pallet_id, target.id)
+        self.assertEqual(transferred[0].current_warehouse, 'FG02')
+        source.refresh_from_db()
+        target.refresh_from_db()
+        self.assertEqual(source.box_count, 1)
+        self.assertEqual(target.box_count, 2)
+
+        with self.assertRaisesMessage(ValueError, "Pallet capacity exceeded."):
+            self.service.transfer_boxes(
+                [source_boxes[1].id],
+                to_warehouse=target.current_warehouse,
+                to_pallet_id=target.id,
+                user=self.user,
+            )
+
+        source_boxes[1].refresh_from_db()
+        self.assertEqual(source_boxes[1].pallet_id, source.id)
 
     def test_pallet_sequence_uses_global_unique_namespace(self):
         first = self.service.create_pallet(

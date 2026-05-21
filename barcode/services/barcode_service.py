@@ -131,39 +131,12 @@ class BarcodeService:
         return 1
 
     def _build_box_barcode_data(self, box):
-        """Build the JSON payload that gets encoded in the QR code."""
-        box_number = self._get_box_number(box) if box.pallet_id else None
-        return {
-            "type": "BOX",
-            "box_barcode": box.box_barcode,
-            "pallet_id": box.pallet.pallet_id if box.pallet_id else "",
-            "box_number": box_number,
-            "box_count": box.pallet.box_count if box.pallet_id else None,
-            "item_code": box.item_code,
-            "batch": box.batch_number,
-            "qty": str(box.qty),
-            "uom": box.uom,
-            "mfg_date": str(box.mfg_date),
-            "exp_date": str(box.exp_date),
-            "line": box.production_line,
-            "warehouse": box.current_warehouse,
-        }
+        """Store only the unique box reference used by printed/scanned barcodes."""
+        return {"barcode": box.box_barcode}
 
     def _build_pallet_barcode_data(self, pallet):
-        return {
-            "type": "PALLET",
-            "pallet_id": pallet.pallet_id,
-            "item_code": pallet.item_code,
-            "batch": pallet.batch_number,
-            "box_count": pallet.box_count,
-            "max_box_count": pallet.max_box_count,
-            "total_qty": str(pallet.total_qty),
-            "uom": pallet.uom,
-            "mfg_date": str(pallet.mfg_date),
-            "exp_date": str(pallet.exp_date),
-            "line": pallet.production_line,
-            "warehouse": pallet.current_warehouse,
-        }
+        """Store only the unique pallet reference used by printed/scanned barcodes."""
+        return {"barcode": pallet.pallet_id}
 
     # ==================================================================
     # BOX — Generate
