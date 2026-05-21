@@ -6,7 +6,9 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
 from company.permissions import HasCompanyContext
-from .services import ProductionExecutionService
+from sap_client.exceptions import SAPConnectionError, SAPDataError
+
+from .services import ProductionExecutionService, ProductionMovementService
 from .models import (
     ProductionRun, MachineBreakdown, WasteLog, BreakdownCategory,
     ResourceElectricity, ResourceWater, ResourceGas, ResourceCompressedAir,
@@ -55,6 +57,9 @@ from .serializers import (
     # QC
     InProcessQCCheckSerializer, InProcessQCCheckCreateSerializer,
     FinalQCCheckSerializer, FinalQCCheckCreateSerializer,
+    # Production Movement Dashboard
+    ProductionMovementFilterOptionsSerializer, ProductionMovementFilterSerializer,
+    ProductionMovementReportSerializer,
 )
 from .permissions import (
     CanManageProductionLines, CanManageMachines, CanManageChecklistTemplates,
@@ -1077,6 +1082,53 @@ class AnalyticsAPI(APIView):
             line_id=request.GET.get('line_id'),
         )
         return Response(analytics)
+
+
+class ProductionMovementFilterOptionsAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewReports]
+
+    def get(self, request):
+        service = ProductionMovementService(request.company.company.code)
+        try:
+            result = service.get_filter_options()
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError as e:
+            return Response(
+                {"detail": f"SAP data error: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(ProductionMovementFilterOptionsSerializer(result).data)
+
+
+class ProductionMovementReportAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewReports]
+
+    def get(self, request):
+        filter_serializer = ProductionMovementFilterSerializer(data=request.query_params)
+        if not filter_serializer.is_valid():
+            return Response(
+                {"detail": "Invalid query parameters.", "errors": filter_serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = ProductionMovementService(request.company.company.code)
+        try:
+            result = service.get_report(filter_serializer.validated_data)
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError as e:
+            return Response(
+                {"detail": f"SAP data error: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(ProductionMovementReportSerializer(result).data)
 
 
 # ===========================================================================

@@ -829,6 +829,124 @@ class SAPBOMComponentSerializer(serializers.Serializer):
 
 
 # ---------------------------------------------------------------------------
+# Production Movement Dashboard Serializers
+# ---------------------------------------------------------------------------
+
+class ProductionMovementFilterSerializer(serializers.Serializer):
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
+    warehouse = serializers.CharField(required=False, max_length=20, allow_blank=True)
+    direction = serializers.ChoiceField(
+        choices=["all", "in", "out"],
+        required=False,
+        default="all",
+    )
+    transaction_type = serializers.CharField(
+        required=False,
+        max_length=50,
+        allow_blank=True,
+        help_text="SAP transaction type code, or comma-separated codes",
+    )
+    search = serializers.CharField(required=False, max_length=100, allow_blank=True)
+    production_only = serializers.BooleanField(required=False, default=True)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=1000, default=500)
+
+    def validate_transaction_type(self, value):
+        if not value:
+            return value
+        codes = [part.strip() for part in value.split(",") if part.strip()]
+        if not codes or any(not code.isdigit() for code in codes):
+            raise serializers.ValidationError("Use numeric SAP transaction type codes.")
+        return ",".join(codes)
+
+    def validate(self, attrs):
+        date_from = attrs.get("date_from")
+        date_to = attrs.get("date_to")
+        if date_from and date_to and date_from > date_to:
+            raise serializers.ValidationError("date_from cannot be after date_to.")
+        return attrs
+
+
+class ProductionMovementOptionSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    name = serializers.CharField(required=False, allow_blank=True)
+    label = serializers.CharField(required=False, allow_blank=True)
+
+
+class ProductionMovementFilterOptionsSerializer(serializers.Serializer):
+    warehouses = ProductionMovementOptionSerializer(many=True)
+    transaction_types = ProductionMovementOptionSerializer(many=True)
+
+
+class ProductionMovementItemSerializer(serializers.Serializer):
+    date = serializers.CharField()
+    item_code = serializers.CharField()
+    item_name = serializers.CharField()
+    item_group = serializers.CharField()
+    warehouse = serializers.CharField()
+    warehouse_name = serializers.CharField()
+    in_qty = serializers.FloatField()
+    out_qty = serializers.FloatField()
+    quantity = serializers.FloatField()
+    direction = serializers.CharField()
+    transaction_value = serializers.FloatField()
+    abs_value = serializers.FloatField()
+    transaction_type = serializers.IntegerField()
+    transaction_label = serializers.CharField()
+    reference = serializers.CharField(allow_blank=True)
+    doc_num = serializers.CharField(allow_blank=True)
+    created_by = serializers.CharField(allow_blank=True)
+
+
+class ProductionMovementSummarySerializer(serializers.Serializer):
+    total_entries = serializers.IntegerField()
+    inward_entries = serializers.IntegerField()
+    outward_entries = serializers.IntegerField()
+    total_in_qty = serializers.FloatField()
+    total_out_qty = serializers.FloatField()
+    net_qty = serializers.FloatField()
+    total_value = serializers.FloatField()
+    net_value = serializers.FloatField()
+    warehouse_count = serializers.IntegerField()
+
+
+class ProductionMovementWarehouseSummarySerializer(serializers.Serializer):
+    warehouse = serializers.CharField()
+    warehouse_name = serializers.CharField()
+    entry_count = serializers.IntegerField()
+    in_qty = serializers.FloatField()
+    out_qty = serializers.FloatField()
+    net_qty = serializers.FloatField()
+    total_value = serializers.FloatField()
+
+
+class ProductionMovementTypeSummarySerializer(serializers.Serializer):
+    transaction_type = serializers.IntegerField()
+    transaction_label = serializers.CharField()
+    entry_count = serializers.IntegerField()
+    in_qty = serializers.FloatField()
+    out_qty = serializers.FloatField()
+    total_value = serializers.FloatField()
+
+
+class ProductionMovementMetaSerializer(serializers.Serializer):
+    date_from = serializers.CharField()
+    date_to = serializers.CharField()
+    warehouse = serializers.CharField(allow_blank=True)
+    direction = serializers.CharField()
+    production_only = serializers.BooleanField()
+    limit = serializers.IntegerField()
+
+
+class ProductionMovementReportSerializer(serializers.Serializer):
+    data = ProductionMovementItemSerializer(many=True)
+    summary = ProductionMovementSummarySerializer()
+    warehouse_summary = ProductionMovementWarehouseSummarySerializer(many=True)
+    movement_type_summary = ProductionMovementTypeSummarySerializer(many=True)
+    meta = ProductionMovementMetaSerializer()
+
+
+# ---------------------------------------------------------------------------
 # Line SKU Config
 # ---------------------------------------------------------------------------
 
