@@ -21,6 +21,7 @@ from sap_client.client import SAPClient
 from sap_client.context import CompanyContext
 from sap_client.exceptions import SAPConnectionError, SAPDataError, SAPValidationError
 from sap_client.hana.connection import HanaConnection
+from weighment.models import Weighment
 
 from .models import (
     GRPOPosting,
@@ -828,6 +829,7 @@ class GRPOService:
         warehouse_code: Optional[str] = None,
         comments: Optional[str] = None,
         vendor_ref: Optional[str] = None,
+        tare_weight: Optional[Decimal] = None,
         extra_charges: Optional[List[Dict[str, Any]]] = None,
         attachments: Optional[list] = None,
         doc_date: Optional[str] = None,
@@ -848,6 +850,7 @@ class GRPOService:
             warehouse_code: Optional warehouse code for SAP
             comments: Optional user comments for SAP document
             vendor_ref: Optional vendor reference number (NumAtCard)
+            tare_weight: Tare weight captured at GRPO; updates the gate weighment row
             extra_charges: Optional list of additional expense dicts
             attachments: Optional list of Django UploadedFile objects to attach
             doc_date: Optional posting date (DocDate), ISO format YYYY-MM-DD
@@ -899,6 +902,35 @@ class GRPOService:
             raise ValueError(
                 f"Gate entry is not completed. Current status: {vehicle_entry.status}"
             )
+
+        # GRPO is the authoritative point for tare weight on RM/PM receipts.
+        # Gross remains captured at gate; net is recalculated by the Weighment model.
+        try:
+            weighment = Weighment.objects.select_for_update().get(vehicle_entry=vehicle_entry)
+        except Weighment.DoesNotExist:
+            raise ValueError("Gate gross weight is required before GRPO")
+
+        if weighment.gross_weight is None or weighment.gross_weight <= 0:
+            raise ValueError("Gate gross weight is required before GRPO")
+
+        resolved_tare_weight = tare_weight if tare_weight is not None else weighment.tare_weight
+        if resolved_tare_weight is None or resolved_tare_weight <= 0:
+            raise ValueError("Tare weight is required before GRPO")
+        if resolved_tare_weight > weighment.gross_weight:
+            raise ValueError("Tare weight cannot be greater than gross weight")
+
+        if tare_weight is not None:
+            weighment.tare_weight = resolved_tare_weight
+            if weighment.second_weighment_time is None:
+                weighment.second_weighment_time = timezone.now()
+            weighment.updated_by = user
+            weighment.save(update_fields=[
+                "tare_weight",
+                "net_weight",
+                "second_weighment_time",
+                "updated_by",
+                "updated_at",
+            ])
 
         # Check if any PO already has a POSTED GRPO
         for po_receipt in po_receipts:

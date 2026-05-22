@@ -313,6 +313,7 @@ class PostGRPOAPI(APIView):
                 warehouse_code=serializer.validated_data.get("warehouse_code"),
                 comments=serializer.validated_data.get("comments"),
                 vendor_ref=serializer.validated_data.get("vendor_ref"),
+                tare_weight=serializer.validated_data["tare_weight"],
                 extra_charges=serializer.validated_data.get("extra_charges"),
                 attachments=attachments,
                 doc_date=serializer.validated_data.get("doc_date"),

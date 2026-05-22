@@ -179,6 +179,13 @@ class GRPOPostRequestSerializer(serializers.Serializer):
         required=False, allow_blank=True, allow_null=True,
         help_text="Vendor reference / invoice number (NumAtCard in SAP)"
     )
+    tare_weight = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        required=True,
+        min_value=Decimal("0.001"),
+        help_text="Tare weight captured at GRPO; updates the gate weighment row"
+    )
     extra_charges = ExtraChargeInputSerializer(
         many=True, required=False,
         help_text="Additional expenses (freight, handling, etc.)"
