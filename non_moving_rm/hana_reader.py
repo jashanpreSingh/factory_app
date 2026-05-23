@@ -73,8 +73,47 @@ class HanaNonMovingRMReader:
         rows = self._execute(query, [])
         return [self._map_item_group_row(r) for r in rows]
 
+    def get_warehouse_distribution(self, item_codes: List[str]) -> List[Dict]:
+        """
+        Reads current warehouse-level stock for the given item codes.
+        """
+        unique_codes = sorted({code for code in item_codes if code})
+        if not unique_codes:
+            return []
+
+        rows = []
+        for chunk in self._chunks(unique_codes, 200):
+            query, params = self._build_warehouse_distribution_query(chunk)
+            rows.extend(self._execute(query, params))
+        return [self._map_warehouse_distribution_row(r) for r in rows]
+
+    def _build_warehouse_distribution_query(self, item_codes: List[str]):
+        schema = self._schema()
+        placeholders = ", ".join("?" for _ in item_codes)
+        query = f"""
+SELECT
+    T1."ItemCode",
+    T1."WhsCode",
+    COALESCE(T5."WhsName", T1."WhsCode") AS "WhsName",
+    SUM(COALESCE(T1."OnHand", 0)) AS "Quantity"
+FROM "{schema}"."OITW" T1
+LEFT JOIN "{schema}"."OWHS" T5
+    ON T5."WhsCode" = T1."WhsCode"
+WHERE T1."ItemCode" IN ({placeholders})
+  AND COALESCE(T5."Inactive", 'N') <> 'Y'
+GROUP BY T1."ItemCode", T1."WhsCode", COALESCE(T5."WhsName", T1."WhsCode")
+HAVING SUM(COALESCE(T1."OnHand", 0)) <> 0
+ORDER BY T1."WhsCode", T1."ItemCode"
+"""
+        return query, item_codes
+
     def _schema(self) -> str:
         return self.schema_override or self.connection.schema
+
+    @staticmethod
+    def _chunks(values: List[str], size: int):
+        for index in range(0, len(values), size):
+            yield values[index:index + size]
 
     # ------------------------------------------------------------------
     # Row Mappers
@@ -100,6 +139,14 @@ class HanaNonMovingRMReader:
         return {
             "item_group_code": int(row[0]),
             "item_group_name": row[1] or "",
+        }
+
+    def _map_warehouse_distribution_row(self, row) -> Dict:
+        return {
+            "item_code": row[0] or "",
+            "warehouse": row[1] or "",
+            "warehouse_name": row[2] or row[1] or "",
+            "quantity": float(row[3] or 0),
         }
 
     # ------------------------------------------------------------------

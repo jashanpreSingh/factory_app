@@ -179,6 +179,8 @@ class TestNonMovingRMService(TestCase):
             service = NonMovingRMService.__new__(NonMovingRMService)
             service.company_code = "JIVO_OIL"
             service.reader = MagicMock()
+            service.company_reader = MagicMock()
+            service.company_reader.get_warehouse_distribution.return_value = []
             return service
 
     def test_get_report_meta(self):
@@ -249,6 +251,45 @@ class TestNonMovingRMService(TestCase):
         by_branch = {b["branch"]: b for b in result["summary"]["by_branch"]}
         self.assertEqual(by_branch["OIL"]["item_count"], 2)
         self.assertEqual(by_branch["OIL"]["total_value"], 300.0)
+
+    def test_get_report_builds_warehouse_summary_from_distribution(self):
+        service = self._make_service()
+        service.reader.get_non_moving_report.return_value = [
+            {"branch": "OIL", "item_code": "ITEM-1", "value": 100.0, "quantity": 10.0},
+            {"branch": "OIL", "item_code": "ITEM-2", "value": 300.0, "quantity": 30.0},
+        ]
+        service.company_reader.get_warehouse_distribution.return_value = [
+            {
+                "item_code": "ITEM-1",
+                "warehouse": "BH-PC",
+                "warehouse_name": "Production Consumption",
+                "quantity": 10.0,
+            },
+            {
+                "item_code": "ITEM-2",
+                "warehouse": "BH-PC",
+                "warehouse_name": "Production Consumption",
+                "quantity": 10.0,
+            },
+            {
+                "item_code": "ITEM-2",
+                "warehouse": "BH-BS",
+                "warehouse_name": "Blowing Section",
+                "quantity": 20.0,
+            },
+        ]
+
+        result = service.get_report(age=45, item_group=105)
+
+        by_warehouse = {
+            row["warehouse"]: row for row in result["warehouse_summary"]
+        }
+        self.assertEqual(by_warehouse["BH-PC"]["item_count"], 2)
+        self.assertEqual(by_warehouse["BH-PC"]["total_quantity"], 20.0)
+        self.assertEqual(by_warehouse["BH-PC"]["total_value"], 200.0)
+        self.assertEqual(by_warehouse["BH-BS"]["item_count"], 1)
+        self.assertEqual(by_warehouse["BH-BS"]["total_quantity"], 20.0)
+        self.assertEqual(by_warehouse["BH-BS"]["total_value"], 200.0)
 
     def test_get_report_filters_to_selected_company_branch(self):
         service = self._make_service()
@@ -414,6 +455,15 @@ class TestNonMovingRMAPIViews(APITestCase):
                     }
                 ],
             },
+            "warehouse_summary": [
+                {
+                    "warehouse": "WH-RM",
+                    "warehouse_name": "RM Warehouse",
+                    "item_count": 1,
+                    "total_value": 24203.0,
+                    "total_quantity": 26116.0,
+                }
+            ],
             "meta": {
                 "age_days": 45,
                 "item_group": 105,

@@ -36,6 +36,7 @@ class NonMovingRMService:
             self.report_context,
             schema_override=PROCEDURE_SOURCE_SCHEMA,
         )
+        self.company_reader = HanaNonMovingRMReader(self.context)
 
     # ------------------------------------------------------------------
     # Report — Non-Moving RM Data
@@ -50,6 +51,9 @@ class NonMovingRMService:
             row for row in rows
             if self._matches_company_branch(row) and self._meets_age_threshold(row, age)
         ]
+        warehouse_distribution = self.company_reader.get_warehouse_distribution(
+            [row.get("item_code", "") for row in rows]
+        )
 
         total_items = len(rows)
         total_value = sum(r["value"] for r in rows)
@@ -83,6 +87,10 @@ class NonMovingRMService:
                 "total_quantity": round(total_quantity, 2),
                 "by_branch": list(branch_summary.values()),
             },
+            "warehouse_summary": self._build_warehouse_summary(
+                rows,
+                warehouse_distribution,
+            ),
             "meta": {
                 "age_days": age,
                 "item_group": item_group,
@@ -123,3 +131,86 @@ class NonMovingRMService:
         if not expected_branch:
             return True
         return branch == expected_branch
+
+    def _build_warehouse_summary(
+        self,
+        rows: List[Dict],
+        warehouse_distribution: List[Dict],
+    ) -> List[Dict]:
+        report_by_item: Dict[str, Dict[str, float]] = {}
+        for row in rows:
+            item_code = row.get("item_code") or ""
+            if not item_code:
+                continue
+            existing = report_by_item.setdefault(
+                item_code,
+                {"quantity": 0.0, "value": 0.0},
+            )
+            existing["quantity"] += row["quantity"]
+            existing["value"] += row["value"]
+
+        distribution_by_item: Dict[str, List[Dict]] = {}
+        for row in warehouse_distribution:
+            distribution_by_item.setdefault(row["item_code"], []).append(row)
+
+        buckets: Dict[str, Dict] = {}
+        for item_code, report_totals in report_by_item.items():
+            distributions = distribution_by_item.get(item_code, [])
+            distribution_total = sum(abs(row["quantity"]) for row in distributions)
+            if distribution_total <= 0:
+                self._add_warehouse_bucket(
+                    buckets,
+                    warehouse="Unassigned",
+                    warehouse_name="No current warehouse stock found",
+                    quantity=report_totals["quantity"],
+                    value=report_totals["value"],
+                    item_code=item_code,
+                )
+                continue
+
+            for distribution in distributions:
+                ratio = abs(distribution["quantity"]) / distribution_total
+                self._add_warehouse_bucket(
+                    buckets,
+                    warehouse=distribution["warehouse"],
+                    warehouse_name=distribution["warehouse_name"],
+                    quantity=report_totals["quantity"] * ratio,
+                    value=report_totals["value"] * ratio,
+                    item_code=item_code,
+                )
+
+        summary = []
+        for bucket in buckets.values():
+            summary.append({
+                "warehouse": bucket["warehouse"],
+                "warehouse_name": bucket["warehouse_name"],
+                "item_count": len(bucket["item_codes"]),
+                "total_quantity": round(bucket["total_quantity"], 3),
+                "total_value": round(bucket["total_value"], 2),
+            })
+
+        return sorted(summary, key=lambda row: row["total_value"], reverse=True)
+
+    @staticmethod
+    def _add_warehouse_bucket(
+        buckets: Dict[str, Dict],
+        *,
+        warehouse: str,
+        warehouse_name: str,
+        quantity: float,
+        value: float,
+        item_code: str,
+    ) -> None:
+        bucket = buckets.setdefault(
+            warehouse,
+            {
+                "warehouse": warehouse,
+                "warehouse_name": warehouse_name,
+                "item_codes": set(),
+                "total_quantity": 0.0,
+                "total_value": 0.0,
+            },
+        )
+        bucket["item_codes"].add(item_code)
+        bucket["total_quantity"] += quantity
+        bucket["total_value"] += value
