@@ -309,8 +309,10 @@ class SalesDispatchGateOut(BaseModel):
         permissions = [
             ("can_view_sales_dispatch_out", "Can view sales dispatch out"),
             ("can_create_sales_dispatch_out", "Can create sales dispatch out"),
+            ("can_edit_sales_dispatch_out", "Can edit sales dispatch out"),
             ("can_upload_sales_dispatch_photo", "Can upload sales dispatch truck photo"),
             ("can_print_sales_dispatch_gatepass", "Can print sales dispatch gatepass"),
+            ("can_reprint_sales_dispatch_gatepass", "Can reprint sales dispatch gatepass"),
             ("can_commit_sales_dispatch_print", "Can commit sales dispatch print"),
             ("can_reject_sales_dispatch_out", "Can reject sales dispatch out"),
             ("can_cancel_sales_dispatch_out", "Can cancel sales dispatch out"),

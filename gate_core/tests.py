@@ -2,6 +2,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
@@ -23,6 +24,22 @@ from vehicle_management.models import Transporter, Vehicle
 from weighment.models import Weighment
 
 
+SALES_DISPATCH_PERMISSION_CODENAMES = [
+    "can_view_sales_dispatch_out",
+    "can_create_sales_dispatch_out",
+    "can_edit_sales_dispatch_out",
+    "can_upload_sales_dispatch_photo",
+    "can_print_sales_dispatch_gatepass",
+    "can_reprint_sales_dispatch_gatepass",
+    "can_commit_sales_dispatch_print",
+    "can_reject_sales_dispatch_out",
+    "can_cancel_sales_dispatch_out",
+    "can_dispatch_sales_dispatch_out",
+    "can_view_sales_dispatch_reports",
+    "can_manage_sales_dispatch_lock",
+]
+
+
 class SalesDispatchAPITests(APITestCase):
     def setUp(self):
         user_model = get_user_model()
@@ -40,6 +57,7 @@ class SalesDispatchAPITests(APITestCase):
             role=self.role,
             is_default=True,
         )
+        self.grant_sales_dispatch_permissions(self.user)
         self.transporter = Transporter.objects.create(name="Test Transporter")
         self.vehicle = Vehicle.objects.create(
             vehicle_number="DL01AC0001",
@@ -53,6 +71,29 @@ class SalesDispatchAPITests(APITestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
         self.company_header = {"HTTP_COMPANY_CODE": self.company.code}
+
+    def grant_sales_dispatch_permissions(self, user):
+        permissions = Permission.objects.filter(
+            content_type__app_label="gate_core",
+            codename__in=SALES_DISPATCH_PERMISSION_CODENAMES,
+        )
+        user.user_permissions.add(*permissions)
+
+    def create_company_user_without_permissions(self):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(
+            email="dock.viewer@example.com",
+            password="testpass",
+            full_name="Dock No Permission",
+            employee_code="DCK002",
+        )
+        UserCompany.objects.create(
+            user=user,
+            company=self.company,
+            role=self.role,
+            is_default=True,
+        )
+        return user
 
     def sap_document(
         self,
@@ -172,6 +213,51 @@ class SalesDispatchAPITests(APITestCase):
                 updated_by=self.user,
             )
         return entry
+
+    def test_sales_dispatch_actions_require_docking_permissions(self):
+        entry = self.create_sales_dispatch(
+            "90",
+            status_value=SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
+        )
+        no_permission_client = APIClient()
+        no_permission_client.force_authenticate(self.create_company_user_without_permissions())
+
+        requests = [
+            ("get", "/api/v1/gate-core/sales-dispatch/lock/", None),
+            ("patch", "/api/v1/gate-core/sales-dispatch/lock/", {"is_locked": True, "reason": "Hold"}),
+            ("get", "/api/v1/gate-core/sales-dispatch/reports/", None),
+            ("get", "/api/v1/gate-core/sales-dispatch/pending-bookings/", None),
+            ("get", "/api/v1/gate-core/sales-dispatch/documents/", None),
+            ("get", "/api/v1/gate-core/sales-dispatch/", None),
+            ("post", "/api/v1/gate-core/sales-dispatch/", {}),
+            ("get", f"/api/v1/gate-core/sales-dispatch/{entry.id}/", None),
+            ("patch", f"/api/v1/gate-core/sales-dispatch/{entry.id}/", {"remarks": "No"}),
+            ("get", f"/api/v1/gate-core/sales-dispatch/by-vehicle-entry/{entry.vehicle_entry_id}/", None),
+            ("get", f"/api/v1/gate-core/sales-dispatch/{entry.id}/attachments/", None),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/attachments/", {}),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/preview/", {}),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/", {}),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/reprint/", {"reprint_reason": "Copy"}),
+            ("get", f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/prints/", None),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/commit-print/", {}),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/dispatch/", {}),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/reject/", {"reason": "No"}),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/cancel/", {"reason": "No"}),
+        ]
+
+        for method, url, payload in requests:
+            with self.subTest(method=method, url=url):
+                client_method = getattr(no_permission_client, method)
+                if payload is None:
+                    response = client_method(url, **self.company_header)
+                else:
+                    response = client_method(
+                        url,
+                        payload,
+                        format="json",
+                        **self.company_header,
+                    )
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_lock_endpoint_creates_default_unlocked_state(self):
         response = self.client.get(
@@ -375,6 +461,121 @@ class SalesDispatchAPITests(APITestCase):
         self.assertEqual(len(response.data["missing_photo"]), 1)
         self.assertEqual(len(response.data["ready_for_dispatch"]), 1)
         self.assertEqual(len(response.data["rejected_cancelled"]), 2)
+
+    def test_pending_bookings_endpoint_groups_booked_dispatch_plans(self):
+        linked_vehicle_entry = VehicleEntry.objects.create(
+            entry_no="VEH-LINK-1",
+            company=self.company,
+            vehicle=self.vehicle,
+            driver=self.driver,
+            entry_type="SALES_DISPATCH",
+            status="BOOKED",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        first_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=80001,
+            sap_invoice_doc_num="80001",
+            invoice_number="INV-80001",
+            invoice_weight=Decimal("10.000"),
+            invoice_amount=Decimal("100.00"),
+            product_variety="Oil",
+            total_litres=Decimal("40.000"),
+            booking_status=DispatchPlanStatus.BOOKED,
+            dispatch_date=timezone.localdate(),
+            vehicle=self.vehicle,
+            transporter=self.transporter,
+            driver=self.driver,
+            linked_vehicle_entry=linked_vehicle_entry,
+            bilty_no="BLT-BOOKED",
+            bilty_date=timezone.localdate(),
+            freight=Decimal("50.00"),
+            total_freight=Decimal("50.00"),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        second_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=80002,
+            sap_invoice_doc_num="80002",
+            invoice_number="INV-80002",
+            invoice_weight=Decimal("20.000"),
+            invoice_amount=Decimal("200.00"),
+            product_variety="Oil",
+            total_litres=Decimal("60.000"),
+            booking_status=DispatchPlanStatus.BOOKED,
+            dispatch_date=timezone.localdate(),
+            vehicle=self.vehicle,
+            transporter=self.transporter,
+            driver=self.driver,
+            linked_vehicle_entry=linked_vehicle_entry,
+            bilty_no="BLT-BOOKED",
+            bilty_date=timezone.localdate(),
+            freight=Decimal("75.00"),
+            total_freight=Decimal("75.00"),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.get(
+            "/api/v1/gate-core/sales-dispatch/pending-bookings/",
+            {
+                "from_date": timezone.localdate().isoformat(),
+                "to_date": timezone.localdate().isoformat(),
+            },
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        group = response.data[0]
+        self.assertEqual(group["row_type"], "PENDING_BOOKING")
+        self.assertEqual(group["status"], "PENDING_DOCKING")
+        self.assertEqual(group["dispatch_plan_ids"], [first_plan.id, second_plan.id])
+        self.assertEqual(group["document_numbers"], ["80001", "80002"])
+        self.assertEqual(group["vehicle"], self.vehicle.id)
+        self.assertEqual(group["driver"], self.driver.id)
+        self.assertEqual(group["vehicle_entry"], linked_vehicle_entry.id)
+        self.assertEqual(group["total_litres"], Decimal("100.000"))
+        self.assertEqual(group["total_weight"], Decimal("30.000"))
+        self.assertEqual(len(group["documents"]), 2)
+
+    def test_pending_bookings_excludes_already_docked_plans(self):
+        plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=81001,
+            sap_invoice_doc_num="81001",
+            booking_status=DispatchPlanStatus.BOOKED,
+            dispatch_date=timezone.localdate(),
+            vehicle=self.vehicle,
+            transporter=self.transporter,
+            driver=self.driver,
+            bilty_no="BLT-DOCKED",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        entry = self.create_sales_dispatch(
+            "23",
+            status_value=SalesDispatchGateOutStatus.DOCKED,
+            dispatch_plan=plan,
+        )
+        SalesDispatchGateOutDocument.objects.create(
+            sales_dispatch=entry,
+            company=self.company,
+            dispatch_plan=plan,
+            document_type=SalesDispatchDocumentType.INVOICE,
+            sap_doc_entry=81001,
+            sap_doc_num="81001",
+        )
+
+        response = self.client.get(
+            "/api/v1/gate-core/sales-dispatch/pending-bookings/",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, [])
 
     def test_mark_dispatched_completes_vehicle_entry_and_dispatch_plan(self):
         plan = DispatchPlan.objects.create(

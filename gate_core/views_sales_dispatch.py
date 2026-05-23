@@ -16,6 +16,7 @@ from driver_management.models import Driver, VehicleEntry
 from sap_client.exceptions import SAPConnectionError, SAPDataError
 from vehicle_management.models import Vehicle
 
+from gate_core.permissions import HasRequiredDjangoPermission
 from gate_core.models import (
     SalesDispatchAttachment,
     SalesDispatchAttachmentType,
@@ -48,6 +49,16 @@ from gate_core.services.sales_dispatch_gatepass import (
     ensure_gatepass_ready,
     get_gatepass_readiness,
 )
+
+
+SALES_DISPATCH_ACTIVE_STATUSES = [
+    SalesDispatchGateOutStatus.DOCKED,
+    SalesDispatchGateOutStatus.PHOTO_ATTACHED,
+    SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
+    SalesDispatchGateOutStatus.GATEPASS_PRINTED,
+    SalesDispatchGateOutStatus.PRINT_COMMITTED,
+    SalesDispatchGateOutStatus.DISPATCHED,
+]
 
 
 def sales_dispatch_queryset(company):
@@ -117,6 +128,286 @@ def apply_sales_dispatch_filters(qs, query_params):
     return qs.distinct()
 
 
+def pending_dispatch_plan_queryset(company):
+    active_plan_ids = SalesDispatchGateOut.objects.filter(
+        company=company,
+        is_active=True,
+        dispatch_plan_id__isnull=False,
+        status__in=SALES_DISPATCH_ACTIVE_STATUSES,
+    ).values_list("dispatch_plan_id", flat=True)
+    active_document_plan_ids = SalesDispatchGateOutDocument.objects.filter(
+        company=company,
+        is_active=True,
+        dispatch_plan_id__isnull=False,
+        sales_dispatch__is_active=True,
+        sales_dispatch__status__in=SALES_DISPATCH_ACTIVE_STATUSES,
+    ).values_list("dispatch_plan_id", flat=True)
+    active_document_doc_entries = SalesDispatchGateOutDocument.objects.filter(
+        company=company,
+        is_active=True,
+        document_type=SalesDispatchDocumentType.INVOICE,
+        sales_dispatch__is_active=True,
+        sales_dispatch__status__in=SALES_DISPATCH_ACTIVE_STATUSES,
+    ).values_list("sap_doc_entry", flat=True)
+
+    return (
+        DispatchPlan.objects
+        .filter(
+            company=company,
+            is_active=True,
+            booking_status=DispatchPlanStatus.BOOKED,
+        )
+        .exclude(id__in=active_plan_ids)
+        .exclude(id__in=active_document_plan_ids)
+        .exclude(sap_invoice_doc_entry__in=active_document_doc_entries)
+        .select_related(
+            "vehicle",
+            "vehicle__vehicle_type",
+            "vehicle__transporter",
+            "transporter",
+            "driver",
+            "linked_vehicle_entry",
+        )
+        .order_by("dispatch_date", "updated_at", "id")
+    )
+
+
+def apply_pending_dispatch_plan_filters(qs, query_params):
+    from_date = query_params.get("from_date")
+    to_date = query_params.get("to_date")
+    search = (query_params.get("search") or "").strip()
+    dispatch_plan_ids = parse_id_list(query_params.get("dispatch_plan_ids"))
+
+    if dispatch_plan_ids:
+        return qs.filter(id__in=dispatch_plan_ids)
+    if from_date:
+        qs = qs.filter(
+            Q(dispatch_date__gte=from_date)
+            | Q(dispatch_date__isnull=True, updated_at__date__gte=from_date)
+        )
+    if to_date:
+        qs = qs.filter(
+            Q(dispatch_date__lte=to_date)
+            | Q(dispatch_date__isnull=True, updated_at__date__lte=to_date)
+        )
+    if search:
+        qs = qs.filter(
+            Q(sap_invoice_doc_num__icontains=search)
+            | Q(invoice_number__icontains=search)
+            | Q(eway_bill__icontains=search)
+            | Q(vehicle_no__icontains=search)
+            | Q(vehicle__vehicle_number__icontains=search)
+            | Q(driver_name__icontains=search)
+            | Q(driver__name__icontains=search)
+            | Q(transporter_name__icontains=search)
+            | Q(transporter__name__icontains=search)
+            | Q(bilty_no__icontains=search)
+            | Q(product_variety__icontains=search)
+            | Q(place_of_supply__icontains=search)
+        )
+    return qs
+
+
+def parse_id_list(value):
+    ids = []
+    for raw_id in str(value or "").split(","):
+        raw_id = raw_id.strip()
+        if not raw_id:
+            continue
+        try:
+            ids.append(int(raw_id))
+        except ValueError:
+            continue
+    return list(dict.fromkeys(ids))
+
+
+def serialize_pending_booking_groups(plans):
+    groups = {}
+    for plan in plans:
+        groups.setdefault(pending_booking_group_key(plan), []).append(plan)
+
+    return [
+        serialize_pending_booking_group(group_plans)
+        for group_plans in sorted(
+            groups.values(),
+            key=lambda grouped: (
+                grouped[0].dispatch_date or timezone.localdate(),
+                grouped[0].updated_at,
+                grouped[0].id,
+            ),
+        )
+    ]
+
+
+def pending_booking_group_key(plan):
+    bilty_date = plan.bilty_date.isoformat() if plan.bilty_date else ""
+    dispatch_date = plan.dispatch_date.isoformat() if plan.dispatch_date else ""
+    return (
+        plan.linked_vehicle_entry_id or 0,
+        plan.vehicle_id or 0,
+        plan.driver_id or 0,
+        plan.transporter_id or 0,
+        plan.bilty_no.strip().upper(),
+        bilty_date,
+        dispatch_date,
+    )
+
+
+def serialize_pending_booking_group(plans):
+    plans = sorted(plans, key=lambda plan: plan.sap_invoice_doc_num or plan.sap_invoice_doc_entry)
+    primary = plans[0]
+    plan_ids = [plan.id for plan in plans]
+    documents = [serialize_pending_booking_document(plan) for plan in plans]
+    updated_at = max(plan.updated_at for plan in plans)
+    created_at = min(plan.created_at for plan in plans)
+
+    return {
+        "row_type": "PENDING_BOOKING",
+        "id": f"booking:{','.join(str(plan_id) for plan_id in plan_ids)}",
+        "dispatch_plan_ids": plan_ids,
+        "document_count": len(plans),
+        "document_numbers": [
+            plan.sap_invoice_doc_num or str(plan.sap_invoice_doc_entry)
+            for plan in plans
+        ],
+        "documents": documents,
+        "document_type": SalesDispatchDocumentType.INVOICE,
+        "sap_doc_entry": primary.sap_invoice_doc_entry,
+        "sap_doc_num": join_unique(
+            plan.sap_invoice_doc_num or str(plan.sap_invoice_doc_entry)
+            for plan in plans
+        ),
+        "sap_doc_date": None,
+        "sap_doc_total": sum_decimal(
+            plan.invoice_amount
+            for plan in plans
+            if plan.invoice_amount is not None
+        ),
+        "customer_code": "",
+        "customer_name": "",
+        "place_of_supply": join_unique(plan.place_of_supply for plan in plans),
+        "eway_bill": join_unique(plan.eway_bill for plan in plans),
+        "item_summary": join_unique(
+            plan.product_variety or plan.invoice_number or plan.sap_invoice_doc_num
+            for plan in plans
+        ),
+        "total_litres": sum_decimal(
+            plan.total_litres
+            for plan in plans
+            if plan.total_litres is not None
+        ),
+        "total_weight": sum_decimal(
+            plan.invoice_weight
+            for plan in plans
+            if plan.invoice_weight is not None
+        ),
+        "vehicle": primary.vehicle_id,
+        "vehicle_entry": primary.linked_vehicle_entry_id,
+        "vehicle_entry_no": (
+            primary.linked_vehicle_entry.entry_no
+            if primary.linked_vehicle_entry_id
+            else ""
+        ),
+        "vehicle_no": vehicle_number(primary),
+        "transporter": primary.transporter_id,
+        "transporter_name": transporter_name(primary),
+        "transporter_gstin": primary.transporter_gstin,
+        "transporter_contact_person": primary.contact_person,
+        "transporter_mobile_no": primary.mobile_no,
+        "driver": primary.driver_id,
+        "driver_name": driver_name(primary),
+        "driver_mobile_no": primary.driver_mobile_no,
+        "driver_license_no": primary.driver_license_no,
+        "driver_id_proof_type": primary.driver_id_proof_type,
+        "driver_id_proof_number": primary.driver_id_proof_number,
+        "bilty_no": primary.bilty_no,
+        "bilty_date": primary.bilty_date,
+        "freight": sum_decimal(plan.freight for plan in plans if plan.freight is not None),
+        "total_freight": sum_decimal(
+            plan.total_freight
+            for plan in plans
+            if plan.total_freight is not None
+        ),
+        "gate_out_date": primary.dispatch_date,
+        "out_time": None,
+        "gatepass_no": None,
+        "status": "PENDING_DOCKING",
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+
+
+def serialize_pending_booking_document(plan):
+    return {
+        "document_type": SalesDispatchDocumentType.INVOICE,
+        "doc_entry": plan.sap_invoice_doc_entry,
+        "doc_num": plan.sap_invoice_doc_num or str(plan.sap_invoice_doc_entry),
+        "doc_date": None,
+        "doc_total": plan.invoice_amount,
+        "card_code": "",
+        "card_name": "",
+        "place_of_supply": plan.place_of_supply,
+        "eway_bill": plan.eway_bill,
+        "vehicle_no": vehicle_number(plan),
+        "transporter_name": transporter_name(plan),
+        "bilty_no": plan.bilty_no,
+        "bilty_date": plan.bilty_date,
+        "item_summary": plan.product_variety or plan.invoice_number,
+        "total_litres": plan.total_litres,
+        "total_weight": plan.invoice_weight,
+        "line_count": 0,
+        "items": [],
+        "plan": {
+            "id": plan.id,
+            "sap_invoice_doc_entry": plan.sap_invoice_doc_entry,
+            "sap_invoice_doc_num": plan.sap_invoice_doc_num,
+            "booking_status": plan.booking_status,
+        },
+    }
+
+
+def vehicle_number(plan):
+    if plan.vehicle_no:
+        return plan.vehicle_no
+    if plan.vehicle_id:
+        return plan.vehicle.vehicle_number
+    return ""
+
+
+def transporter_name(plan):
+    if plan.transporter_name:
+        return plan.transporter_name
+    if plan.transporter_id:
+        return plan.transporter.name
+    if plan.vehicle_id and plan.vehicle.transporter_id:
+        return plan.vehicle.transporter.name
+    return ""
+
+
+def driver_name(plan):
+    if plan.driver_name:
+        return plan.driver_name
+    if plan.driver_id:
+        return plan.driver.name
+    return ""
+
+
+def join_unique(values):
+    result = []
+    for value in values:
+        value = str(value or "").strip()
+        if value and value not in result:
+            result.append(value)
+    return ", ".join(result)
+
+
+def sum_decimal(values):
+    values = list(values)
+    if not values:
+        return None
+    return sum(values, Decimal("0"))
+
+
 def sales_dispatch_locked_response(company):
     lock = SalesDispatchLock.for_company(company)
     if not lock.is_locked:
@@ -135,7 +426,11 @@ def sales_dispatch_locked_response(company):
 
 
 class SalesDispatchLockView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = {
+        "GET": "gate_core.can_view_sales_dispatch_out",
+        "PATCH": "gate_core.can_manage_sales_dispatch_lock",
+    }
 
     def get(self, request):
         lock = SalesDispatchLock.for_company(request.company.company)
@@ -166,7 +461,8 @@ class SalesDispatchLockView(APIView):
 
 
 class SalesDispatchReportView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_view_sales_dispatch_reports"
 
     def get(self, request):
         qs = apply_sales_dispatch_filters(
@@ -238,8 +534,23 @@ class SalesDispatchReportView(APIView):
         )
 
 
+class SalesDispatchPendingBookingListView(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_view_sales_dispatch_out"
+
+    def get(self, request):
+        qs = apply_pending_dispatch_plan_filters(
+            pending_dispatch_plan_queryset(request.company.company),
+            request.query_params,
+        )
+        limit = min(int(request.query_params.get("limit") or 200), 1000)
+        groups = serialize_pending_booking_groups(qs[:limit])
+        return Response(groups)
+
+
 class SalesDispatchDocumentListView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_create_sales_dispatch_out"
 
     def get(self, request):
         service = SalesDispatchDocumentService(request.company.company)
@@ -272,7 +583,8 @@ class SalesDispatchDocumentListView(APIView):
 
 
 class SalesDispatchDocumentDetailView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_create_sales_dispatch_out"
 
     def get(self, request, document_type, doc_entry):
         service = SalesDispatchDocumentService(request.company.company)
@@ -297,7 +609,11 @@ class SalesDispatchDocumentDetailView(APIView):
 
 
 class SalesDispatchGateOutListCreateView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = {
+        "GET": "gate_core.can_view_sales_dispatch_out",
+        "POST": "gate_core.can_create_sales_dispatch_out",
+    }
 
     def get(self, request):
         qs = apply_sales_dispatch_filters(
@@ -428,14 +744,7 @@ class SalesDispatchGateOutListCreateView(APIView):
 
     @staticmethod
     def _active_statuses():
-        return [
-            SalesDispatchGateOutStatus.DOCKED,
-            SalesDispatchGateOutStatus.PHOTO_ATTACHED,
-            SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
-            SalesDispatchGateOutStatus.GATEPASS_PRINTED,
-            SalesDispatchGateOutStatus.PRINT_COMMITTED,
-            SalesDispatchGateOutStatus.DISPATCHED,
-        ]
+        return SALES_DISPATCH_ACTIVE_STATUSES
 
     def _validate_document_set(self, company, documents):
         document_types = {document["document_type"] for document in documents}
@@ -636,7 +945,11 @@ class SalesDispatchGateOutListCreateView(APIView):
 
 
 class SalesDispatchGateOutDetailView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = {
+        "GET": "gate_core.can_view_sales_dispatch_out",
+        "PATCH": "gate_core.can_edit_sales_dispatch_out",
+    }
 
     def get(self, request, entry_id):
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
@@ -660,7 +973,8 @@ class SalesDispatchGateOutDetailView(APIView):
 
 
 class SalesDispatchGateOutByVehicleEntryView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_view_sales_dispatch_out"
 
     def get(self, request, vehicle_entry_id):
         entry = sales_dispatch_queryset(request.company.company).filter(
@@ -672,7 +986,11 @@ class SalesDispatchGateOutByVehicleEntryView(APIView):
 
 
 class SalesDispatchAttachmentListCreateView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = {
+        "GET": "gate_core.can_view_sales_dispatch_out",
+        "POST": "gate_core.can_upload_sales_dispatch_photo",
+    }
 
     def get(self, request, entry_id):
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
@@ -735,7 +1053,8 @@ class SalesDispatchAttachmentListCreateView(APIView):
 
 
 class SalesDispatchGatepassPreviewView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_print_sales_dispatch_gatepass"
 
     def post(self, request, entry_id):
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
@@ -750,7 +1069,8 @@ class SalesDispatchGatepassPreviewView(APIView):
 
 
 class SalesDispatchGatepassPrintView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_print_sales_dispatch_gatepass"
 
     def post(self, request, entry_id):
         locked_response = sales_dispatch_locked_response(request.company.company)
@@ -821,7 +1141,8 @@ class SalesDispatchGatepassPrintView(APIView):
 
 
 class SalesDispatchGatepassReprintView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_reprint_sales_dispatch_gatepass"
 
     def post(self, request, entry_id):
         locked_response = sales_dispatch_locked_response(request.company.company)
@@ -863,7 +1184,8 @@ class SalesDispatchGatepassReprintView(APIView):
 
 
 class SalesDispatchGatepassPrintHistoryView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_view_sales_dispatch_out"
 
     def get(self, request, entry_id):
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
@@ -876,7 +1198,8 @@ class SalesDispatchGatepassPrintHistoryView(APIView):
 
 
 class SalesDispatchCommitPrintView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_commit_sales_dispatch_print"
 
     def post(self, request, entry_id):
         locked_response = sales_dispatch_locked_response(request.company.company)
@@ -906,7 +1229,8 @@ class SalesDispatchCommitPrintView(APIView):
 
 
 class SalesDispatchMarkDispatchedView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_dispatch_sales_dispatch_out"
 
     def post(self, request, entry_id):
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
@@ -961,7 +1285,8 @@ class SalesDispatchMarkDispatchedView(APIView):
 
 
 class SalesDispatchRejectView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_reject_sales_dispatch_out"
 
     def post(self, request, entry_id):
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
@@ -991,7 +1316,8 @@ class SalesDispatchRejectView(APIView):
 
 
 class SalesDispatchCancelView(APIView):
-    permission_classes = [IsAuthenticated, HasCompanyContext]
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = "gate_core.can_cancel_sales_dispatch_out"
 
     def post(self, request, entry_id):
         entry = get_sales_dispatch_or_404(request.company.company, entry_id)
