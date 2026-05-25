@@ -148,6 +148,7 @@ ADMIN_INDEX_TITLE = "JI Factory Jivo Wellness Admin"
 
 # Static files
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Media files
 MEDIA_URL = '/media/'
@@ -234,16 +235,18 @@ SAP_ATTACHMENT_DIRECT_COPY_PASSWORD = config(
     "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD",
     default="",
 )
+SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL = config(
+    "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL",
+    default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME,
+)
+SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL = config(
+    "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL",
+    default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD,
+)
 SAP_ATTACHMENT_DIRECT_COPY_CREDENTIALS = {
     "JIVO_OIL": {
-        "username": config(
-            "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL",
-            default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME,
-        ),
-        "password": config(
-            "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL",
-            default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD,
-        ),
+        "username": SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL,
+        "password": SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL,
     },
     "JIVO_MART": {
         "username": config(
@@ -258,11 +261,11 @@ SAP_ATTACHMENT_DIRECT_COPY_CREDENTIALS = {
     "JIVO_BEVERAGES": {
         "username": config(
             "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_BEVERAGES",
-            default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME,
+            default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL,
         ),
         "password": config(
             "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_BEVERAGES",
-            default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD,
+            default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL,
         ),
     },
 }
