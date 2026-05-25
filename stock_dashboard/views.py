@@ -25,6 +25,7 @@ from .serializers import (
     ItemDetailResponseSerializer,
     StockDashboardAsOfFilterSerializer,
     StockDashboardFilterSerializer,
+    StockDashboardFilterOptionsSerializer,
     StockDashboardResponseSerializer,
 )
 from .services import StockDashboardService
@@ -147,3 +148,42 @@ class StockItemDetailAPI(APIView):
             )
 
         return Response(ItemDetailResponseSerializer(result).data)
+
+
+class StockDashboardFilterOptionsAPI(APIView):
+    """
+    SAP-backed option values for the Stock Benchmark click filter page.
+
+    GET /api/v1/dashboards/stock/filter-options/
+
+    Accepts the same filter query parameters as the stock dashboard list so
+    each step can request contextual option values for the current draft flow.
+    """
+
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewStockDashboard]
+
+    def get(self, request):
+        filter_serializer = StockDashboardFilterSerializer(data=request.query_params)
+        if not filter_serializer.is_valid():
+            return Response(
+                {"detail": "Invalid query parameters.", "errors": filter_serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        filters = filter_serializer.validated_data
+        service = StockDashboardService(company_code=request.company.company.code)
+
+        try:
+            result = service.get_filter_options(filters)
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError as e:
+            return Response(
+                {"detail": f"SAP data error: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(StockDashboardFilterOptionsSerializer(result).data)

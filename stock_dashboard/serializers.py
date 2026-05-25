@@ -9,6 +9,12 @@ from django.utils import timezone
 from rest_framework import serializers
 
 
+def parse_csv_values(value):
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
 # ---------------------------------------------------------------------------
 # Query Parameter Serializers (Input Validation)
 # ---------------------------------------------------------------------------
@@ -36,12 +42,60 @@ class StockDashboardFilterSerializer(serializers.Serializer):
     )
 
     def validate_warehouse(self, value):
-        if not value:
-            return []
-        return [w.strip() for w in value.split(",") if w.strip()]
+        return parse_csv_values(value)
 
     def validate_item_group(self, value):
         return value.strip() if value else ""
+
+    sub_group = serializers.CharField(
+        required=False,
+        default="",
+        allow_blank=True,
+        help_text="Comma-separated SAP item sub-groups from OITM.U_Sub_Group",
+    )
+
+    def validate_sub_group(self, value):
+        return parse_csv_values(value)
+
+    variety = serializers.CharField(
+        required=False,
+        default="",
+        allow_blank=True,
+        help_text="Comma-separated SAP item varieties from OITM.U_Variety",
+    )
+
+    def validate_variety(self, value):
+        return parse_csv_values(value)
+
+    unit = serializers.CharField(
+        required=False,
+        default="",
+        allow_blank=True,
+        help_text="Comma-separated SAP item units from OITM.U_Unit",
+    )
+
+    def validate_unit(self, value):
+        return parse_csv_values(value)
+
+    sku = serializers.CharField(
+        required=False,
+        default="",
+        allow_blank=True,
+        help_text="Comma-separated SAP SKU/pack-size values from OITM.U_SKU",
+    )
+
+    def validate_sku(self, value):
+        return parse_csv_values(value)
+
+    uom = serializers.CharField(
+        required=False,
+        default="",
+        allow_blank=True,
+        help_text="Comma-separated inventory UOM values from OITM.InvntryUom",
+    )
+
+    def validate_uom(self, value):
+        return parse_csv_values(value)
 
     status = serializers.CharField(
         required=False,
@@ -165,6 +219,24 @@ class StockDashboardMetaSerializer(serializers.Serializer):
 class StockDashboardResponseSerializer(serializers.Serializer):
     data = StockItemSerializer(many=True)
     meta = StockDashboardMetaSerializer()
+
+
+class StockDashboardFilterOptionSerializer(serializers.Serializer):
+    value = serializers.CharField()
+    label = serializers.CharField()
+    count = serializers.IntegerField(required=False)
+
+
+class StockDashboardFilterOptionsSerializer(serializers.Serializer):
+    item_groups = StockDashboardFilterOptionSerializer(many=True)
+    warehouses = StockDashboardFilterOptionSerializer(many=True)
+    statuses = StockDashboardFilterOptionSerializer(many=True)
+    movements = StockDashboardFilterOptionSerializer(many=True)
+    sub_groups = StockDashboardFilterOptionSerializer(many=True)
+    varieties = StockDashboardFilterOptionSerializer(many=True)
+    skus = StockDashboardFilterOptionSerializer(many=True)
+    units = StockDashboardFilterOptionSerializer(many=True)
+    uoms = StockDashboardFilterOptionSerializer(many=True)
 
 
 # ---------------------------------------------------------------------------

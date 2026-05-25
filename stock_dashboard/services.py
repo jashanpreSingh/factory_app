@@ -18,6 +18,18 @@ logger = logging.getLogger(__name__)
 _STATUS_SEVERITY = {"none": 0, "healthy": 0, "unset": 1, "low": 2, "critical": 3}
 SLOW_MOVING_DAYS = 30
 
+STOCK_STATUS_OPTIONS = [
+    {"value": "healthy", "label": "Healthy"},
+    {"value": "low", "label": "Low"},
+    {"value": "critical", "label": "Critical"},
+    {"value": "unset", "label": "No Benchmark Set"},
+]
+
+STOCK_MOVEMENT_OPTIONS = [
+    {"value": "recent", "label": "Recently Used"},
+    {"value": "slow", "label": "Slow Moving"},
+]
+
 
 class StockDashboardService:
     """
@@ -127,6 +139,15 @@ class StockDashboardService:
         rows = self.reader.get_item_warehouses(item_code, warehouses)
         self._enrich_rows(rows)
         return {"data": rows}
+
+    def get_filter_options(self, filters: Dict[str, Any] | None = None) -> Dict:
+        """Returns SAP-backed filter option values plus computed status buckets."""
+        options = self.reader.get_filter_options(filters or {})
+        return {
+            **options,
+            "statuses": STOCK_STATUS_OPTIONS,
+            "movements": STOCK_MOVEMENT_OPTIONS,
+        }
 
     # ------------------------------------------------------------------
     # Internal helpers

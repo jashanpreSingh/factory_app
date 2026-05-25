@@ -29,6 +29,24 @@ class StockDashboardFilterSerializerTests(SimpleTestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["movement_status"], ["recent", "slow"])
 
+    def test_accepts_item_master_dimension_filters(self):
+        serializer = StockDashboardFilterSerializer(
+            data={
+                "sub_group": "HDPE, CAP",
+                "variety": "1 LTR, 5 LTR",
+                "sku": "1 LTR",
+                "unit": "LTR",
+                "uom": "PCS, NOS",
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["sub_group"], ["HDPE", "CAP"])
+        self.assertEqual(serializer.validated_data["variety"], ["1 LTR", "5 LTR"])
+        self.assertEqual(serializer.validated_data["sku"], ["1 LTR"])
+        self.assertEqual(serializer.validated_data["unit"], ["LTR"])
+        self.assertEqual(serializer.validated_data["uom"], ["PCS", "NOS"])
+
     def test_rejects_invalid_movement_status_filter(self):
         serializer = StockDashboardFilterSerializer(
             data={"movement_status": "planned,stale"}
@@ -70,6 +88,24 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         self.assertIn('"OITB" grp', query)
         self.assertIn('UPPER(IFNULL(grp."ItmsGrpNam", \'\')) = UPPER(?)', query)
         self.assertEqual(params, ["PACKAGING MATERIAL"])
+
+    def test_stock_query_filters_by_item_master_dimensions(self):
+        query, params = self.reader._build_query(
+            {
+                "sub_group": ["HDPE", "CAP"],
+                "variety": ["CANOLA"],
+                "sku": ["1 LTR"],
+                "unit": ["OIL"],
+                "uom": ["PCS"],
+            }
+        )
+
+        self.assertIn('IFNULL(m."U_Sub_Group", \'\') IN (?, ?)', query)
+        self.assertIn('IFNULL(m."U_Variety", \'\') IN (?)', query)
+        self.assertIn('IFNULL(m."U_SKU", \'\') IN (?)', query)
+        self.assertIn('IFNULL(m."U_Unit", \'\') IN (?)', query)
+        self.assertIn('IFNULL(m."InvntryUom", \'\') IN (?)', query)
+        self.assertEqual(params, ["HDPE", "CAP", "CANOLA", "1 LTR", "OIL", "PCS"])
 
     def test_stock_query_includes_movement_signal(self):
         query, _ = self.reader._build_query({})
@@ -176,6 +212,46 @@ class HanaStockDashboardReaderQueryTests(SimpleTestCase):
         self.assertIn('"OITB" grp', query)
         self.assertIn('UPPER(IFNULL(grp."ItmsGrpNam", \'\')) = UPPER(?)', query)
         self.assertEqual(params, ["PACKAGING MATERIAL"])
+
+    def test_filter_options_query_uses_sap_item_master_dimensions(self):
+        self.reader._execute = Mock(return_value=[])
+
+        options = self.reader.get_filter_options()
+
+        executed_sql = "\n".join(call.args[0] for call in self.reader._execute.call_args_list)
+        self.assertIn('"OITB" grp', executed_sql)
+        self.assertIn('m."U_Sub_Group"', executed_sql)
+        self.assertIn('m."U_Variety"', executed_sql)
+        self.assertIn('m."U_SKU"', executed_sql)
+        self.assertIn('m."U_Unit"', executed_sql)
+        self.assertIn('m."InvntryUom"', executed_sql)
+        self.assertEqual(options["item_groups"], [])
+        self.assertEqual(options["sub_groups"], [])
+
+    def test_filter_options_scope_each_option_against_current_flow_filters(self):
+        self.reader._execute = Mock(return_value=[])
+
+        self.reader.get_filter_options(
+            {
+                "warehouse": ["BH-PM"],
+                "item_group": "PACKAGING MATERIAL",
+                "sub_group": ["HDPE"],
+                "variety": ["1 LTR"],
+            }
+        )
+
+        item_group_params = self.reader._execute.call_args_list[0].args[1]
+        warehouse_params = self.reader._execute.call_args_list[1].args[1]
+        sub_group_params = self.reader._execute.call_args_list[2].args[1]
+        variety_sql = self.reader._execute.call_args_list[3].args[0]
+        variety_params = self.reader._execute.call_args_list[3].args[1]
+
+        self.assertEqual(item_group_params, ["BH-PM", "HDPE", "1 LTR"])
+        self.assertEqual(warehouse_params, ["PACKAGING MATERIAL", "HDPE", "1 LTR"])
+        self.assertEqual(sub_group_params, ["BH-PM", "PACKAGING MATERIAL", "1 LTR"])
+        self.assertIn('IFNULL(m."U_Sub_Group", \'\') IN (?)', variety_sql)
+        self.assertNotIn('IFNULL(m."U_Variety", \'\') IN (?)', variety_sql)
+        self.assertEqual(variety_params, ["BH-PM", "PACKAGING MATERIAL", "HDPE"])
 
     def test_grouped_stats_query_filters_by_movement_status(self):
         query, _ = self.reader._build_grouped_stats_query(
@@ -314,6 +390,26 @@ class StockDashboardServiceTests(SimpleTestCase):
         self.assertEqual(result["meta"]["healthy_count"], 2)
         self.assertEqual(result["meta"]["low_stock_count"], 1)
         self.assertEqual(result["meta"]["critical_stock_count"], 4)
+
+    def test_filter_options_pass_current_flow_filters_to_reader(self):
+        reader = Mock()
+        reader.get_filter_options.return_value = {
+            "item_groups": [],
+            "warehouses": [],
+            "sub_groups": [],
+            "varieties": [],
+            "skus": [],
+            "units": [],
+            "uoms": [],
+        }
+        service = self.make_service(reader)
+        filters = {"item_group": "PACKAGING MATERIAL", "sub_group": ["HDPE"]}
+
+        result = service.get_filter_options(filters)
+
+        reader.get_filter_options.assert_called_once_with(filters)
+        self.assertEqual(result["statuses"][0]["value"], "healthy")
+        self.assertEqual(result["movements"][0]["value"], "recent")
 
     def test_as_of_stock_levels_use_reconstructed_reader_methods(self):
         as_of_date = date(2026, 5, 1)

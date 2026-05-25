@@ -55,6 +55,45 @@ class HanaStockDashboardReader:
         rows = self._execute(query, [])
         return [r[0] for r in rows if r[0]]
 
+    def get_filter_options(self, filters: Optional[Dict[str, Any]] = None) -> Dict[str, List[Dict]]:
+        """
+        Returns SAP-backed filter option values for the click filter page.
+
+        Item groups come from OITB. Warehouses and item-master dimensions are
+        scoped to item-warehouse rows so the options match the stock dashboard.
+        """
+        active_filters = filters or {}
+
+        return {
+            "item_groups": self._get_item_group_options(active_filters),
+            "warehouses": self._get_warehouse_options(active_filters),
+            "sub_groups": self._get_item_master_options(
+                'm."U_Sub_Group"',
+                active_filters,
+                exclude_key="sub_group",
+            ),
+            "varieties": self._get_item_master_options(
+                'm."U_Variety"',
+                active_filters,
+                exclude_key="variety",
+            ),
+            "skus": self._get_item_master_options(
+                'm."U_SKU"',
+                active_filters,
+                exclude_key="sku",
+            ),
+            "units": self._get_item_master_options(
+                'm."U_Unit"',
+                active_filters,
+                exclude_key="unit",
+            ),
+            "uoms": self._get_item_master_options(
+                'm."InvntryUom"',
+                active_filters,
+                exclude_key="uom",
+            ),
+        }
+
     def get_stock_stats(self, filters: Dict[str, Any]) -> Dict:
         """Returns total, healthy, low, and critical counts across the full filtered dataset."""
         query, params = self._build_stats_query(filters)
@@ -255,6 +294,20 @@ class HanaStockDashboardReader:
                 '(w."ItemCode" LIKE ? OR m."ItemName" LIKE ? OR w."WhsCode" LIKE ?)'
             )
             params.extend([search_term, search_term, search_term])
+
+        list_filters = {
+            "sub_group": 'm."U_Sub_Group"',
+            "variety": 'm."U_Variety"',
+            "sku": 'm."U_SKU"',
+            "unit": 'm."U_Unit"',
+            "uom": 'm."InvntryUom"',
+        }
+        for filter_key, column in list_filters.items():
+            values = filters.get(filter_key, [])
+            if values:
+                placeholders = ", ".join("?" for _ in values)
+                clauses.append(f'IFNULL({column}, \'\') IN ({placeholders})')
+                params.extend(values)
 
         return clauses, params
 
@@ -690,6 +743,118 @@ class HanaStockDashboardReader:
         if hasattr(value, "strftime"):
             return value.strftime("%Y-%m-%d")
         return str(value)[:10]
+
+    def _filters_excluding(
+        self,
+        filters: Dict[str, Any],
+        *exclude_keys: str,
+    ) -> Dict[str, Any]:
+        excluded = set(exclude_keys)
+        return {key: value for key, value in filters.items() if key not in excluded}
+
+    def _build_option_where(
+        self,
+        filters: Dict[str, Any],
+        required_value_column: str,
+        *exclude_keys: str,
+    ) -> Tuple[str, List]:
+        scoped_filters = self._filters_excluding(filters, *exclude_keys)
+        clauses, params = self._build_base_where(scoped_filters)
+        clauses.append(f"IFNULL({required_value_column}, '') <> ''")
+        return f'WHERE {" AND ".join(clauses)}', params
+
+    def _get_item_group_options(self, filters: Dict[str, Any]) -> List[Dict]:
+        schema = self.connection.schema
+        where, params = self._build_option_where(
+            filters,
+            'grp."ItmsGrpNam"',
+            "item_group",
+        )
+        rows = self._execute(
+            f"""
+            SELECT
+                IFNULL(grp."ItmsGrpNam", '') AS value,
+                COUNT(DISTINCT m."ItemCode") AS item_count
+            FROM "{schema}"."OITM" m
+            JOIN "{schema}"."OITW" w
+                ON m."ItemCode" = w."ItemCode"
+            LEFT JOIN "{schema}"."OITB" grp
+                ON m."ItmsGrpCod" = grp."ItmsGrpCod"
+            {where}
+            GROUP BY grp."ItmsGrpNam"
+            ORDER BY grp."ItmsGrpNam" ASC
+            """,
+            params,
+        )
+        return self._map_option_rows(rows)
+
+    def _get_warehouse_options(self, filters: Dict[str, Any]) -> List[Dict]:
+        schema = self.connection.schema
+        where, params = self._build_option_where(
+            filters,
+            'w."WhsCode"',
+            "warehouse",
+        )
+        rows = self._execute(
+            f"""
+            SELECT
+                w."WhsCode" AS value,
+                COUNT(DISTINCT w."ItemCode") AS item_count
+            FROM "{schema}"."OITW" w
+            JOIN "{schema}"."OITM" m
+                ON w."ItemCode" = m."ItemCode"
+            LEFT JOIN "{schema}"."OITB" grp
+                ON m."ItmsGrpCod" = grp."ItmsGrpCod"
+            {where}
+            GROUP BY w."WhsCode"
+            ORDER BY w."WhsCode" ASC
+            """,
+            params,
+        )
+        return self._map_option_rows(rows)
+
+    def _get_item_master_options(
+        self,
+        column_sql: str,
+        filters: Optional[Dict[str, Any]] = None,
+        exclude_key: Optional[str] = None,
+    ) -> List[Dict]:
+        schema = self.connection.schema
+        exclude_keys = [exclude_key] if exclude_key else []
+        where, params = self._build_option_where(
+            filters or {},
+            column_sql,
+            *exclude_keys,
+        )
+        rows = self._execute(
+            f"""
+            SELECT
+                IFNULL({column_sql}, '') AS value,
+                COUNT(DISTINCT m."ItemCode") AS item_count
+            FROM "{schema}"."OITM" m
+            JOIN "{schema}"."OITW" w
+                ON m."ItemCode" = w."ItemCode"
+            LEFT JOIN "{schema}"."OITB" grp
+                ON m."ItmsGrpCod" = grp."ItmsGrpCod"
+            {where}
+            GROUP BY {column_sql}
+            ORDER BY {column_sql} ASC
+            """,
+            params,
+        )
+        return self._map_option_rows(rows)
+
+    @staticmethod
+    def _map_option_rows(rows) -> List[Dict]:
+        return [
+            {
+                "value": row[0] or "",
+                "label": row[0] or "",
+                "count": int(row[1] or 0),
+            }
+            for row in rows
+            if row[0]
+        ]
 
     # ------------------------------------------------------------------
     # Execution Helper

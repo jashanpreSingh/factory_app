@@ -8,6 +8,7 @@ The stock dashboard API powers the frontend Stock Benchmark page. It reads SAP H
 |--------|----------|---------|
 | GET | `/api/v1/dashboards/stock/` | Stock benchmark rows, pagination, and meta counts |
 | GET | `/api/v1/dashboards/stock/as-of/` | Experimental SAP movement reconstruction for a prior posting date |
+| GET | `/api/v1/dashboards/stock/filter-options/` | SAP-backed option values for the guided click filter flow |
 | GET | `/api/v1/dashboards/stock/<item_code>/warehouses/` | Per-warehouse detail for an expanded grouped item |
 
 All endpoints require:
@@ -25,6 +26,11 @@ All endpoints require:
 | `search` | string | Case-insensitive match against item code, item name, or warehouse code. |
 | `warehouse` | comma-separated string | Warehouse codes. Two or more warehouses switch the service to grouped item rows. |
 | `item_group` | string | SAP item group name from `OITB.ItmsGrpNam`, for example `PACKAGING MATERIAL`. |
+| `sub_group` | comma-separated string | SAP item sub-group values from `OITM.U_Sub_Group`, for example `HDPE`, `CAP`, or `CARTON`. |
+| `variety` | comma-separated string | SAP item variety values from `OITM.U_Variety`, for example oil/product variants maintained in item master. |
+| `sku` | comma-separated string | SAP item SKU/pack-size values from `OITM.U_SKU`. |
+| `unit` | comma-separated string | SAP item unit values from `OITM.U_Unit`. |
+| `uom` | comma-separated string | Inventory UOM values from `OITM.InvntryUom`. |
 | `status` | comma-separated string | Allowed values: `healthy`, `low`, `critical`, `unset`. The `unset` value is displayed as No Benchmark Set. When the default operational set `healthy,low,critical` is used without a movement filter excluding slow rows, slow rows with a benchmark are still returned with no stock status so the Movement filter owns slow-moving visibility. |
 | `movement_status` | comma-separated string | Allowed values: `recent`, `slow`. Omit to include all movement states. |
 | `sort_by` | string | `item_code`, `item_name`, `warehouse`, `on_hand`, `min_stock`, `health_ratio`. The `min_stock` sort is the Benchmark column. |
@@ -42,6 +48,21 @@ Supports the same filters as the live Stock Benchmark endpoint, plus:
 
 This endpoint is a proof path for historical Stock Benchmark data. It reconstructs `on_hand`, last consumption date, movement status, health ratio, and stock status from SAP movement history up to the selected date. Benchmark (`MinStock`), item name, UOM, and item group still come from current SAP master data.
 
+`GET /api/v1/dashboards/stock/filter-options/`
+
+Returns click-filter option groups. It accepts the same filter query parameters as the stock list so the frontend can request contextual options while the user moves through the guided flow.
+
+- `item_groups` from `OITB.ItmsGrpNam`
+- `warehouses` from `OITW.WhsCode`
+- `sub_groups` from `OITM.U_Sub_Group`
+- `varieties` from `OITM.U_Variety`
+- `skus` from `OITM.U_SKU`
+- `units` from `OITM.U_Unit`
+- `uoms` from `OITM.InvntryUom`
+- computed `statuses` and `movements`
+
+Each SAP-backed option includes `value`, `label`, and `count`, where `count` is the number of distinct SAP item codes contributing to that option in the selected company. For each option group, the backend applies the current draft filters but excludes that group's own selected filter, so users can revise a step without hiding the other valid choices.
+
 `GET /api/v1/dashboards/stock/<item_code>/warehouses/`
 
 | Parameter | Type | Description |
@@ -53,7 +74,7 @@ This endpoint is a proof path for historical Stock Benchmark data. It reconstruc
 | SAP table | Usage |
 |-----------|-------|
 | `OITW` | Item warehouse stock, `OnHand`, benchmark (`MinStock`), warehouse code |
-| `OITM` | Item name, inventory UOM, inventory item flag |
+| `OITM` | Item name, inventory UOM, inventory item flag, `U_Sub_Group`, `U_Variety`, `U_SKU`, `U_Unit` |
 | `OITB` | Item group name for material type filtering |
 | `OINM` | Inventory audit trail for item-level outbound consumption history |
 
