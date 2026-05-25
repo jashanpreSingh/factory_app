@@ -8,6 +8,10 @@ from django.conf import settings
 
 class PalletStatus(models.TextChoices):
     ACTIVE = "ACTIVE", "Active"
+    PARTIAL = "PARTIAL", "Partial"
+    DISPATCHED = "DISPATCHED", "Dispatched"
+    EMPTY = "EMPTY", "Empty"
+    INACTIVE = "INACTIVE", "Inactive"
     CLEARED = "CLEARED", "Cleared"
     SPLIT = "SPLIT", "Split"
     VOID = "VOID", "Void"
@@ -16,6 +20,7 @@ class PalletStatus(models.TextChoices):
 class BoxStatus(models.TextChoices):
     ACTIVE = "ACTIVE", "Active"
     PARTIAL = "PARTIAL", "Partial"
+    DISPATCHED = "DISPATCHED", "Dispatched"
     DISMANTLED = "DISMANTLED", "Dismantled"
     VOID = "VOID", "Void"
 
@@ -36,6 +41,8 @@ class PalletMovementType(models.TextChoices):
     CREATE = "CREATE", "Create"
     MOVE = "MOVE", "Move"
     TRANSFER = "TRANSFER", "Transfer"
+    DISPATCH = "DISPATCH", "Dispatch"
+    REMOVE_FOR_DISPATCH = "REMOVE_FOR_DISPATCH", "Remove for Dispatch"
     DISMANTLE = "DISMANTLE", "Dismantle"
     CLEAR = "CLEAR", "Clear"
     SPLIT = "SPLIT", "Split"
@@ -48,6 +55,8 @@ class BoxMovementType(models.TextChoices):
     TRANSFER = "TRANSFER", "Transfer"
     PALLETIZE = "PALLETIZE", "Palletize"
     DEPALLETIZE = "DEPALLETIZE", "Depalletize"
+    DISPATCH = "DISPATCH", "Dispatch"
+    REMOVE_FOR_DISPATCH = "REMOVE_FOR_DISPATCH", "Remove for Dispatch"
     DISMANTLE = "DISMANTLE", "Dismantle"
     VOID = "VOID", "Void"
 
@@ -90,6 +99,55 @@ class ScanResult(models.TextChoices):
     NOT_FOUND = "NOT_FOUND", "Not Found"
     DUPLICATE = "DUPLICATE", "Duplicate"
     ERROR = "ERROR", "Error"
+
+
+class DispatchSessionStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    ACTIVE = "ACTIVE", "Active"
+    PARTIAL = "PARTIAL", "Partial"
+    READY_TO_DISPATCH = "READY_TO_DISPATCH", "Ready to Dispatch"
+    COMPLETED = "COMPLETED", "Completed"
+    CLOSED = "CLOSED", "Closed"
+    CANCELLED = "CANCELLED", "Cancelled"
+    SAP_SYNC_FAILED = "SAP_SYNC_FAILED", "SAP Sync Failed"
+
+
+class DispatchSapUpdateStatus(models.TextChoices):
+    NOT_CONFIGURED = "NOT_CONFIGURED", "Not Configured"
+    PENDING = "PENDING", "Pending"
+    SUCCESS = "SUCCESS", "Success"
+    FAILED = "FAILED", "Failed"
+
+
+class DispatchSapSystemType(models.TextChoices):
+    S4HANA = "S4HANA", "S/4HANA"
+    ECC = "ECC", "ECC"
+    BUSINESS_ONE = "BUSINESS_ONE", "SAP Business One"
+
+
+class DispatchSapObjectType(models.TextChoices):
+    BILLING_DOCUMENT = "BILLING_DOCUMENT", "Billing Document"
+    AR_INVOICE = "AR_INVOICE", "A/R Invoice"
+    OUTBOUND_DELIVERY = "OUTBOUND_DELIVERY", "Outbound Delivery"
+
+
+class DispatchScanResult(models.TextChoices):
+    ACCEPTED = "ACCEPTED", "Accepted"
+    REJECTED = "REJECTED", "Rejected"
+
+
+class DispatchScanEntityType(models.TextChoices):
+    ITEM = "ITEM", "Item"
+    BOX = "BOX", "Box"
+    PALLET = "PALLET", "Pallet"
+    SERIAL = "SERIAL", "Serial"
+    UNKNOWN = "UNKNOWN", "Unknown"
+
+
+class BarcodeMasterType(models.TextChoices):
+    ITEM = "ITEM", "Item"
+    BOX = "BOX", "Box"
+    PALLET = "PALLET", "Pallet"
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +196,9 @@ class Pallet(models.Model):
     item_name = models.CharField(max_length=255, blank=True, default='')
     batch_number = models.CharField(max_length=100)
     box_count = models.PositiveIntegerField(default=0)
+    total_boxes = models.PositiveIntegerField(default=0)
+    available_boxes = models.PositiveIntegerField(default=0)
+    dispatched_boxes = models.PositiveIntegerField(default=0)
     max_box_count = models.PositiveIntegerField(
         default=0,
         help_text="Editable pallet capacity fetched from SAP HANA when available"
@@ -162,6 +223,14 @@ class Pallet(models.Model):
         max_length=20, choices=PalletStatus.choices,
         default=PalletStatus.ACTIVE
     )
+    dispatch_session = models.ForeignKey(
+        'DispatchSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dispatched_pallets',
+    )
+    dispatched_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='pallets_created'
@@ -224,6 +293,16 @@ class Box(models.Model):
         max_length=20, choices=BoxStatus.choices,
         default=BoxStatus.ACTIVE
     )
+    dispatch_session = models.ForeignKey(
+        'DispatchSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dispatched_boxes',
+    )
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    removed_from_pallet_at = models.DateTimeField(null=True, blank=True)
+    removed_from_pallet_reason = models.TextField(blank=True, default='')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='boxes_created'
@@ -238,6 +317,57 @@ class Box(models.Model):
 
     def __str__(self):
         return f"{self.box_barcode} — {self.item_code} x {self.qty}"
+
+
+# ---------------------------------------------------------------------------
+# Barcode Master — optional normalized barcode mapping for dispatch validation
+# ---------------------------------------------------------------------------
+
+class BarcodeMaster(models.Model):
+    company = models.ForeignKey(
+        'company.Company', on_delete=models.PROTECT,
+        related_name='barcode_master_records'
+    )
+    barcode = models.CharField(max_length=200)
+    barcode_type = models.CharField(max_length=20, choices=BarcodeMasterType.choices)
+    material_code = models.CharField(max_length=80, blank=True, default='')
+    quantity = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    uom = models.CharField(max_length=30, blank=True, default='')
+    pallet = models.ForeignKey(
+        Pallet,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_master_records',
+    )
+    box = models.ForeignKey(
+        Box,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_master_records',
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['barcode']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'barcode'],
+                name='unique_barcode_master_per_company',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['company', 'barcode_type', 'is_active']),
+            models.Index(fields=['material_code']),
+        ]
+        verbose_name = 'Barcode Master'
+        verbose_name_plural = 'Barcode Master'
+
+    def __str__(self):
+        return f"{self.barcode_type} {self.barcode}"
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +495,55 @@ class BoxMovement(models.Model):
         return f"{self.movement_type} — {self.box.box_barcode}"
 
 
+class PalletBoxHistory(models.Model):
+    company = models.ForeignKey(
+        'company.Company', on_delete=models.PROTECT,
+        related_name='pallet_box_history'
+    )
+    pallet = models.ForeignKey(
+        Pallet,
+        on_delete=models.CASCADE,
+        related_name='box_history',
+    )
+    box = models.ForeignKey(
+        Box,
+        on_delete=models.CASCADE,
+        related_name='pallet_history',
+    )
+    action = models.CharField(max_length=80)
+    old_status = models.CharField(max_length=40, blank=True, default='')
+    new_status = models.CharField(max_length=40, blank=True, default='')
+    dispatch_session = models.ForeignKey(
+        'DispatchSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pallet_box_history',
+    )
+    remarks = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pallet_box_history_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['pallet', 'box', 'created_at']),
+            models.Index(fields=['dispatch_session', 'created_at']),
+            models.Index(fields=['action']),
+        ]
+        verbose_name = 'Pallet Box History'
+        verbose_name_plural = 'Pallet Box History'
+
+    def __str__(self):
+        return f"{self.action} — {self.pallet.pallet_id}/{self.box.box_barcode}"
+
+
 # ---------------------------------------------------------------------------
 # Loose Stock — items dismantled from boxes
 # ---------------------------------------------------------------------------
@@ -476,3 +655,347 @@ class ScanLog(models.Model):
 
     def __str__(self):
         return f"{self.scan_type} — {self.barcode_raw[:50]}"
+
+
+# ---------------------------------------------------------------------------
+# Dispatch Session - SAP-backed barcode dispatch workflow
+# ---------------------------------------------------------------------------
+
+class DispatchSettings(models.Model):
+    company = models.OneToOneField(
+        'company.Company',
+        on_delete=models.CASCADE,
+        related_name='barcode_dispatch_settings',
+    )
+    allow_partial_dispatch = models.BooleanField(default=False)
+    allow_partial_pallet_dispatch = models.BooleanField(default=True)
+    allow_box_dispatch_from_pallet = models.BooleanField(default=True)
+    require_sequential_item_scanning = models.BooleanField(default=True)
+    require_sap_sync_on_completion = models.BooleanField(default=False)
+    allow_manual_close = models.BooleanField(default=True)
+    allow_admin_override = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Dispatch Settings'
+        verbose_name_plural = 'Dispatch Settings'
+
+    def __str__(self):
+        return f"Dispatch settings — {self.company.code}"
+
+
+class DispatchSession(models.Model):
+    company = models.ForeignKey(
+        'company.Company', on_delete=models.PROTECT,
+        related_name='barcode_dispatch_sessions'
+    )
+    bill_number = models.CharField(max_length=80)
+    sap_system_type = models.CharField(
+        max_length=30,
+        choices=DispatchSapSystemType.choices,
+        default=DispatchSapSystemType.BUSINESS_ONE,
+    )
+    sap_object_type = models.CharField(
+        max_length=40,
+        choices=DispatchSapObjectType.choices,
+        default=DispatchSapObjectType.AR_INVOICE,
+    )
+    sap_doc_entry = models.CharField(max_length=80, blank=True, default='')
+    sap_doc_num = models.CharField(max_length=80, blank=True, default='')
+    delivery_number = models.CharField(max_length=80, blank=True, default='')
+    reference_delivery_number = models.CharField(max_length=80, blank=True, default='')
+    customer_code = models.CharField(max_length=80, blank=True, default='')
+    customer_name = models.CharField(max_length=255, blank=True, default='')
+    ship_to_code = models.CharField(max_length=80, blank=True, default='')
+    ship_to_name = models.CharField(max_length=255, blank=True, default='')
+    bill_date = models.DateField(null=True, blank=True)
+    status = models.CharField(
+        max_length=30,
+        choices=DispatchSessionStatus.choices,
+        default=DispatchSessionStatus.DRAFT,
+    )
+    total_expected_qty = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    total_scanned_qty = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    sap_dispatch_status = models.CharField(max_length=80, blank=True, default='')
+    sap_update_status = models.CharField(
+        max_length=30,
+        choices=DispatchSapUpdateStatus.choices,
+        default=DispatchSapUpdateStatus.NOT_CONFIGURED,
+    )
+    sap_update_error = models.TextField(blank=True, default='')
+    sap_snapshot = models.JSONField(default=dict, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    dispatched_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_dispatches_completed',
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_dispatches_closed',
+    )
+    close_reason = models.TextField(blank=True, default='')
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_dispatches_cancelled',
+    )
+    cancel_reason = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_dispatches_created',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_dispatches_updated',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'bill_number'],
+                condition=models.Q(status__in=[
+                    DispatchSessionStatus.DRAFT,
+                    DispatchSessionStatus.ACTIVE,
+                    DispatchSessionStatus.PARTIAL,
+                    DispatchSessionStatus.READY_TO_DISPATCH,
+                    DispatchSessionStatus.COMPLETED,
+                    DispatchSessionStatus.SAP_SYNC_FAILED,
+                ]),
+                name='unique_active_barcode_dispatch_bill',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['company', 'bill_number']),
+            models.Index(fields=['company', 'status', 'created_at']),
+            models.Index(fields=['company', 'sap_doc_entry']),
+        ]
+        permissions = [
+            ("can_view_barcode_dispatch", "Can view barcode dispatch sessions"),
+            ("can_create_barcode_dispatch", "Can create barcode dispatch sessions"),
+            ("can_scan_barcode_dispatch", "Can scan barcode dispatch labels"),
+            ("can_complete_barcode_dispatch", "Can mark barcode dispatch complete"),
+            ("can_close_barcode_dispatch", "Can close barcode dispatch sessions"),
+            ("can_retry_barcode_dispatch_sap", "Can retry barcode dispatch SAP sync"),
+            ("can_manage_barcode_dispatch_settings", "Can manage barcode dispatch settings"),
+            ("can_view_barcode_dispatch_reports", "Can view barcode dispatch reports"),
+        ]
+
+    def __str__(self):
+        return f"{self.company.code} dispatch {self.bill_number}"
+
+
+class DispatchSessionLine(models.Model):
+    session = models.ForeignKey(
+        DispatchSession,
+        on_delete=models.CASCADE,
+        related_name='lines',
+    )
+    sequence_no = models.PositiveIntegerField()
+    sap_line_no = models.CharField(max_length=80)
+    material_code = models.CharField(max_length=80)
+    material_description = models.TextField(blank=True, default='')
+    bill_qty = models.DecimalField(max_digits=18, decimal_places=3)
+    scanned_qty = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    uom = models.CharField(max_length=30, blank=True, default='')
+    batch_number = models.CharField(max_length=120, blank=True, default='')
+    warehouse_code = models.CharField(max_length=40, blank=True, default='')
+    serial_required = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sequence_no', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['session', 'sequence_no'],
+                name='unique_dispatch_session_sequence',
+            ),
+            models.UniqueConstraint(
+                fields=['session', 'sap_line_no'],
+                name='unique_dispatch_session_sap_line',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(scanned_qty__lte=models.F('bill_qty')),
+                name='dispatch_line_scanned_lte_bill',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['session', 'sequence_no']),
+            models.Index(fields=['session', 'status']),
+            models.Index(fields=['material_code']),
+        ]
+
+    def __str__(self):
+        return f"{self.session.bill_number} line {self.sequence_no} {self.material_code}"
+
+
+class DispatchScanLog(models.Model):
+    session = models.ForeignKey(
+        DispatchSession,
+        on_delete=models.CASCADE,
+        related_name='scan_logs',
+    )
+    line = models.ForeignKey(
+        DispatchSessionLine,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='scan_logs',
+    )
+    raw_barcode = models.TextField()
+    parsed_barcode = models.JSONField(default=dict, blank=True)
+    entity_type = models.CharField(
+        max_length=20,
+        choices=DispatchScanEntityType.choices,
+        default=DispatchScanEntityType.UNKNOWN,
+    )
+    entity_id = models.CharField(max_length=120, blank=True, default='')
+    material_code = models.CharField(max_length=80, blank=True, default='')
+    batch_number = models.CharField(max_length=120, blank=True, default='')
+    qty = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
+    uom = models.CharField(max_length=30, blank=True, default='')
+    result = models.CharField(max_length=20, choices=DispatchScanResult.choices)
+    reject_code = models.CharField(max_length=80, blank=True, default='')
+    reject_message = models.TextField(blank=True, default='')
+    device_id = models.CharField(max_length=120, blank=True, default='')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    scanned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_dispatch_scans',
+    )
+    scanned_at = models.DateTimeField(auto_now_add=True)
+    request_id = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-scanned_at']
+        indexes = [
+            models.Index(fields=['session', 'scanned_at']),
+            models.Index(fields=['session', 'result']),
+            models.Index(fields=['session', 'reject_code']),
+            models.Index(fields=['entity_type', 'entity_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.session.bill_number} {self.result} {self.raw_barcode[:50]}"
+
+
+class DispatchScannedUnit(models.Model):
+    session = models.ForeignKey(
+        DispatchSession,
+        on_delete=models.CASCADE,
+        related_name='scanned_units',
+    )
+    line = models.ForeignKey(
+        DispatchSessionLine,
+        on_delete=models.CASCADE,
+        related_name='scanned_units',
+    )
+    scan_log = models.ForeignKey(
+        DispatchScanLog,
+        on_delete=models.CASCADE,
+        related_name='scanned_units',
+    )
+    barcode_value = models.CharField(max_length=200)
+    entity_type = models.CharField(
+        max_length=20,
+        choices=DispatchScanEntityType.choices,
+    )
+    box = models.ForeignKey(
+        Box,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='dispatch_scanned_units',
+    )
+    pallet = models.ForeignKey(
+        Pallet,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='dispatch_scanned_units',
+    )
+    serial_number = models.CharField(max_length=120, blank=True, default='')
+    material_code = models.CharField(max_length=80)
+    batch_number = models.CharField(max_length=120, blank=True, default='')
+    qty = models.DecimalField(max_digits=18, decimal_places=3)
+    uom = models.CharField(max_length=30, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['session', 'barcode_value'],
+                name='unique_dispatch_barcode_per_session',
+            ),
+            models.UniqueConstraint(
+                fields=['session', 'serial_number'],
+                condition=~models.Q(serial_number=''),
+                name='unique_dispatch_serial_per_session',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['session', 'line']),
+            models.Index(fields=['barcode_value']),
+        ]
+
+    def __str__(self):
+        return f"{self.session.bill_number} {self.barcode_value}"
+
+
+class DispatchSapSyncLog(models.Model):
+    session = models.ForeignKey(
+        DispatchSession,
+        on_delete=models.CASCADE,
+        related_name='sap_sync_logs',
+    )
+    operation = models.CharField(max_length=80)
+    request_payload = models.JSONField(default=dict, blank=True)
+    response_payload = models.JSONField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('SUCCESS', 'Success'),
+            ('FAILED', 'Failed'),
+        ],
+        default='PENDING',
+    )
+    error_message = models.TextField(blank=True, default='')
+    attempt_no = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['session', 'operation', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.session.bill_number} {self.operation} {self.status}"

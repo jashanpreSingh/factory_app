@@ -8,6 +8,18 @@ from .views import (
     DismantlePalletAPI, DismantleBoxAPI, RepackAPI,
     LooseStockListAPI, LooseStockDetailAPI,
     ScanAPI, BarcodeLookupAPI, ScanHistoryAPI,
+    DispatchBillLookupAPI, DispatchSessionListCreateAPI,
+    DispatchSessionFromBillAPI, DispatchSessionActiveAPI,
+    DispatchSessionCompletedAPI, DispatchSessionClosedAPI,
+    DispatchSessionDetailAPI, DispatchSessionScanAPI,
+    DispatchSessionDispatchAPI, DispatchSessionCompleteAPI,
+    DispatchSessionCloseAPI, DispatchSessionCancelAPI,
+    DispatchSessionRetrySapSyncAPI, DispatchSettingsAPI,
+    DispatchSessionScanLogsAPI, DispatchSessionSapSyncLogsAPI,
+    PalletHistoryAPI, BoxHistoryAPI,
+    DispatchReportAPI, DispatchReportDetailAPI,
+    DispatchPalletReportAPI, DispatchBoxReportAPI,
+    DispatchRejectedScanReportAPI,
     ProductionRunLabelsAPI, ProductionRunPalletAPI, ProductionReleaseOilListAPI,
 )
 
@@ -19,6 +31,7 @@ urlpatterns = [
     path('boxes/', BoxListAPI.as_view(), name='bc-box-list'),
     path('boxes/<int:box_id>/', BoxDetailAPI.as_view(), name='bc-box-detail'),
     path('boxes/<int:box_id>/void/', BoxVoidAPI.as_view(), name='bc-box-void'),
+    path('boxes/<int:box_id>/history/', BoxHistoryAPI.as_view(), name='bc-box-history'),
 
     # ------------------------------------------------------------------
     # Pallets
@@ -32,6 +45,7 @@ urlpatterns = [
     path('pallets/<int:pallet_id>/split/', PalletSplitAPI.as_view(), name='bc-pallet-split'),
     path('pallets/<int:pallet_id>/add-boxes/', PalletAddBoxesAPI.as_view(), name='bc-pallet-add-boxes'),
     path('pallets/<int:pallet_id>/remove-boxes/', PalletRemoveBoxesAPI.as_view(), name='bc-pallet-remove-boxes'),
+    path('pallets/<int:pallet_id>/history/', PalletHistoryAPI.as_view(), name='bc-pallet-history'),
 
     # ------------------------------------------------------------------
     # Box Transfer
@@ -66,6 +80,32 @@ urlpatterns = [
     path('scan/', ScanAPI.as_view(), name='bc-scan'),
     path('scan/history/', ScanHistoryAPI.as_view(), name='bc-scan-history'),
     path('lookup/<str:barcode_string>/', BarcodeLookupAPI.as_view(), name='bc-lookup'),
+
+    # ------------------------------------------------------------------
+    # Barcode Dispatch
+    # ------------------------------------------------------------------
+    path('dispatch/bills/lookup/', DispatchBillLookupAPI.as_view(), name='bc-dispatch-bill-lookup'),
+    path('dispatch/settings/', DispatchSettingsAPI.as_view(), name='bc-dispatch-settings'),
+    path('dispatch/sessions/from-bill/', DispatchSessionFromBillAPI.as_view(), name='bc-dispatch-session-from-bill'),
+    path('dispatch/sessions/', DispatchSessionListCreateAPI.as_view(), name='bc-dispatch-session-list-create'),
+    path('dispatch/sessions/active/', DispatchSessionActiveAPI.as_view(), name='bc-dispatch-session-active'),
+    path('dispatch/sessions/completed/', DispatchSessionCompletedAPI.as_view(), name='bc-dispatch-session-completed'),
+    path('dispatch/sessions/closed/', DispatchSessionClosedAPI.as_view(), name='bc-dispatch-session-closed'),
+    path('dispatch/sessions/<int:session_id>/', DispatchSessionDetailAPI.as_view(), name='bc-dispatch-session-detail'),
+    path('dispatch/sessions/<int:session_id>/scans/', DispatchSessionScanAPI.as_view(), name='bc-dispatch-session-scan'),
+    path('dispatch/sessions/<int:session_id>/scan/', DispatchSessionScanAPI.as_view(), name='bc-dispatch-session-scan-alias'),
+    path('dispatch/sessions/<int:session_id>/dispatch/', DispatchSessionDispatchAPI.as_view(), name='bc-dispatch-session-dispatch'),
+    path('dispatch/sessions/<int:session_id>/complete/', DispatchSessionCompleteAPI.as_view(), name='bc-dispatch-session-complete'),
+    path('dispatch/sessions/<int:session_id>/close/', DispatchSessionCloseAPI.as_view(), name='bc-dispatch-session-close'),
+    path('dispatch/sessions/<int:session_id>/cancel/', DispatchSessionCancelAPI.as_view(), name='bc-dispatch-session-cancel'),
+    path('dispatch/sessions/<int:session_id>/retry-sap-sync/', DispatchSessionRetrySapSyncAPI.as_view(), name='bc-dispatch-session-retry-sap'),
+    path('dispatch/sessions/<int:session_id>/scan-logs/', DispatchSessionScanLogsAPI.as_view(), name='bc-dispatch-session-scan-logs'),
+    path('dispatch/sessions/<int:session_id>/sap-sync-logs/', DispatchSessionSapSyncLogsAPI.as_view(), name='bc-dispatch-session-sap-sync-logs'),
+    path('dispatch/reports/', DispatchReportAPI.as_view(), name='bc-dispatch-report'),
+    path('dispatch/reports/pallets/', DispatchPalletReportAPI.as_view(), name='bc-dispatch-report-pallets'),
+    path('dispatch/reports/boxes/', DispatchBoxReportAPI.as_view(), name='bc-dispatch-report-boxes'),
+    path('dispatch/reports/rejected-scans/', DispatchRejectedScanReportAPI.as_view(), name='bc-dispatch-report-rejected-scans'),
+    path('dispatch/reports/<int:session_id>/', DispatchReportDetailAPI.as_view(), name='bc-dispatch-report-detail'),
 
     # ------------------------------------------------------------------
     # Production Integration
