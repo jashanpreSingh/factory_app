@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import (
     Box, Pallet, BoxMovement, PalletMovement, LabelPrintLog, ScanLog, LooseStock,
+    DispatchSession, DispatchSessionLine, DispatchScanLog, DispatchScannedUnit,
+    DispatchSapSyncLog, DispatchSettings, PalletBoxHistory,
 )
 
 
@@ -56,6 +58,26 @@ class PalletMovementSerializer(serializers.ModelSerializer):
         ]
 
 
+class PalletBoxHistorySerializer(serializers.ModelSerializer):
+    pallet_barcode = serializers.CharField(source='pallet.pallet_id', read_only=True, default='')
+    box_barcode = serializers.CharField(source='box.box_barcode', read_only=True, default='')
+    bill_number = serializers.CharField(source='dispatch_session.bill_number', read_only=True, default='')
+    created_by_name = serializers.CharField(
+        source='created_by.full_name', read_only=True, default=''
+    )
+
+    class Meta:
+        model = PalletBoxHistory
+        fields = [
+            'id', 'pallet', 'pallet_barcode',
+            'box', 'box_barcode',
+            'action', 'old_status', 'new_status',
+            'dispatch_session', 'bill_number',
+            'remarks', 'created_by', 'created_by_name',
+            'created_at',
+        ]
+
+
 # ---------------------------------------------------------------------------
 # Box
 # ---------------------------------------------------------------------------
@@ -78,6 +100,8 @@ class BoxListSerializer(serializers.ModelSerializer):
             'pallet', 'pallet_code',
             'current_warehouse', 'current_bin',
             'status', 'production_line',
+            'dispatch_session', 'dispatched_at',
+            'removed_from_pallet_at', 'removed_from_pallet_reason',
             'created_by', 'created_by_name',
             'created_at',
         ]
@@ -105,6 +129,8 @@ class BoxDetailSerializer(serializers.ModelSerializer):
             'production_run', 'production_line',
             'current_warehouse', 'current_bin',
             'status',
+            'dispatch_session', 'dispatched_at',
+            'removed_from_pallet_at', 'removed_from_pallet_reason',
             'created_by', 'created_by_name',
             'created_at', 'updated_at',
             'movements', 'dismantled_into', 'repacked_from',
@@ -154,10 +180,13 @@ class PalletListSerializer(serializers.ModelSerializer):
         model = Pallet
         fields = [
             'id', 'pallet_id', 'item_code', 'item_name',
-            'batch_number', 'box_count', 'max_box_count', 'total_qty', 'uom',
+            'batch_number', 'box_count', 'total_boxes',
+            'available_boxes', 'dispatched_boxes',
+            'max_box_count', 'total_qty', 'uom',
             'mfg_date', 'exp_date',
             'current_warehouse', 'current_bin',
             'status', 'production_line',
+            'dispatch_session', 'dispatched_at',
             'created_by', 'created_by_name',
             'created_at',
         ]
@@ -180,11 +209,14 @@ class PalletDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'pallet_id', 'barcode_data',
             'item_code', 'item_name',
-            'batch_number', 'box_count', 'max_box_count', 'total_qty', 'uom',
+            'batch_number', 'box_count', 'total_boxes',
+            'available_boxes', 'dispatched_boxes',
+            'max_box_count', 'total_qty', 'uom',
             'mfg_date', 'exp_date',
             'production_run', 'production_line',
             'current_warehouse', 'current_bin',
             'status',
+            'dispatch_session', 'dispatched_at',
             'created_by', 'created_by_name',
             'created_at', 'updated_at',
             'boxes', 'dismantled_boxes', 'movements',
@@ -470,3 +502,216 @@ class ScanRequestSerializer(serializers.Serializer):
     context_ref_type = serializers.CharField(required=False, allow_blank=True, default='')
     context_ref_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     device_info = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+# ---------------------------------------------------------------------------
+# Barcode Dispatch
+# ---------------------------------------------------------------------------
+
+class DispatchBillLookupSerializer(serializers.Serializer):
+    bill_number = serializers.CharField(max_length=80)
+
+
+class DispatchSessionCreateSerializer(serializers.Serializer):
+    bill_number = serializers.CharField(max_length=80)
+
+
+class DispatchScanSubmitSerializer(serializers.Serializer):
+    barcode = serializers.CharField(max_length=1000)
+    device_id = serializers.CharField(max_length=120, required=False, allow_blank=True, default='')
+    request_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+
+
+class DispatchCancelSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=True, allow_blank=False)
+
+
+class DispatchSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchSettings
+        fields = [
+            'allow_partial_dispatch',
+            'allow_partial_pallet_dispatch',
+            'allow_box_dispatch_from_pallet',
+            'require_sequential_item_scanning',
+            'require_sap_sync_on_completion',
+            'allow_manual_close',
+            'allow_admin_override',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class DispatchSessionLineSerializer(serializers.ModelSerializer):
+    remaining_qty = serializers.SerializerMethodField()
+    expected_qty = serializers.DecimalField(source='bill_qty', max_digits=18, decimal_places=3, read_only=True)
+    pending_qty = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DispatchSessionLine
+        fields = [
+            'id', 'sequence_no', 'sap_line_no',
+            'material_code', 'material_description',
+            'bill_qty', 'expected_qty', 'scanned_qty', 'remaining_qty',
+            'pending_qty',
+            'uom', 'batch_number', 'warehouse_code',
+            'serial_required', 'status',
+        ]
+
+    def get_remaining_qty(self, obj):
+        return str(max(obj.bill_qty - obj.scanned_qty, 0))
+
+    def get_pending_qty(self, obj):
+        return self.get_remaining_qty(obj)
+
+
+class DispatchScanLogSerializer(serializers.ModelSerializer):
+    scanned_by_name = serializers.CharField(
+        source='scanned_by.full_name', read_only=True, default=''
+    )
+    scan_type = serializers.CharField(source='entity_type', read_only=True)
+    parsed_material_code = serializers.CharField(source='material_code', read_only=True)
+    qty_delta = serializers.DecimalField(source='qty', max_digits=18, decimal_places=3, read_only=True)
+    rejection_reason = serializers.CharField(source='reject_message', read_only=True)
+    pallet_id = serializers.SerializerMethodField()
+    box_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DispatchScanLog
+        fields = [
+            'id', 'line', 'raw_barcode', 'parsed_barcode',
+            'scan_type', 'entity_type', 'entity_id',
+            'material_code', 'batch_number', 'qty', 'uom',
+            'parsed_material_code', 'pallet_id', 'box_id', 'qty_delta',
+            'result', 'reject_code', 'reject_message',
+            'rejection_reason',
+            'device_id', 'ip_address',
+            'scanned_by', 'scanned_by_name', 'scanned_at',
+            'request_id',
+        ]
+
+    def _first_unit(self, obj):
+        units = getattr(obj, '_prefetched_objects_cache', {}).get('scanned_units')
+        if units:
+            return units[0]
+        return obj.scanned_units.select_related('box', 'pallet').first()
+
+    def get_pallet_id(self, obj):
+        unit = self._first_unit(obj)
+        return unit.pallet_id if unit else None
+
+    def get_box_id(self, obj):
+        unit = self._first_unit(obj)
+        return unit.box_id if unit else None
+
+
+class DispatchScannedUnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchScannedUnit
+        fields = [
+            'id', 'line', 'scan_log', 'barcode_value',
+            'entity_type', 'box', 'pallet', 'serial_number',
+            'material_code', 'batch_number', 'qty', 'uom',
+            'created_at',
+        ]
+
+
+class DispatchSapSyncLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchSapSyncLog
+        fields = [
+            'id', 'operation', 'request_payload', 'response_payload',
+            'status', 'error_message', 'attempt_no', 'created_at',
+        ]
+
+
+class DispatchSessionSerializer(serializers.ModelSerializer):
+    lines = DispatchSessionLineSerializer(many=True, read_only=True)
+    active_line = serializers.SerializerMethodField()
+    can_dispatch = serializers.SerializerMethodField()
+    can_scan = serializers.SerializerMethodField()
+    pending_qty = serializers.SerializerMethodField()
+    line_count = serializers.SerializerMethodField()
+    completed_line_count = serializers.SerializerMethodField()
+    accepted_scan_count = serializers.SerializerMethodField()
+    rejected_scan_count = serializers.SerializerMethodField()
+    pallet_scan_count = serializers.SerializerMethodField()
+    box_scan_count = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(
+        source='created_by.full_name', read_only=True, default=''
+    )
+    dispatched_by_name = serializers.CharField(
+        source='dispatched_by.full_name', read_only=True, default=''
+    )
+    completed_by = serializers.IntegerField(source='dispatched_by_id', read_only=True)
+    completed_by_name = serializers.CharField(source='dispatched_by.full_name', read_only=True, default='')
+    closed_by_name = serializers.CharField(source='closed_by.full_name', read_only=True, default='')
+    sap_sync_status = serializers.CharField(source='sap_update_status', read_only=True)
+    sap_sync_error = serializers.CharField(source='sap_update_error', read_only=True)
+
+    class Meta:
+        model = DispatchSession
+        fields = [
+            'id', 'bill_number',
+            'sap_system_type', 'sap_object_type',
+            'sap_doc_entry', 'sap_doc_num',
+            'delivery_number', 'reference_delivery_number',
+            'customer_code', 'customer_name',
+            'ship_to_code', 'ship_to_name',
+            'bill_date', 'status',
+            'total_expected_qty', 'total_scanned_qty', 'pending_qty',
+            'sap_dispatch_status',
+            'sap_update_status', 'sap_update_error',
+            'sap_sync_status', 'sap_sync_error',
+            'started_at', 'completed_at',
+            'dispatched_at', 'dispatched_by', 'dispatched_by_name',
+            'completed_by', 'completed_by_name',
+            'closed_at', 'closed_by', 'closed_by_name', 'close_reason',
+            'cancelled_at', 'cancel_reason',
+            'created_by', 'created_by_name',
+            'created_at', 'updated_at',
+            'line_count', 'completed_line_count',
+            'accepted_scan_count', 'rejected_scan_count',
+            'pallet_scan_count', 'box_scan_count',
+            'active_line', 'can_dispatch', 'can_scan',
+            'lines',
+        ]
+
+    def _lines(self, obj):
+        return list(obj.lines.all())
+
+    def get_active_line(self, obj):
+        for line in self._lines(obj):
+            if line.scanned_qty < line.bill_qty:
+                return DispatchSessionLineSerializer(line).data
+        return None
+
+    def get_can_dispatch(self, obj):
+        return self.get_active_line(obj) is None and obj.status not in {
+            'COMPLETED', 'CLOSED', 'CANCELLED', 'SAP_SYNC_FAILED',
+        }
+
+    def get_can_scan(self, obj):
+        return obj.status in {'DRAFT', 'ACTIVE', 'PARTIAL', 'READY_TO_DISPATCH'}
+
+    def get_pending_qty(self, obj):
+        return str(max(obj.total_expected_qty - obj.total_scanned_qty, 0))
+
+    def get_line_count(self, obj):
+        return len(self._lines(obj))
+
+    def get_completed_line_count(self, obj):
+        return sum(1 for line in self._lines(obj) if line.scanned_qty >= line.bill_qty)
+
+    def get_accepted_scan_count(self, obj):
+        return obj.scan_logs.filter(result='ACCEPTED').count()
+
+    def get_rejected_scan_count(self, obj):
+        return obj.scan_logs.filter(result='REJECTED').count()
+
+    def get_pallet_scan_count(self, obj):
+        return obj.scan_logs.filter(result='ACCEPTED', entity_type='PALLET').count()
+
+    def get_box_scan_count(self, obj):
+        return obj.scanned_units.filter(entity_type='BOX').count()
