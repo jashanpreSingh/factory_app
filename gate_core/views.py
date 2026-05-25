@@ -40,6 +40,10 @@ from .models import (
     JobWorkGateInItem,
     RejectedQCReturnEntry,
     RejectedQCReturnItem,
+    SalesDispatchDocumentType,
+    SalesDispatchGateOut,
+    SalesDispatchGateOutItem,
+    SalesDispatchGateOutStatus,
     UnitChoice,
 )
 from .serializers import (
@@ -65,6 +69,7 @@ from .serializers import (
     SAPGRPOSerializer,
     SAPProductionOrderSerializer,
     SAPStockTransferSerializer,
+    SalesDispatchBSTEligibleOutSerializer,
     UnitChoiceSerializer,
 )
 
@@ -240,25 +245,31 @@ def sync_empty_gate_in_items(gate_in, sap_transfer, actual_quantities, user):
         )
 
 
-def sync_bst_gate_in_items(bst_in, bst_out, receiving_quantities, user):
+def sync_bst_gate_in_items(bst_in, bst_source, receiving_quantities, user):
     bst_in.items.all().delete()
 
-    for item in bst_out.items.all():
+    for item in bst_source.items.all():
+        is_docking_stock_transfer_item = isinstance(item, SalesDispatchGateOutItem)
+        quantity = item.quantity
+        actual_quantity = getattr(item, "actual_quantity", None)
+        if actual_quantity is None:
+            actual_quantity = quantity
         received_quantity = receiving_quantities.get(
             item.line_num,
-            item.actual_quantity if item.actual_quantity is not None else item.quantity,
+            actual_quantity,
         )
         BSTGateInItem.objects.create(
             bst_gate_in=bst_in,
-            bst_gate_out_item=item,
+            bst_gate_out_item=None if is_docking_stock_transfer_item else item,
+            sales_dispatch_gate_out_item=item if is_docking_stock_transfer_item else None,
             line_num=item.line_num,
             item_code=item.item_code,
             item_name=item.item_name,
-            quantity=item.quantity,
-            actual_quantity=item.actual_quantity,
+            quantity=quantity,
+            actual_quantity=actual_quantity,
             receiving_quantity=received_quantity,
             uom=item.uom,
-            from_warehouse=item.from_warehouse,
+            from_warehouse=item.from_warehouse or getattr(item, "warehouse_code", ""),
             to_warehouse=item.to_warehouse,
             created_by=user,
             updated_by=user,
@@ -1731,13 +1742,19 @@ def select_bst_gate_in_queryset():
             "bst_gate_out",
             "bst_gate_out__vehicle_entry",
             "bst_gate_out__empty_vehicle_gate_in",
+            "sales_dispatch_gate_out",
+            "sales_dispatch_gate_out__vehicle_entry",
+            "sales_dispatch_gate_out__vehicle",
+            "sales_dispatch_gate_out__vehicle__vehicle_type",
+            "sales_dispatch_gate_out__vehicle__transporter",
+            "sales_dispatch_gate_out__driver",
             "vehicle",
             "vehicle__vehicle_type",
             "vehicle__transporter",
             "driver",
             "company",
         )
-        .prefetch_related("items", "bst_gate_out__items")
+        .prefetch_related("items", "bst_gate_out__items", "sales_dispatch_gate_out__items")
     )
 
 
@@ -1769,6 +1786,47 @@ def get_receivable_bst_gate_out(request, bst_gate_out_id):
     )
 
 
+def select_sales_dispatch_bst_source_queryset():
+    return (
+        SalesDispatchGateOut.objects
+        .select_related(
+            "vehicle_entry",
+            "vehicle",
+            "vehicle__vehicle_type",
+            "vehicle__transporter",
+            "transporter",
+            "driver",
+            "company",
+        )
+        .prefetch_related("items")
+    )
+
+
+def get_receivable_sales_dispatch_gate_out(request, sales_dispatch_gate_out_id):
+    return get_object_or_404(
+        select_sales_dispatch_bst_source_queryset(),
+        id=sales_dispatch_gate_out_id,
+        company=request.company.company,
+        is_active=True,
+        document_type=SalesDispatchDocumentType.STOCK_TRANSFER,
+        status=SalesDispatchGateOutStatus.DISPATCHED,
+    )
+
+
+def get_receivable_bst_in_source(request, data):
+    sales_dispatch_gate_out_id = data.get("sales_dispatch_gate_out_id")
+    if sales_dispatch_gate_out_id:
+        return (
+            "DOCKING_STOCK_TRANSFER",
+            get_receivable_sales_dispatch_gate_out(request, sales_dispatch_gate_out_id),
+        )
+
+    return (
+        "LEGACY_BST_OUT",
+        get_receivable_bst_gate_out(request, data["bst_gate_out_id"]),
+    )
+
+
 def ensure_bst_gate_out_not_received(bst_gate_out, exclude_gate_in_id=None):
     qs = BSTGateIn.objects.filter(
         bst_gate_out=bst_gate_out,
@@ -1794,6 +1852,39 @@ def ensure_bst_gate_out_not_received(bst_gate_out, exclude_gate_in_id=None):
             status=status.HTTP_400_BAD_REQUEST,
         )
     return None
+
+
+def ensure_sales_dispatch_gate_out_not_received(sales_dispatch_gate_out, exclude_gate_in_id=None):
+    qs = BSTGateIn.objects.filter(
+        sales_dispatch_gate_out=sales_dispatch_gate_out,
+        is_active=True,
+        status__in=["IN_PROGRESS", "COMPLETED"],
+    )
+    if exclude_gate_in_id:
+        qs = qs.exclude(id=exclude_gate_in_id)
+
+    linked_gate_in = qs.order_by("-created_at").first()
+    if linked_gate_in:
+        return Response(
+            {
+                "detail": (
+                    "This Docking stock-transfer gate-out is already linked to "
+                    f"BST In entry {linked_gate_in.entry_no} "
+                    f"(entryId {linked_gate_in.vehicle_entry_id})."
+                ),
+                "linked_bst_in_id": linked_gate_in.id,
+                "linked_entry_no": linked_gate_in.entry_no,
+                "linked_entry_id": linked_gate_in.vehicle_entry_id,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
+
+def ensure_bst_in_source_not_received(source_type, source, exclude_gate_in_id=None):
+    if source_type == "DOCKING_STOCK_TRANSFER":
+        return ensure_sales_dispatch_gate_out_not_received(source, exclude_gate_in_id)
+    return ensure_bst_gate_out_not_received(source, exclude_gate_in_id)
 
 
 def ensure_bst_gate_out_not_returned(bst_gate_out, exclude_return_id=None):
@@ -1824,24 +1915,21 @@ def ensure_bst_gate_out_not_returned(bst_gate_out, exclude_return_id=None):
 
 
 class BSTGateInEligibleOutsView(APIView):
-    """List completed BST gate-outs that have not been received at the gate yet."""
+    """List dispatched Docking stock-transfer gate-outs pending destination BST In."""
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def get(self, request):
         qs = (
-            select_bst_gate_out_queryset()
+            select_sales_dispatch_bst_source_queryset()
             .filter(
                 company=request.company.company,
                 is_active=True,
-                status="COMPLETED",
+                document_type=SalesDispatchDocumentType.STOCK_TRANSFER,
+                status=SalesDispatchGateOutStatus.DISPATCHED,
             )
             .exclude(
                 bst_gate_ins__is_active=True,
                 bst_gate_ins__status__in=["IN_PROGRESS", "COMPLETED"],
-            )
-            .exclude(
-                bst_gate_returns__is_active=True,
-                bst_gate_returns__status__in=["IN_PROGRESS", "COMPLETED"],
             )
             .distinct()
         )
@@ -1854,18 +1942,21 @@ class BSTGateInEligibleOutsView(APIView):
                     search in str(value or "").lower()
                     for value in [
                         entry.entry_no,
+                        entry.vehicle_no,
                         entry.vehicle.vehicle_number,
+                        entry.driver_name,
                         entry.driver.name,
                         entry.sap_doc_num,
-                        entry.sap_from_warehouse,
-                        entry.sap_to_warehouse,
+                        entry.from_warehouse,
+                        entry.to_warehouse,
+                        entry.gatepass_no,
                         entry.gate_out_date,
                         entry.out_time,
                     ]
                 )
             ]
 
-        return Response(BSTGateOutSerializer(qs, many=True).data)
+        return Response(SalesDispatchBSTEligibleOutSerializer(qs, many=True).data)
 
 
 class BSTGateInListCreateView(APIView):
@@ -1897,8 +1988,8 @@ class BSTGateInListCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        bst_out = get_receivable_bst_gate_out(request, data["bst_gate_out_id"])
-        duplicate_response = ensure_bst_gate_out_not_received(bst_out)
+        source_type, bst_source = get_receivable_bst_in_source(request, data)
+        duplicate_response = ensure_bst_in_source_not_received(source_type, bst_source)
         if duplicate_response is not None:
             return duplicate_response
         receiving_quantities = parse_line_quantities(
@@ -1912,8 +2003,8 @@ class BSTGateInListCreateView(APIView):
             vehicle_entry = VehicleEntry.objects.create(
                 company=request.company.company,
                 entry_no=entry_no,
-                vehicle=bst_out.vehicle,
-                driver=bst_out.driver,
+                vehicle=bst_source.vehicle,
+                driver=bst_source.driver,
                 entry_type="BST_IN",
                 status="IN_PROGRESS",
                 remarks=data.get("remarks", ""),
@@ -1925,9 +2016,12 @@ class BSTGateInListCreateView(APIView):
                 company=request.company.company,
                 entry_no=entry_no,
                 vehicle_entry=vehicle_entry,
-                bst_gate_out=bst_out,
-                vehicle=bst_out.vehicle,
-                driver=bst_out.driver,
+                bst_gate_out=bst_source if source_type == "LEGACY_BST_OUT" else None,
+                sales_dispatch_gate_out=(
+                    bst_source if source_type == "DOCKING_STOCK_TRANSFER" else None
+                ),
+                vehicle=bst_source.vehicle,
+                driver=bst_source.driver,
                 gate_in_date=data["gate_in_date"],
                 in_time=data["in_time"],
                 sap_receipt_doc_num=data.get("sap_receipt_doc_num", ""),
@@ -1938,7 +2032,7 @@ class BSTGateInListCreateView(APIView):
                 created_by=request.user,
                 updated_by=request.user,
             )
-            sync_bst_gate_in_items(bst_in, bst_out, receiving_quantities, request.user)
+            sync_bst_gate_in_items(bst_in, bst_source, receiving_quantities, request.user)
 
         return Response(
             BSTGateInSerializer(bst_in).data,
@@ -1958,30 +2052,37 @@ def update_bst_gate_in(request, bst_in):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    bst_out = bst_in.bst_gate_out
+    current_source_type = (
+        "DOCKING_STOCK_TRANSFER" if bst_in.sales_dispatch_gate_out_id else "LEGACY_BST_OUT"
+    )
+    current_source_id = bst_in.sales_dispatch_gate_out_id or bst_in.bst_gate_out_id
+    source_type, bst_source = get_receivable_bst_in_source(request, data)
     receiving_quantities = parse_line_quantities(
         data.get("items"),
         "receiving_quantity",
         "Receiving quantity",
     )
-    if data["bst_gate_out_id"] != bst_in.bst_gate_out_id:
-        bst_out = get_receivable_bst_gate_out(request, data["bst_gate_out_id"])
-        duplicate_response = ensure_bst_gate_out_not_received(
-            bst_out,
+    if source_type != current_source_type or bst_source.id != current_source_id:
+        duplicate_response = ensure_bst_in_source_not_received(
+            source_type,
+            bst_source,
             exclude_gate_in_id=bst_in.id,
         )
         if duplicate_response is not None:
             return duplicate_response
 
     with transaction.atomic():
-        if bst_out.id != bst_in.bst_gate_out_id:
-            bst_in.bst_gate_out = bst_out
-            bst_in.vehicle = bst_out.vehicle
-            bst_in.driver = bst_out.driver
+        if source_type != current_source_type or bst_source.id != current_source_id:
+            bst_in.bst_gate_out = bst_source if source_type == "LEGACY_BST_OUT" else None
+            bst_in.sales_dispatch_gate_out = (
+                bst_source if source_type == "DOCKING_STOCK_TRANSFER" else None
+            )
+            bst_in.vehicle = bst_source.vehicle
+            bst_in.driver = bst_source.driver
 
             vehicle_entry = bst_in.vehicle_entry
-            vehicle_entry.vehicle = bst_out.vehicle
-            vehicle_entry.driver = bst_out.driver
+            vehicle_entry.vehicle = bst_source.vehicle
+            vehicle_entry.driver = bst_source.driver
             vehicle_entry.updated_by = request.user
             vehicle_entry.save(update_fields=["vehicle", "driver", "updated_by", "updated_at"])
 
@@ -1994,7 +2095,7 @@ def update_bst_gate_in(request, bst_in):
         bst_in.remarks = data.get("remarks", "")
         bst_in.updated_by = request.user
         bst_in.save()
-        sync_bst_gate_in_items(bst_in, bst_out, receiving_quantities, request.user)
+        sync_bst_gate_in_items(bst_in, bst_source, receiving_quantities, request.user)
 
     if hasattr(bst_in, "_prefetched_objects_cache"):
         bst_in._prefetched_objects_cache.pop("items", None)

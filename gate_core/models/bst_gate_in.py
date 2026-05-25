@@ -28,6 +28,15 @@ class BSTGateIn(BaseModel):
         "gate_core.BSTGateOut",
         on_delete=models.PROTECT,
         related_name="bst_gate_ins",
+        null=True,
+        blank=True,
+    )
+    sales_dispatch_gate_out = models.ForeignKey(
+        "gate_core.SalesDispatchGateOut",
+        on_delete=models.PROTECT,
+        related_name="bst_gate_ins",
+        null=True,
+        blank=True,
     )
     vehicle = models.ForeignKey(
         "vehicle_management.Vehicle",
@@ -59,6 +68,7 @@ class BSTGateIn(BaseModel):
             models.Index(fields=["status"]),
             models.Index(fields=["vehicle"]),
             models.Index(fields=["bst_gate_out"]),
+            models.Index(fields=["sales_dispatch_gate_out"]),
         ]
 
     def __str__(self):
@@ -98,6 +108,15 @@ class BSTGateInItem(BaseModel):
         "gate_core.BSTGateOutItem",
         on_delete=models.PROTECT,
         related_name="bst_gate_in_items",
+        null=True,
+        blank=True,
+    )
+    sales_dispatch_gate_out_item = models.ForeignKey(
+        "gate_core.SalesDispatchGateOutItem",
+        on_delete=models.PROTECT,
+        related_name="bst_gate_in_items",
+        null=True,
+        blank=True,
     )
     line_num = models.IntegerField()
     item_code = models.CharField(max_length=100, blank=True)

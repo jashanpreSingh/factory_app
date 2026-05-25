@@ -497,6 +497,13 @@ class SalesDispatchReportView(APIView):
                 SalesDispatchGateOutStatus.CANCELLED,
             ]
         )
+        truck_with_photo = qs.exclude(
+            Q(truck_photo="")
+            | Q(truck_photo__isnull=True)
+            | Q(photo_latitude__isnull=True)
+            | Q(photo_longitude__isnull=True)
+        )
+        limit = self._report_limit(request.query_params.get("limit"))
 
         return Response(
             {
@@ -509,29 +516,53 @@ class SalesDispatchReportView(APIView):
                     "ready_for_dispatch": ready_for_dispatch.count(),
                     "dispatched": dispatched.count(),
                     "rejected_cancelled": rejected_cancelled.count(),
+                    "truck_with_photo": truck_with_photo.count(),
                 },
                 "waiting_inside": SalesDispatchGateOutSerializer(
-                    active.order_by("created_at")[:20],
+                    active.order_by("created_at")[:limit],
                     many=True,
                 ).data,
                 "missing_photo": SalesDispatchGateOutSerializer(
-                    missing_photo.order_by("created_at")[:20],
+                    missing_photo.order_by("created_at")[:limit],
                     many=True,
                 ).data,
                 "gatepass_pending": SalesDispatchGateOutSerializer(
-                    gatepass_pending.order_by("created_at")[:20],
+                    gatepass_pending.order_by("created_at")[:limit],
+                    many=True,
+                ).data,
+                "printed_not_committed": SalesDispatchGateOutSerializer(
+                    printed_not_committed.order_by("printed_at", "created_at")[:limit],
                     many=True,
                 ).data,
                 "ready_for_dispatch": SalesDispatchGateOutSerializer(
-                    ready_for_dispatch.order_by("created_at")[:20],
+                    ready_for_dispatch.order_by("print_committed_at", "created_at")[:limit],
+                    many=True,
+                ).data,
+                "dispatched": SalesDispatchGateOutSerializer(
+                    dispatched.order_by("-dispatched_at", "-updated_at")[:limit],
                     many=True,
                 ).data,
                 "rejected_cancelled": SalesDispatchGateOutSerializer(
-                    rejected_cancelled.order_by("-updated_at")[:20],
+                    rejected_cancelled.order_by("-updated_at")[:limit],
+                    many=True,
+                ).data,
+                "truck_vs_invoices_with_photo": SalesDispatchGateOutSerializer(
+                    truck_with_photo.order_by("-photo_uploaded_at", "-created_at")[:limit],
+                    many=True,
+                ).data,
+                "truck_status_with_photo": SalesDispatchGateOutSerializer(
+                    truck_with_photo.order_by("status", "-photo_uploaded_at", "-created_at")[:limit],
                     many=True,
                 ).data,
             }
         )
+
+    @staticmethod
+    def _report_limit(value):
+        try:
+            return min(max(int(value or 20), 1), 1000)
+        except (TypeError, ValueError):
+            return 20
 
 
 class SalesDispatchPendingBookingListView(APIView):

@@ -11,6 +11,7 @@ from company.models import Company, UserCompany, UserRole
 from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import Driver, VehicleEntry
 from gate_core.models import (
+    BSTGateIn,
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
     SalesDispatchGateOutDocument,
@@ -212,6 +213,31 @@ class SalesDispatchAPITests(APITestCase):
                 created_by=self.user,
                 updated_by=self.user,
             )
+        return entry
+
+    def create_dispatched_stock_transfer(self, suffix="70"):
+        entry = self.create_sales_dispatch(
+            suffix,
+            status_value=SalesDispatchGateOutStatus.DISPATCHED,
+            document_type=SalesDispatchDocumentType.STOCK_TRANSFER,
+            with_item=True,
+        )
+        entry.sap_doc_num = f"BST-{suffix}"
+        entry.from_warehouse = "SRC-WH"
+        entry.to_warehouse = "DST-WH"
+        entry.gate_out_date = timezone.localdate()
+        entry.out_time = timezone.localtime().time().replace(microsecond=0)
+        entry.save(
+            update_fields=[
+                "sap_doc_num",
+                "from_warehouse",
+                "to_warehouse",
+                "gate_out_date",
+                "out_time",
+                "updated_at",
+            ]
+        )
+        entry.items.update(from_warehouse="SRC-WH", to_warehouse="DST-WH")
         return entry
 
     def test_sales_dispatch_actions_require_docking_permissions(self):
@@ -455,12 +481,17 @@ class SalesDispatchAPITests(APITestCase):
                 "ready_for_dispatch": 1,
                 "dispatched": 1,
                 "rejected_cancelled": 2,
+                "truck_with_photo": 3,
             },
         )
         self.assertEqual(len(response.data["waiting_inside"]), 4)
         self.assertEqual(len(response.data["missing_photo"]), 1)
+        self.assertEqual(len(response.data["printed_not_committed"]), 1)
         self.assertEqual(len(response.data["ready_for_dispatch"]), 1)
+        self.assertEqual(len(response.data["dispatched"]), 1)
         self.assertEqual(len(response.data["rejected_cancelled"]), 2)
+        self.assertEqual(len(response.data["truck_vs_invoices_with_photo"]), 3)
+        self.assertEqual(len(response.data["truck_status_with_photo"]), 3)
 
     def test_pending_bookings_endpoint_groups_booked_dispatch_plans(self):
         linked_vehicle_entry = VehicleEntry.objects.create(
@@ -823,3 +854,73 @@ class SalesDispatchAPITests(APITestCase):
         second_plan.refresh_from_db()
         self.assertEqual(first_plan.booking_status, DispatchPlanStatus.DISPATCHED)
         self.assertEqual(second_plan.booking_status, DispatchPlanStatus.DISPATCHED)
+
+    def test_bst_in_eligible_outs_use_dispatched_docking_stock_transfers(self):
+        eligible_entry = self.create_dispatched_stock_transfer("80")
+        self.create_sales_dispatch(
+            "81",
+            status_value=SalesDispatchGateOutStatus.DISPATCHED,
+            document_type=SalesDispatchDocumentType.INVOICE,
+        )
+        self.create_sales_dispatch(
+            "82",
+            status_value=SalesDispatchGateOutStatus.PRINT_COMMITTED,
+            document_type=SalesDispatchDocumentType.STOCK_TRANSFER,
+        )
+
+        response = self.client.get(
+            "/api/v1/gate-core/bst-ins/eligible-outs/",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], eligible_entry.id)
+        self.assertEqual(response.data[0]["source_type"], "DOCKING_STOCK_TRANSFER")
+        self.assertEqual(response.data[0]["sap_doc_num"], "BST-80")
+        self.assertEqual(response.data[0]["sap_from_warehouse"], "SRC-WH")
+        self.assertEqual(response.data[0]["sap_to_warehouse"], "DST-WH")
+        self.assertEqual(response.data[0]["items"][0]["actual_quantity"], "10.000")
+
+    def test_bst_in_create_links_to_docking_stock_transfer_source(self):
+        source_entry = self.create_dispatched_stock_transfer("83")
+        source_item = source_entry.items.first()
+
+        response = self.client.post(
+            "/api/v1/gate-core/bst-ins/",
+            {
+                "sales_dispatch_gate_out_id": source_entry.id,
+                "gate_in_date": str(timezone.localdate()),
+                "in_time": "10:30",
+                "sap_receipt_doc_num": "GR-BST-83",
+                "items": [
+                    {
+                        "line_num": source_item.line_num,
+                        "receiving_quantity": "8.000",
+                    }
+                ],
+            },
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["source_type"], "DOCKING_STOCK_TRANSFER")
+        self.assertIsNone(response.data["bst_gate_out"])
+        self.assertEqual(response.data["sales_dispatch_gate_out"], source_entry.id)
+
+        bst_in = BSTGateIn.objects.get(id=response.data["id"])
+        self.assertIsNone(bst_in.bst_gate_out_id)
+        self.assertEqual(bst_in.sales_dispatch_gate_out_id, source_entry.id)
+        self.assertEqual(bst_in.items.count(), 1)
+        bst_in_item = bst_in.items.first()
+        self.assertIsNone(bst_in_item.bst_gate_out_item_id)
+        self.assertEqual(bst_in_item.sales_dispatch_gate_out_item_id, source_item.id)
+        self.assertEqual(bst_in_item.receiving_quantity, Decimal("8.000"))
+
+        eligible_response = self.client.get(
+            "/api/v1/gate-core/bst-ins/eligible-outs/",
+            **self.company_header,
+        )
+        self.assertEqual(eligible_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(eligible_response.data, [])

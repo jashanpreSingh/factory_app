@@ -13,6 +13,8 @@ from .models import (
     JobWorkGateInItem,
     RejectedQCReturnEntry,
     RejectedQCReturnItem,
+    SalesDispatchGateOut,
+    SalesDispatchGateOutItem,
     UnitChoice,
 )
 
@@ -131,6 +133,7 @@ class BSTGateInItemSerializer(serializers.ModelSerializer):
 
 
 class BSTGateOutSerializer(serializers.ModelSerializer):
+    source_type = serializers.SerializerMethodField()
     vehicle_entry_no = serializers.CharField(source="vehicle_entry.entry_no", read_only=True)
     vehicle_entry_status = serializers.CharField(source="vehicle_entry.status", read_only=True)
     empty_vehicle_gate_in_entry_no = serializers.CharField(
@@ -155,7 +158,7 @@ class BSTGateOutSerializer(serializers.ModelSerializer):
     class Meta:
         model = BSTGateOut
         fields = [
-            "id", "entry_no", "company", "vehicle_entry", "vehicle_entry_no",
+            "id", "source_type", "entry_no", "company", "vehicle_entry", "vehicle_entry_no",
             "vehicle_entry_status", "empty_vehicle_gate_in",
             "empty_vehicle_gate_in_entry_no", "empty_vehicle_gate_in_date",
             "empty_vehicle_in_time", "vehicle", "vehicle_number", "vehicle_type",
@@ -166,6 +169,102 @@ class BSTGateOutSerializer(serializers.ModelSerializer):
             "cancelled_at", "cancelled_by", "items", "created_at", "updated_at",
         ]
         read_only_fields = fields
+
+    def get_source_type(self, obj):
+        return "LEGACY_BST_OUT"
+
+
+class SalesDispatchBSTEligibleItemSerializer(serializers.ModelSerializer):
+    actual_quantity = serializers.DecimalField(
+        source="quantity",
+        max_digits=18,
+        decimal_places=3,
+        read_only=True,
+    )
+
+    class Meta:
+        model = SalesDispatchGateOutItem
+        fields = [
+            "id", "line_num", "item_code", "item_name", "quantity",
+            "actual_quantity", "uom", "from_warehouse", "to_warehouse",
+        ]
+        read_only_fields = fields
+
+
+class SalesDispatchBSTEligibleOutSerializer(serializers.ModelSerializer):
+    source_type = serializers.SerializerMethodField()
+    vehicle_entry_no = serializers.CharField(source="vehicle_entry.entry_no", read_only=True)
+    vehicle_entry_status = serializers.CharField(source="vehicle_entry.status", read_only=True)
+    empty_vehicle_gate_in = serializers.SerializerMethodField()
+    empty_vehicle_gate_in_entry_no = serializers.SerializerMethodField()
+    empty_vehicle_gate_in_date = serializers.SerializerMethodField()
+    empty_vehicle_in_time = serializers.SerializerMethodField()
+    vehicle_number = serializers.SerializerMethodField()
+    vehicle_type = serializers.CharField(source="vehicle.vehicle_type.name", read_only=True, allow_null=True)
+    transporter_name = serializers.SerializerMethodField()
+    driver_name = serializers.SerializerMethodField()
+    driver_mobile = serializers.SerializerMethodField()
+    sap_from_warehouse = serializers.CharField(source="from_warehouse", read_only=True)
+    sap_to_warehouse = serializers.CharField(source="to_warehouse", read_only=True)
+    status = serializers.SerializerMethodField()
+    cancel_reason = serializers.SerializerMethodField()
+    cancelled_at = serializers.SerializerMethodField()
+    cancelled_by = serializers.SerializerMethodField()
+    items = SalesDispatchBSTEligibleItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SalesDispatchGateOut
+        fields = [
+            "id", "source_type", "entry_no", "company", "vehicle_entry", "vehicle_entry_no",
+            "vehicle_entry_status", "empty_vehicle_gate_in",
+            "empty_vehicle_gate_in_entry_no", "empty_vehicle_gate_in_date",
+            "empty_vehicle_in_time", "vehicle", "vehicle_number", "vehicle_type",
+            "transporter_name", "driver", "driver_name", "driver_mobile",
+            "sap_doc_entry", "sap_doc_num", "sap_doc_date", "sap_from_warehouse",
+            "sap_to_warehouse", "sap_reference", "sap_comments", "gate_out_date",
+            "out_time", "security_name", "remarks", "status", "cancel_reason",
+            "cancelled_at", "cancelled_by", "items", "created_at", "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_source_type(self, obj):
+        return "DOCKING_STOCK_TRANSFER"
+
+    def get_empty_vehicle_gate_in(self, obj):
+        return None
+
+    def get_empty_vehicle_gate_in_entry_no(self, obj):
+        return ""
+
+    def get_empty_vehicle_gate_in_date(self, obj):
+        return None
+
+    def get_empty_vehicle_in_time(self, obj):
+        return None
+
+    def get_vehicle_number(self, obj):
+        return obj.vehicle_no or getattr(obj.vehicle, "vehicle_number", "")
+
+    def get_transporter_name(self, obj):
+        return obj.transporter_name or getattr(obj.transporter, "name", "")
+
+    def get_driver_name(self, obj):
+        return obj.driver_name or getattr(obj.driver, "name", "")
+
+    def get_driver_mobile(self, obj):
+        return obj.driver_mobile_no or getattr(obj.driver, "mobile_no", "")
+
+    def get_status(self, obj):
+        return "COMPLETED"
+
+    def get_cancel_reason(self, obj):
+        return ""
+
+    def get_cancelled_at(self, obj):
+        return None
+
+    def get_cancelled_by(self, obj):
+        return None
 
 
 class BSTGateOutCreateSerializer(serializers.Serializer):
@@ -233,34 +332,33 @@ class JobWorkGateInCreateSerializer(serializers.Serializer):
 
 
 class BSTGateInSerializer(serializers.ModelSerializer):
+    source_type = serializers.SerializerMethodField()
     vehicle_entry_no = serializers.CharField(source="vehicle_entry.entry_no", read_only=True)
     vehicle_entry_status = serializers.CharField(source="vehicle_entry.status", read_only=True)
-    bst_gate_out_entry_no = serializers.CharField(source="bst_gate_out.entry_no", read_only=True)
-    bst_gate_out_vehicle_entry = serializers.IntegerField(
-        source="bst_gate_out.vehicle_entry_id",
-        read_only=True,
-    )
-    bst_gate_out_date = serializers.DateField(source="bst_gate_out.gate_out_date", read_only=True)
-    bst_gate_out_time = serializers.TimeField(source="bst_gate_out.out_time", read_only=True)
+    bst_gate_out_entry_no = serializers.SerializerMethodField()
+    bst_gate_out_vehicle_entry = serializers.SerializerMethodField()
+    bst_gate_out_date = serializers.SerializerMethodField()
+    bst_gate_out_time = serializers.SerializerMethodField()
     vehicle_number = serializers.CharField(source="vehicle.vehicle_number", read_only=True)
     vehicle_type = serializers.CharField(source="vehicle.vehicle_type.name", read_only=True, allow_null=True)
     transporter_name = serializers.CharField(source="vehicle.transporter.name", read_only=True, allow_null=True)
     driver_name = serializers.CharField(source="driver.name", read_only=True)
     driver_mobile = serializers.CharField(source="driver.mobile_no", read_only=True)
-    sap_doc_entry = serializers.IntegerField(source="bst_gate_out.sap_doc_entry", read_only=True)
-    sap_doc_num = serializers.CharField(source="bst_gate_out.sap_doc_num", read_only=True)
-    sap_doc_date = serializers.DateField(source="bst_gate_out.sap_doc_date", read_only=True)
-    sap_from_warehouse = serializers.CharField(source="bst_gate_out.sap_from_warehouse", read_only=True)
-    sap_to_warehouse = serializers.CharField(source="bst_gate_out.sap_to_warehouse", read_only=True)
-    sap_reference = serializers.CharField(source="bst_gate_out.sap_reference", read_only=True)
-    sap_comments = serializers.CharField(source="bst_gate_out.sap_comments", read_only=True)
+    sap_doc_entry = serializers.SerializerMethodField()
+    sap_doc_num = serializers.SerializerMethodField()
+    sap_doc_date = serializers.SerializerMethodField()
+    sap_from_warehouse = serializers.SerializerMethodField()
+    sap_to_warehouse = serializers.SerializerMethodField()
+    sap_reference = serializers.SerializerMethodField()
+    sap_comments = serializers.SerializerMethodField()
     items = BSTGateInItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = BSTGateIn
         fields = [
-            "id", "entry_no", "company", "vehicle_entry", "vehicle_entry_no",
-            "vehicle_entry_status", "bst_gate_out", "bst_gate_out_entry_no",
+            "id", "source_type", "entry_no", "company", "vehicle_entry", "vehicle_entry_no",
+            "vehicle_entry_status", "bst_gate_out", "sales_dispatch_gate_out",
+            "bst_gate_out_entry_no",
             "bst_gate_out_vehicle_entry", "bst_gate_out_date", "bst_gate_out_time",
             "vehicle", "vehicle_number", "vehicle_type", "transporter_name",
             "driver", "driver_name", "driver_mobile", "sap_doc_entry",
@@ -272,9 +370,60 @@ class BSTGateInSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    def _source(self, obj):
+        return obj.sales_dispatch_gate_out or obj.bst_gate_out
+
+    def get_source_type(self, obj):
+        return "DOCKING_STOCK_TRANSFER" if obj.sales_dispatch_gate_out_id else "LEGACY_BST_OUT"
+
+    def get_bst_gate_out_entry_no(self, obj):
+        source = self._source(obj)
+        return getattr(source, "entry_no", "")
+
+    def get_bst_gate_out_vehicle_entry(self, obj):
+        source = self._source(obj)
+        return getattr(source, "vehicle_entry_id", None)
+
+    def get_bst_gate_out_date(self, obj):
+        source = self._source(obj)
+        return getattr(source, "gate_out_date", None)
+
+    def get_bst_gate_out_time(self, obj):
+        source = self._source(obj)
+        return getattr(source, "out_time", None)
+
+    def get_sap_doc_entry(self, obj):
+        source = self._source(obj)
+        return getattr(source, "sap_doc_entry", None)
+
+    def get_sap_doc_num(self, obj):
+        source = self._source(obj)
+        return getattr(source, "sap_doc_num", "")
+
+    def get_sap_doc_date(self, obj):
+        source = self._source(obj)
+        return getattr(source, "sap_doc_date", None)
+
+    def get_sap_from_warehouse(self, obj):
+        source = self._source(obj)
+        return getattr(source, "from_warehouse", "") or getattr(source, "sap_from_warehouse", "")
+
+    def get_sap_to_warehouse(self, obj):
+        source = self._source(obj)
+        return getattr(source, "to_warehouse", "") or getattr(source, "sap_to_warehouse", "")
+
+    def get_sap_reference(self, obj):
+        source = self._source(obj)
+        return getattr(source, "sap_reference", "")
+
+    def get_sap_comments(self, obj):
+        source = self._source(obj)
+        return getattr(source, "sap_comments", "")
+
 
 class BSTGateInCreateSerializer(serializers.Serializer):
-    bst_gate_out_id = serializers.IntegerField()
+    bst_gate_out_id = serializers.IntegerField(required=False)
+    sales_dispatch_gate_out_id = serializers.IntegerField(required=False)
     gate_in_date = serializers.DateField()
     in_time = serializers.TimeField()
     sap_receipt_doc_num = serializers.CharField(required=False, allow_blank=True, default="")
@@ -288,6 +437,15 @@ class BSTGateInCreateSerializer(serializers.Serializer):
         allow_empty=True,
         default=list,
     )
+
+    def validate(self, attrs):
+        has_legacy_bst_out = bool(attrs.get("bst_gate_out_id"))
+        has_docking_stock_transfer = bool(attrs.get("sales_dispatch_gate_out_id"))
+        if has_legacy_bst_out == has_docking_stock_transfer:
+            raise serializers.ValidationError(
+                "Select exactly one BST source: bst_gate_out_id or sales_dispatch_gate_out_id."
+            )
+        return attrs
 
 
 class BSTGateReturnSerializer(serializers.ModelSerializer):
