@@ -190,12 +190,6 @@ class BarcodeDispatchService:
         if not bill:
             raise DispatchValidationError("SAP_BILL_NOT_FOUND", "Bill not found in SAP.", 404)
 
-        if bill.get("already_dispatched"):
-            raise DispatchValidationError(
-                "BILL_ALREADY_DISPATCHED",
-                "This bill is already dispatched in SAP.",
-            )
-
         if DispatchSession.objects.filter(
             company=self.company,
             bill_number=bill_number,

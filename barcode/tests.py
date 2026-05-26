@@ -857,6 +857,20 @@ class BarcodeDispatchWorkflowTests(TestCase):
             [(1, 'FG001', Decimal('10.000')), (2, 'FG002', Decimal('5.000'))],
         )
 
+    def test_create_session_allows_bill_marked_dispatched_in_sap(self):
+        self.adapter.bill = {
+            **self._bill(),
+            'already_dispatched': True,
+            'sap_dispatch_status': 'DISPATCHED',
+            'raw': {'sap_dispatch_date': '2026-05-25'},
+        }
+
+        session = self.dispatch_service.create_session('900001', self.user)
+
+        self.assertEqual(session.bill_number, '900001')
+        self.assertEqual(session.sap_dispatch_status, 'DISPATCHED')
+        self.assertEqual(session.status, DispatchSessionStatus.DRAFT)
+
     def test_scan_rejects_later_item_until_current_line_is_complete(self):
         session = self.dispatch_service.create_session('900001', self.user)
         item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
