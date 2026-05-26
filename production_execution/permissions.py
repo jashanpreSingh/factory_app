@@ -114,7 +114,11 @@ class CanCreateManpower(BasePermission):
 # Line Clearance
 class CanViewLineClearance(BasePermission):
     def has_permission(self, request, view):
-        return request.user.has_perm('production_execution.can_view_line_clearance')
+        return (
+            request.user.has_perm('production_execution.can_view_line_clearance') or
+            request.user.has_perm('quality_control.can_view_line_clearance_qc') or
+            request.user.has_perm('quality_control.can_approve_line_clearance_qc')
+        )
 
 
 class CanCreateLineClearance(BasePermission):
@@ -124,7 +128,10 @@ class CanCreateLineClearance(BasePermission):
 
 class CanApproveLineClearanceQA(BasePermission):
     def has_permission(self, request, view):
-        return request.user.has_perm('production_execution.can_approve_line_clearance_qa')
+        return (
+            request.user.has_perm('production_execution.can_approve_line_clearance_qa') or
+            request.user.has_perm('quality_control.can_approve_line_clearance_qc')
+        )
 
 
 # Machine Checklists

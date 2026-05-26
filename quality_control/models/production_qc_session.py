@@ -109,6 +109,8 @@ class ProductionQCSession(BaseModel):
             ("can_create_production_qc", "Can create production QC session"),
             ("can_submit_production_qc", "Can submit production QC session"),
             ("can_approve_production_qc", "Can approve production QC session"),
+            ("can_view_line_clearance_qc", "Can view line clearance QC"),
+            ("can_approve_line_clearance_qc", "Can approve line clearance QC"),
         ]
 
     def __str__(self):
