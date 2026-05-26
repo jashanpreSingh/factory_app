@@ -182,9 +182,10 @@ class GRPOPostRequestSerializer(serializers.Serializer):
     tare_weight = serializers.DecimalField(
         max_digits=12,
         decimal_places=3,
-        required=True,
+        required=False,
+        allow_null=True,
         min_value=Decimal("0.001"),
-        help_text="Tare weight captured at GRPO; updates the gate weighment row"
+        help_text="Optional tare weight captured at GRPO; updates the gate weighment row when provided"
     )
     extra_charges = ExtraChargeInputSerializer(
         many=True, required=False,

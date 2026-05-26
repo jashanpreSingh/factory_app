@@ -391,6 +391,61 @@ class GRPOServiceTests(TestCase):
         self.assertEqual(line.base_line, 0)
 
     @patch('grpo.services.SAPClient')
+    def test_post_grpo_does_not_require_weighment(self, mock_sap_client):
+        """Material GRPO can be posted without a gate weighment row."""
+        mock_instance = MagicMock()
+        mock_instance.create_grpo.return_value = {
+            "DocEntry": 125,
+            "DocNum": 458,
+            "DocTotal": 2500.00
+        }
+        mock_sap_client.return_value = mock_instance
+
+        entry = VehicleEntry.objects.create(
+            entry_no="VE-2024-NOWEIGH",
+            company=self.company,
+            vehicle=self.vehicle,
+            driver=self.driver,
+            entry_type="RAW_MATERIAL",
+            status=GateEntryStatus.COMPLETED,
+        )
+        po_receipt = POReceipt.objects.create(
+            vehicle_entry=entry,
+            po_number="PO-NOWEIGH-001",
+            supplier_code="SUP001",
+            supplier_name="Test Supplier",
+            sap_doc_entry=22345,
+            branch_id=1,
+        )
+        po_item = POItemReceipt.objects.create(
+            po_receipt=po_receipt,
+            po_item_code="ITEM-NW",
+            item_name="No Weighment Item",
+            ordered_qty=Decimal("50.000"),
+            received_qty=Decimal("50.000"),
+            accepted_qty=Decimal("50.000"),
+            rejected_qty=Decimal("0.000"),
+            sap_line_num=0,
+            unit_price=Decimal("50.000000"),
+            uom="KG",
+        )
+
+        service = GRPOService(company_code="TC001")
+        grpo = service.post_grpo(
+            vehicle_entry_id=entry.id,
+            po_receipt_ids=[po_receipt.id],
+            user=self.user,
+            items=[{
+                "po_item_receipt_id": po_item.id,
+                "accepted_qty": Decimal("50.000"),
+            }],
+            branch_id=1,
+        )
+
+        self.assertEqual(grpo.status, GRPOStatus.POSTED)
+        self.assertFalse(Weighment.objects.filter(vehicle_entry=entry).exists())
+
+    @patch('grpo.services.SAPClient')
     def test_post_grpo_updates_tare_weight_on_weighment(self, mock_sap_client):
         """GRPO tare input should update the same weighment row and recalculate net."""
         mock_instance = MagicMock()
@@ -869,14 +924,13 @@ class GRPOSerializerTests(TestCase):
                 {"po_item_receipt_id": 10, "accepted_qty": "95.000", "variety": "TMT-500D"}
             ],
             "branch_id": 1,
-            "tare_weight": "2500.000",
         }
 
         serializer = GRPOPostRequestSerializer(data=data)
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
-    def test_grpo_post_request_serializer_requires_tare_weight(self):
-        """GRPO post payload must include tare weight."""
+    def test_grpo_post_request_serializer_allows_missing_tare_weight(self):
+        """GRPO post payload does not require tare weight."""
         from grpo.serializers import GRPOPostRequestSerializer
 
         data = {
@@ -889,8 +943,8 @@ class GRPOSerializerTests(TestCase):
         }
 
         serializer = GRPOPostRequestSerializer(data=data)
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("tare_weight", serializer.errors)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("tare_weight", serializer.validated_data)
 
     def test_grpo_post_request_serializer_invalid(self):
         """Test invalid GRPO post request"""
