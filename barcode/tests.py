@@ -793,6 +793,7 @@ class BarcodeDispatchWorkflowTests(TestCase):
                     'material_code': 'FG001',
                     'material_description': 'First item',
                     'quantity': item1_qty,
+                    'total_boxes': '2.000',
                     'uom': 'PCS',
                     'batch_number': 'BATCH-001',
                     'warehouse_code': 'FG01',
@@ -804,6 +805,7 @@ class BarcodeDispatchWorkflowTests(TestCase):
                     'material_code': 'FG002',
                     'material_description': 'Second item',
                     'quantity': item2_qty,
+                    'total_boxes': '1.000',
                     'uom': 'PCS',
                     'batch_number': 'BATCH-002',
                     'warehouse_code': 'FG01',
@@ -853,8 +855,11 @@ class BarcodeDispatchWorkflowTests(TestCase):
         self.assertEqual(session.total_expected_qty, Decimal('15.000'))
         self.assertEqual(session.lines.count(), 2)
         self.assertEqual(
-            list(session.lines.values_list('sequence_no', 'material_code', 'bill_qty')),
-            [(1, 'FG001', Decimal('10.000')), (2, 'FG002', Decimal('5.000'))],
+            list(session.lines.values_list('sequence_no', 'material_code', 'bill_qty', 'bill_boxes')),
+            [
+                (1, 'FG001', Decimal('10.000'), Decimal('2.000')),
+                (2, 'FG002', Decimal('5.000'), Decimal('1.000')),
+            ],
         )
 
     def test_create_session_allows_bill_marked_dispatched_in_sap(self):
@@ -884,6 +889,49 @@ class BarcodeDispatchWorkflowTests(TestCase):
         self.assertEqual(scan.result, DispatchScanResult.REJECTED)
         self.assertEqual(scan.reject_code, 'LINE_SEQUENCE_VIOLATION')
         self.assertEqual(DispatchScanLog.objects.count(), 1)
+
+    def test_non_sequential_scan_uses_selected_line(self):
+        DispatchSettings.objects.update_or_create(
+            company=self.company,
+            defaults={'require_sequential_item_scanning': False},
+        )
+        self.dispatch_service._settings = None
+        session = self.dispatch_service.create_session('900001', self.user)
+        item2_line = session.lines.get(sequence_no=2)
+        item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+
+        scan = self.dispatch_service.submit_scan(
+            session.id,
+            item2_box.box_barcode,
+            user=self.user,
+            line_id=item2_line.id,
+        )
+
+        self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
+        session.refresh_from_db()
+        self.assertEqual(session.lines.get(sequence_no=1).scanned_qty, Decimal('0.000'))
+        self.assertEqual(session.lines.get(sequence_no=2).scanned_qty, Decimal('5.000'))
+        self.assertEqual(DispatchScannedUnit.objects.get().line_id, item2_line.id)
+
+    def test_non_sequential_selected_line_still_rejects_wrong_material(self):
+        DispatchSettings.objects.update_or_create(
+            company=self.company,
+            defaults={'require_sequential_item_scanning': False},
+        )
+        self.dispatch_service._settings = None
+        session = self.dispatch_service.create_session('900001', self.user)
+        item2_line = session.lines.get(sequence_no=2)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='5.00')
+
+        scan = self.dispatch_service.submit_scan(
+            session.id,
+            item1_box.box_barcode,
+            user=self.user,
+            line_id=item2_line.id,
+        )
+
+        self.assertEqual(scan.result, DispatchScanResult.REJECTED)
+        self.assertEqual(scan.reject_code, 'WRONG_MATERIAL')
 
     def test_scan_rejects_wrong_material_and_over_quantity(self):
         session = self.dispatch_service.create_session('900001', self.user)

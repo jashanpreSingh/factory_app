@@ -816,6 +816,7 @@ class DispatchSessionScanAPI(APIView):
                 device_id=serializer.validated_data.get('device_id', ''),
                 request_id=serializer.validated_data.get('request_id'),
                 ip_address=request.META.get('REMOTE_ADDR'),
+                line_id=serializer.validated_data.get('line_id'),
             )
             session = svc.get_session(session_id)
             return Response(

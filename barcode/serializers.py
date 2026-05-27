@@ -518,6 +518,7 @@ class DispatchSessionCreateSerializer(serializers.Serializer):
 
 class DispatchScanSubmitSerializer(serializers.Serializer):
     barcode = serializers.CharField(max_length=1000)
+    line_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     device_id = serializers.CharField(max_length=120, required=False, allow_blank=True, default='')
     request_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
@@ -547,6 +548,9 @@ class DispatchSessionLineSerializer(serializers.ModelSerializer):
     remaining_qty = serializers.SerializerMethodField()
     expected_qty = serializers.DecimalField(source='bill_qty', max_digits=18, decimal_places=3, read_only=True)
     pending_qty = serializers.SerializerMethodField()
+    expected_boxes = serializers.SerializerMethodField()
+    scanned_boxes = serializers.SerializerMethodField()
+    pending_boxes = serializers.SerializerMethodField()
 
     class Meta:
         model = DispatchSessionLine
@@ -555,6 +559,7 @@ class DispatchSessionLineSerializer(serializers.ModelSerializer):
             'material_code', 'material_description',
             'bill_qty', 'expected_qty', 'scanned_qty', 'remaining_qty',
             'pending_qty',
+            'bill_boxes', 'expected_boxes', 'scanned_boxes', 'pending_boxes',
             'uom', 'batch_number', 'warehouse_code',
             'serial_required', 'status',
         ]
@@ -564,6 +569,25 @@ class DispatchSessionLineSerializer(serializers.ModelSerializer):
 
     def get_pending_qty(self, obj):
         return self.get_remaining_qty(obj)
+
+    def get_expected_boxes(self, obj):
+        return str(obj.bill_boxes or 0)
+
+    def get_scanned_boxes(self, obj):
+        units = getattr(obj, '_prefetched_objects_cache', {}).get('scanned_units')
+        if units is None:
+            count = obj.scanned_units.filter(entity_type='BOX').count()
+        else:
+            count = sum(1 for unit in units if unit.entity_type == 'BOX')
+        return str(count)
+
+    def get_pending_boxes(self, obj):
+        try:
+            expected = obj.bill_boxes or 0
+            scanned = int(self.get_scanned_boxes(obj))
+            return str(max(expected - scanned, 0))
+        except Exception:
+            return "0"
 
 
 class DispatchScanLogSerializer(serializers.ModelSerializer):

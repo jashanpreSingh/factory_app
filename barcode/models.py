@@ -817,6 +817,7 @@ class DispatchSessionLine(models.Model):
     material_code = models.CharField(max_length=80)
     material_description = models.TextField(blank=True, default='')
     bill_qty = models.DecimalField(max_digits=18, decimal_places=3)
+    bill_boxes = models.DecimalField(max_digits=18, decimal_places=3, default=0)
     scanned_qty = models.DecimalField(max_digits=18, decimal_places=3, default=0)
     uom = models.CharField(max_length=30, blank=True, default='')
     batch_number = models.CharField(max_length=120, blank=True, default='')

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -116,6 +117,7 @@ class SapDispatchAdapter:
                     "material_code": line.get("item_code") or "",
                     "material_description": line.get("item_name") or "",
                     "quantity": str(line.get("quantity") or "0"),
+                    "total_boxes": str(self._line_total_boxes(line)),
                     "uom": line.get("uom") or "",
                     "batch_number": line.get("batch_number") or "",
                     "warehouse_code": line.get("warehouse_code") or "",
@@ -141,6 +143,37 @@ class SapDispatchAdapter:
     @staticmethod
     def _split_values(value: str) -> list[str]:
         return [part.strip() for part in str(value or "").split(",") if part.strip()]
+
+    @staticmethod
+    def _line_total_boxes(line: dict[str, Any]) -> Decimal:
+        explicit_boxes = SapDispatchAdapter._to_decimal(line.get("total_boxes"))
+        if explicit_boxes > 0:
+            return explicit_boxes
+
+        quantity = SapDispatchAdapter._to_decimal(line.get("quantity"))
+        if quantity <= 0:
+            return Decimal("0")
+
+        item_name = str(line.get("item_name") or "")
+        pack_size = SapDispatchAdapter._pack_size_from_item_name(item_name)
+        if pack_size <= 0:
+            return Decimal("0")
+
+        return (quantity / pack_size).quantize(Decimal("0.001"))
+
+    @staticmethod
+    def _pack_size_from_item_name(item_name: str) -> Decimal:
+        match = re.search(r"(\d+(?:\.\d+)?)\s*(?:PCS?|PIECES?|BOTTLES?|BTL)\b", item_name, re.IGNORECASE)
+        if not match:
+            return Decimal("0")
+        return SapDispatchAdapter._to_decimal(match.group(1))
+
+    @staticmethod
+    def _to_decimal(value: Any) -> Decimal:
+        try:
+            return Decimal(str(value or "0"))
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal("0")
 
 
 class BarcodeDispatchService:
@@ -257,6 +290,7 @@ class BarcodeDispatchService:
                 sap_line_no = f"{sap_line_no}-{index + 1}"
             seen_line_numbers.add(sap_line_no)
             bill_qty = self._to_decimal(line.get("quantity"))
+            bill_boxes = self._to_decimal(line.get("total_boxes"))
             if bill_qty <= 0:
                 raise DispatchValidationError(
                     "INVALID_BILL_QUANTITY",
@@ -271,6 +305,7 @@ class BarcodeDispatchService:
                     material_code=line.get("material_code") or "",
                     material_description=line.get("material_description") or "",
                     bill_qty=bill_qty,
+                    bill_boxes=bill_boxes,
                     scanned_qty=Decimal("0"),
                     uom=line.get("uom") or "",
                     batch_number=line.get("batch_number") or "",
@@ -369,6 +404,7 @@ class BarcodeDispatchService:
         device_id: str = "",
         request_id: str | None = None,
         ip_address: str | None = None,
+        line_id: int | None = None,
     ) -> DispatchScanLog:
         parsed_request_id = self._parse_uuid(request_id)
         raw_barcode = str(raw_barcode or "").strip()
@@ -449,6 +485,7 @@ class BarcodeDispatchService:
                 device_id=device_id,
                 request_id=parsed_request_id,
                 ip_address=ip_address,
+                selected_line_id=line_id,
             )
         if resolved["entity_type"] == DispatchScanEntityType.BOX:
             return self._scan_box(
@@ -459,6 +496,7 @@ class BarcodeDispatchService:
                 device_id=device_id,
                 request_id=parsed_request_id,
                 ip_address=ip_address,
+                selected_line_id=line_id,
             )
         return self._scan_item(
             session=session,
@@ -468,6 +506,7 @@ class BarcodeDispatchService:
             device_id=device_id,
             request_id=parsed_request_id,
             ip_address=ip_address,
+            selected_line_id=line_id,
         )
 
     @transaction.atomic
@@ -636,6 +675,11 @@ class BarcodeDispatchService:
         sessions = self._filtered_report_sessions(filters)
         rows = []
         for session in sessions:
+            expected_boxes = sum((line.bill_boxes or Decimal("0")) for line in session.lines.all())
+            dispatched_boxes = DispatchScannedUnit.objects.filter(
+                session=session,
+                entity_type=DispatchScanEntityType.BOX,
+            ).count()
             rows.append({
                 "session_id": session.id,
                 "bill_number": session.bill_number,
@@ -650,6 +694,9 @@ class BarcodeDispatchService:
                 "total_expected_qty": str(session.total_expected_qty),
                 "total_dispatched_qty": str(session.total_scanned_qty),
                 "pending_qty": str(max(session.total_expected_qty - session.total_scanned_qty, Decimal("0"))),
+                "total_expected_boxes": str(expected_boxes),
+                "total_dispatched_boxes": str(dispatched_boxes),
+                "pending_boxes": str(max(expected_boxes - dispatched_boxes, Decimal("0"))),
                 "sap_sync_status": session.sap_update_status,
                 "sap_sync_error": session.sap_update_error,
             })
@@ -662,6 +709,11 @@ class BarcodeDispatchService:
             .select_related("line", "scanned_by")
             .order_by("scanned_at", "id")
         )
+        expected_boxes = sum((line.bill_boxes or Decimal("0")) for line in session.lines.all())
+        dispatched_boxes = DispatchScannedUnit.objects.filter(
+            session=session,
+            entity_type=DispatchScanEntityType.BOX,
+        ).count()
         return {
             "session": {
                 "session_id": session.id,
@@ -672,6 +724,8 @@ class BarcodeDispatchService:
                 "status": session.status,
                 "total_expected_qty": str(session.total_expected_qty),
                 "total_dispatched_qty": str(session.total_scanned_qty),
+                "total_expected_boxes": str(expected_boxes),
+                "total_dispatched_boxes": str(dispatched_boxes),
             },
             "lines": [
                 {
@@ -682,6 +736,9 @@ class BarcodeDispatchService:
                     "expected_qty": str(line.bill_qty),
                     "dispatched_qty": str(line.scanned_qty),
                     "pending_qty": str(max(line.bill_qty - line.scanned_qty, Decimal("0"))),
+                    "expected_boxes": str(line.bill_boxes or Decimal("0")),
+                    "dispatched_boxes": str(line.scanned_units.filter(entity_type=DispatchScanEntityType.BOX).count()),
+                    "pending_boxes": str(max((line.bill_boxes or Decimal("0")) - line.scanned_units.filter(entity_type=DispatchScanEntityType.BOX).count(), Decimal("0"))),
                     "uom": line.uom,
                     "status": line.status,
                 }
@@ -785,6 +842,7 @@ class BarcodeDispatchService:
         device_id: str,
         request_id,
         ip_address: str | None,
+        selected_line_id: int | None = None,
     ) -> DispatchScanLog:
         line, rejection = self._select_line_for_material(
             session=session,
@@ -796,6 +854,7 @@ class BarcodeDispatchService:
             device_id=device_id,
             request_id=request_id,
             ip_address=ip_address,
+            selected_line_id=selected_line_id,
         )
         if rejection:
             return rejection
@@ -841,6 +900,7 @@ class BarcodeDispatchService:
         device_id: str,
         request_id,
         ip_address: str | None,
+        selected_line_id: int | None = None,
     ) -> DispatchScanLog:
         box = Box.objects.select_for_update().get(
             id=resolved["box"].id,
@@ -905,6 +965,7 @@ class BarcodeDispatchService:
             device_id=device_id,
             request_id=request_id,
             ip_address=ip_address,
+            selected_line_id=selected_line_id,
         )
         if rejection:
             return rejection
@@ -1007,6 +1068,7 @@ class BarcodeDispatchService:
         device_id: str,
         request_id,
         ip_address: str | None,
+        selected_line_id: int | None = None,
     ) -> DispatchScanLog:
         pallet = Pallet.objects.select_for_update().get(id=resolved["pallet"].id, company=self.company)
         resolved = {**resolved, "pallet": pallet}
@@ -1023,6 +1085,7 @@ class BarcodeDispatchService:
                 device_id=device_id,
                 request_id=request_id,
                 ip_address=ip_address,
+                selected_line_id=selected_line_id,
             )
         if pallet.status not in (PalletStatus.ACTIVE, PalletStatus.PARTIAL):
             return self._log_rejected_scan(
@@ -1363,6 +1426,7 @@ class BarcodeDispatchService:
         device_id: str,
         request_id,
         ip_address: str | None,
+        selected_line_id: int | None = None,
     ) -> tuple[DispatchSessionLine | None, DispatchScanLog | None]:
         active_line = self._get_active_line(session)
         if self.settings.require_sequential_item_scanning:
@@ -1408,13 +1472,63 @@ class BarcodeDispatchService:
                 )
             line = active_line
         else:
-            line = (
-                DispatchSessionLine.objects
-                .select_for_update()
-                .filter(session=session, material_code=material_code, scanned_qty__lt=F("bill_qty"))
-                .order_by("sequence_no", "id")
-                .first()
-            )
+            if selected_line_id:
+                line = (
+                    DispatchSessionLine.objects
+                    .select_for_update()
+                    .filter(session=session, id=selected_line_id)
+                    .first()
+                )
+                if not line:
+                    return None, self._log_rejected_scan(
+                        session=session,
+                        line=active_line,
+                        raw_barcode=raw_barcode,
+                        resolved=resolved,
+                        reject_code="SELECTED_LINE_NOT_FOUND",
+                        reject_message="Selected dispatch item was not found.",
+                        user=user,
+                        device_id=device_id,
+                        request_id=request_id,
+                        ip_address=ip_address,
+                    )
+                if line.scanned_qty >= line.bill_qty:
+                    return None, self._log_rejected_scan(
+                        session=session,
+                        line=line,
+                        raw_barcode=raw_barcode,
+                        resolved=resolved,
+                        reject_code="OVER_QUANTITY",
+                        reject_message="Selected dispatch item is already fully scanned.",
+                        user=user,
+                        device_id=device_id,
+                        request_id=request_id,
+                        ip_address=ip_address,
+                    )
+                if material_code != line.material_code:
+                    return None, self._log_rejected_scan(
+                        session=session,
+                        line=line,
+                        raw_barcode=raw_barcode,
+                        resolved=resolved,
+                        reject_code="WRONG_MATERIAL",
+                        reject_message=(
+                            f"Scanned material {material_code} does not match "
+                            f"selected item {line.material_code}."
+                        ),
+                        user=user,
+                        device_id=device_id,
+                        request_id=request_id,
+                        ip_address=ip_address,
+                    )
+            else:
+                line = (
+                    DispatchSessionLine.objects
+                    .select_for_update()
+                    .filter(session=session, material_code=material_code, scanned_qty__lt=F("bill_qty"))
+                    .order_by("sequence_no", "id")
+                    .first()
+                )
             if not line:
                 bill_has_material = DispatchSessionLine.objects.filter(
                     session=session,
