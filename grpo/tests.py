@@ -391,6 +391,47 @@ class GRPOServiceTests(TestCase):
         self.assertEqual(line.base_line, 0)
 
     @patch('grpo.services.SAPClient')
+    def test_post_grpo_uses_material_attachment_metadata_fallback(self, mock_sap_client):
+        """Material GRPO keeps posting when SAP needs metadata-only attachment fallback."""
+        mock_instance = MagicMock()
+        mock_instance.upload_attachment.return_value = {"AbsoluteEntry": 789}
+        mock_instance.create_grpo.return_value = {
+            "DocEntry": 123,
+            "DocNum": 456,
+            "DocTotal": 4750.00
+        }
+        mock_sap_client.return_value = mock_instance
+
+        service = GRPOService(company_code="TC001")
+        test_file = SimpleUploadedFile(
+            "invoice.pdf",
+            b"pdf_content",
+            content_type="application/pdf",
+        )
+        grpo = service.post_grpo(
+            vehicle_entry_id=self.vehicle_entry.id,
+            po_receipt_ids=[self.po_receipt.id],
+            user=self.user,
+            items=[{
+                "po_item_receipt_id": self.po_item.id,
+                "accepted_qty": Decimal("95.000"),
+            }],
+            branch_id=1,
+            attachments=[test_file],
+        )
+
+        self.assertEqual(grpo.status, GRPOStatus.POSTED)
+        self.assertTrue(
+            mock_instance.upload_attachment.call_args.kwargs["allow_metadata_fallback"]
+        )
+        payload = mock_instance.create_grpo.call_args.args[0]
+        self.assertEqual(payload["AttachmentEntry"], 789)
+        attachment = grpo.attachments.get()
+        self.assertEqual(attachment.sap_attachment_status, SAPAttachmentStatus.LINKED)
+        self.assertEqual(attachment.sap_absolute_entry, 789)
+        attachment.file.delete(save=False)
+
+    @patch('grpo.services.SAPClient')
     def test_post_grpo_does_not_require_weighment(self, mock_sap_client):
         """Material GRPO can be posted without a gate weighment row."""
         mock_instance = MagicMock()

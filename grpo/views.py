@@ -294,6 +294,12 @@ class PostGRPOAPI(APIView):
             parsed_data = request.data
             attachments = []
 
+        if not attachments:
+            return Response(
+                {"detail": "At least one attachment is required for material GRPO."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer = GRPOPostRequestSerializer(data=parsed_data)
         if not serializer.is_valid():
             return Response(

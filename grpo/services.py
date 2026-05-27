@@ -1111,7 +1111,8 @@ class GRPOService:
                 try:
                     sap_result = sap_client.upload_attachment(
                         file_path=tmp_path,
-                        filename=uploaded_file.name
+                        filename=uploaded_file.name,
+                        allow_metadata_fallback=True,
                     )
                     abs_entry = sap_result.get("AbsoluteEntry")
                     if abs_entry:
@@ -2111,6 +2112,7 @@ class GRPOService:
                     absolute_entry=existing_abs_entry,
                     file_path=attachment.file.path,
                     filename=attachment.original_filename,
+                    allow_metadata_fallback=True,
                 )
                 attachment.sap_absolute_entry = existing_abs_entry
                 attachment.sap_attachment_status = SAPAttachmentStatus.LINKED
@@ -2121,7 +2123,8 @@ class GRPOService:
                 # No existing attachment — upload and include in GRPO
                 sap_result = sap_client.upload_attachment(
                     file_path=attachment.file.path,
-                    filename=attachment.original_filename
+                    filename=attachment.original_filename,
+                    allow_metadata_fallback=True,
                 )
                 absolute_entry = sap_result.get("AbsoluteEntry")
                 if not absolute_entry:
@@ -2202,6 +2205,7 @@ class GRPOService:
                     absolute_entry=existing_abs_entry,
                     file_path=attachment.file.path,
                     filename=attachment.original_filename,
+                    allow_metadata_fallback=True,
                 )
                 attachment.sap_absolute_entry = existing_abs_entry
                 attachment.sap_attachment_status = SAPAttachmentStatus.LINKED
@@ -2217,7 +2221,8 @@ class GRPOService:
                 else:
                     sap_result = sap_client.upload_attachment(
                         file_path=attachment.file.path,
-                        filename=attachment.original_filename
+                        filename=attachment.original_filename,
+                        allow_metadata_fallback=True,
                     )
                     absolute_entry = sap_result.get("AbsoluteEntry")
                     if not absolute_entry:

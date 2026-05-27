@@ -368,7 +368,118 @@ class AttachmentWriter:
             f"backend copy path '{copy_path}': {error_msg}"
         )
 
-    def upload(self, file_path: str, filename: str) -> dict:
+    def _create_metadata_attachment_entry(
+        self,
+        filename: str,
+        cookies,
+        url: str,
+    ) -> dict:
+        """
+        Create only the SAP Attachments2 metadata row.
+
+        This preserves the legacy material-GRPO behavior: SAP gets an attachment
+        line/AbsoluteEntry even when the actual file was not copied into SAP's
+        attachment folder. The file remains stored in our app.
+        """
+        source_path = self._get_attachment_source_path(cookies=cookies)
+        name_without_ext = os.path.splitext(filename)[0]
+        file_ext = os.path.splitext(filename)[1].lstrip(".")
+        payload = {
+            "Attachments2_Lines": [
+                {
+                    "SourcePath": source_path,
+                    "FileName": name_without_ext,
+                    "FileExtension": file_ext,
+                    "Override": "tYES",
+                    "U_CHK2": "OK",
+                    "U_CHK": "1",
+                }
+            ]
+        }
+
+        response = requests.post(
+            url,
+            json=payload,
+            cookies=cookies,
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+            verify=False,
+        )
+        if response.status_code == 201:
+            result = response.json()
+            logger.warning(
+                "Created legacy metadata-only SAP attachment entry. "
+                "AbsoluteEntry: %s",
+                result.get("AbsoluteEntry"),
+            )
+            return result
+
+        error_msg = self._extract_error_message(response)
+        raise SAPDataError(f"Failed to create metadata-only attachment entry: {error_msg}")
+
+    def _add_metadata_line_to_existing_attachment(
+        self,
+        absolute_entry: int,
+        filename: str,
+        cookies,
+        patch_url: str,
+    ) -> dict:
+        """Append only a metadata line to an existing SAP Attachments2 entry."""
+        get_response = requests.get(
+            patch_url,
+            cookies=cookies,
+            timeout=30,
+            verify=False,
+        )
+        if get_response.status_code != 200:
+            error_msg = self._extract_error_message(get_response)
+            raise SAPDataError(f"Failed to get existing attachment entry: {error_msg}")
+
+        existing_data = get_response.json()
+        existing_lines = existing_data.get("Attachments2_Lines", [])
+        source_path = ""
+        if existing_lines:
+            source_path = existing_lines[0].get("SourcePath") or ""
+        if not source_path:
+            source_path = self._get_attachment_source_path(cookies=cookies)
+
+        name_without_ext = os.path.splitext(filename)[0]
+        file_ext = os.path.splitext(filename)[1].lstrip(".")
+        existing_lines.append(
+            {
+                "SourcePath": source_path,
+                "FileName": name_without_ext,
+                "FileExtension": file_ext,
+                "Override": "tYES",
+            }
+        )
+
+        response = requests.patch(
+            patch_url,
+            json={"Attachments2_Lines": existing_lines},
+            cookies=cookies,
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+            verify=False,
+        )
+        if response.status_code in (200, 204):
+            logger.warning(
+                "Added legacy metadata-only line '%s' to Attachments2(%s)",
+                filename,
+                absolute_entry,
+            )
+            return {"AbsoluteEntry": absolute_entry, "FileName": filename}
+
+        error_msg = self._extract_error_message(response)
+        raise SAPDataError(f"Failed to add metadata-only attachment line: {error_msg}")
+
+    def upload(
+        self,
+        file_path: str,
+        filename: str,
+        *,
+        allow_metadata_fallback: bool = False,
+    ) -> dict:
         """
         Upload a file to SAP Attachments2 endpoint.
         Uses multipart upload so SAP receives and copies the actual file bytes.
@@ -413,13 +524,27 @@ class AttachmentWriter:
                         "trying accessible source-path fallback: %s",
                         error_msg,
                     )
-                    return self._upload_from_accessible_source_path(
-                        file_path=file_path,
-                        filename=filename,
-                        cookies=cookies,
-                        url=url,
-                        original_error=error_msg,
-                    )
+                    try:
+                        return self._upload_from_accessible_source_path(
+                            file_path=file_path,
+                            filename=filename,
+                            cookies=cookies,
+                            url=url,
+                            original_error=error_msg,
+                        )
+                    except SAPValidationError:
+                        if allow_metadata_fallback:
+                            logger.warning(
+                                "Direct-copy attachment fallback failed; creating "
+                                "legacy metadata-only SAP attachment entry for "
+                                "material GRPO."
+                            )
+                            return self._create_metadata_attachment_entry(
+                                filename=filename,
+                                cookies=cookies,
+                                url=url,
+                            )
+                        raise
                 logger.error(f"SAP validation error uploading attachment: {error_msg}")
                 raise SAPValidationError(error_msg)
 
@@ -473,7 +598,12 @@ class AttachmentWriter:
         return None
 
     def add_line_to_existing_attachment(
-        self, absolute_entry: int, file_path: str, filename: str
+        self,
+        absolute_entry: int,
+        file_path: str,
+        filename: str,
+        *,
+        allow_metadata_fallback: bool = False,
     ) -> dict:
         """
         Add a new file line to an existing Attachments2 entry using multipart
@@ -523,14 +653,28 @@ class AttachmentWriter:
                         "error; trying accessible source-path fallback: %s",
                         error_msg,
                     )
-                    return self._add_line_from_accessible_source_path(
-                        absolute_entry=absolute_entry,
-                        file_path=file_path,
-                        filename=filename,
-                        cookies=cookies,
-                        patch_url=patch_url,
-                        original_error=error_msg,
-                    )
+                    try:
+                        return self._add_line_from_accessible_source_path(
+                            absolute_entry=absolute_entry,
+                            file_path=file_path,
+                            filename=filename,
+                            cookies=cookies,
+                            patch_url=patch_url,
+                            original_error=error_msg,
+                        )
+                    except SAPValidationError:
+                        if allow_metadata_fallback:
+                            logger.warning(
+                                "Direct-copy attachment line fallback failed; "
+                                "adding legacy metadata-only line for material GRPO."
+                            )
+                            return self._add_metadata_line_to_existing_attachment(
+                                absolute_entry=absolute_entry,
+                                filename=filename,
+                                cookies=cookies,
+                                patch_url=patch_url,
+                            )
+                        raise
                 logger.error(f"SAP validation error adding attachment line: {error_msg}")
                 raise SAPValidationError(error_msg)
 
