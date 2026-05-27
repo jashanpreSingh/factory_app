@@ -18,6 +18,7 @@ from vehicle_management.models import Vehicle
 
 from gate_core.permissions import HasRequiredDjangoPermission
 from gate_core.models import (
+    EmptyVehicleGateIn,
     SalesDispatchAttachment,
     SalesDispatchAttachmentType,
     SalesDispatchDocumentType,
@@ -29,6 +30,7 @@ from gate_core.models import (
     SalesDispatchGatepassPrintType,
     SalesDispatchLock,
 )
+from gate_core.models.empty_vehicle_gate_in import EmptyVehicleGateInReason
 from gate_core.serializers_sales_dispatch import (
     SalesDispatchAttachmentSerializer,
     SalesDispatchAttachmentUploadSerializer,
@@ -149,6 +151,12 @@ def pending_dispatch_plan_queryset(company):
         sales_dispatch__is_active=True,
         sales_dispatch__status__in=SALES_DISPATCH_ACTIVE_STATUSES,
     ).values_list("sap_doc_entry", flat=True)
+    completed_dispatch_gate_in_vehicle_ids = EmptyVehicleGateIn.objects.filter(
+        company=company,
+        is_active=True,
+        reason=EmptyVehicleGateInReason.DISPATCH,
+        vehicle_entry__status="COMPLETED",
+    ).values_list("vehicle_id", flat=True)
 
     return (
         DispatchPlan.objects
@@ -156,6 +164,7 @@ def pending_dispatch_plan_queryset(company):
             company=company,
             is_active=True,
             booking_status=DispatchPlanStatus.BOOKED,
+            vehicle_id__in=completed_dispatch_gate_in_vehicle_ids,
         )
         .exclude(id__in=active_plan_ids)
         .exclude(id__in=active_document_plan_ids)
@@ -328,7 +337,8 @@ def serialize_pending_booking_group(plans):
             for plan in plans
             if plan.total_freight is not None
         ),
-        "gate_out_date": primary.dispatch_date,
+        "dispatch_date": primary.dispatch_date,
+        "gate_out_date": None,
         "out_time": None,
         "gatepass_no": None,
         "status": "PENDING_DOCKING",

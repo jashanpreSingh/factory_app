@@ -16,6 +16,7 @@ from .views import (
     BSTGateReturnEligibleOutsView,
     BSTGateReturnListCreateView,
     EmptyVehicleEligibleEntriesView,
+    EmptyVehicleGateInCompleteView,
     EmptyVehicleGateInDetailView,
     EmptyVehicleGateInEligibleView,
     EmptyVehicleGateInListCreateView,
@@ -77,6 +78,7 @@ urlpatterns = [
     path('empty-vehicle-ins/reasons/', EmptyVehicleGateInReasonListView.as_view(), name='empty_vehicle_gate_in_reasons'),
     path('empty-vehicle-ins/eligible/', EmptyVehicleGateInEligibleView.as_view(), name='empty_vehicle_gate_in_eligible'),
     path('empty-vehicle-ins/', EmptyVehicleGateInListCreateView.as_view(), name='empty_vehicle_gate_in_list_create'),
+    path('empty-vehicle-ins/<int:entry_id>/complete/', EmptyVehicleGateInCompleteView.as_view(), name='empty_vehicle_gate_in_complete'),
     path('empty-vehicle-ins/<int:entry_id>/', EmptyVehicleGateInDetailView.as_view(), name='empty_vehicle_gate_in_detail'),
 
     # Empty Vehicle gate-out URLs

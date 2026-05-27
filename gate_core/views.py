@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from company.permissions import HasCompanyContext
+from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import Driver, VehicleEntry
 from vehicle_management.models import Vehicle
 from quality_control.enums import FactoryHeadDecision, InspectionStatus
@@ -619,6 +620,68 @@ class EmptyVehicleGateInDetailView(APIView):
 
         if hasattr(gate_in, "_prefetched_objects_cache"):
             gate_in._prefetched_objects_cache.pop("items", None)
+
+        return Response(EmptyVehicleGateInSerializer(gate_in).data)
+
+
+def has_empty_vehicle_tare_weighment(vehicle_entry):
+    if not hasattr(vehicle_entry, "weighment"):
+        return False
+
+    tare_weight = vehicle_entry.weighment.tare_weight
+    return tare_weight is not None and tare_weight >= 0
+
+
+class EmptyVehicleGateInCompleteView(APIView):
+    """Complete empty vehicle gate-in after the required tare weighment is saved."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, entry_id):
+        gate_in = get_object_or_404(
+            EmptyVehicleGateIn.objects.select_related(
+                "vehicle_entry",
+                "vehicle",
+                "vehicle__vehicle_type",
+                "vehicle__transporter",
+                "driver",
+                "company",
+            ).prefetch_related("bst_gate_outs", "items"),
+            id=entry_id,
+            company=request.company.company,
+            is_active=True,
+        )
+
+        vehicle_entry = gate_in.vehicle_entry
+        if vehicle_entry.status == "CANCELLED":
+            return Response(
+                {"detail": "Cancelled empty vehicle entries cannot be completed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not has_empty_vehicle_tare_weighment(vehicle_entry):
+            return Response(
+                {"detail": "Tare weighment is required before completing this empty vehicle entry."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            if gate_in.reason == "DISPATCH":
+                DispatchPlan.objects.filter(
+                    company=request.company.company,
+                    is_active=True,
+                    booking_status=DispatchPlanStatus.BOOKED,
+                    vehicle=gate_in.vehicle,
+                    linked_vehicle_entry__isnull=True,
+                ).update(
+                    linked_vehicle_entry=vehicle_entry,
+                    updated_by_id=request.user.id,
+                    updated_at=timezone.now(),
+                )
+
+            vehicle_entry.status = "COMPLETED"
+            vehicle_entry.is_locked = False
+            vehicle_entry.updated_by = request.user
+            vehicle_entry.save(update_fields=["status", "is_locked", "updated_by", "updated_at"])
 
         return Response(EmptyVehicleGateInSerializer(gate_in).data)
 

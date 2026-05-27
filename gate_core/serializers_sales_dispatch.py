@@ -253,6 +253,7 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
     document_count = serializers.SerializerMethodField()
     document_numbers = serializers.SerializerMethodField()
     primary_document = serializers.SerializerMethodField()
+    dispatch_date = serializers.SerializerMethodField()
     gross_weight = serializers.SerializerMethodField()
     tare_weight = serializers.SerializerMethodField()
     net_weight = serializers.SerializerMethodField()
@@ -270,6 +271,7 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
             "vehicle",
             "transporter",
             "driver",
+            "dispatch_date",
             "documents",
             "document_count",
             "document_numbers",
@@ -355,6 +357,9 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_dispatch_date(self, obj):
+        return getattr(obj.dispatch_plan, "dispatch_date", None)
 
     def get_gatepass_readiness(self, obj):
         return get_gatepass_readiness(obj)
