@@ -87,6 +87,13 @@ def _list_response(request, qs, serializer_class):
     return Response(serializer_class(qs[:500], many=True).data)
 
 
+def _is_unique_integrity_error(exc: IntegrityError, field_name: str) -> bool:
+    message = str(exc).lower()
+    return field_name.lower() in message and (
+        'duplicate' in message or 'unique' in message
+    )
+
+
 # ===========================================================================
 # Box — Generate
 # ===========================================================================
@@ -109,8 +116,13 @@ class BoxGenerateAPI(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as e:
             logger.error(f"Barcode generation integrity error: {e}")
+            if _is_unique_integrity_error(e, 'box_barcode'):
+                return Response(
+                    {'error': 'Duplicate barcode detected. Please try again.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return Response(
-                {'error': 'Duplicate barcode detected. Please try again.'},
+                {'error': 'Unable to generate barcode labels because of a database constraint.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -193,8 +205,13 @@ class PalletCreateAPI(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as e:
             logger.error(f"Pallet creation integrity error: {e}")
+            if _is_unique_integrity_error(e, 'pallet_id'):
+                return Response(
+                    {'error': 'Duplicate pallet ID detected. Please try again.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return Response(
-                {'error': 'Duplicate pallet ID detected. Please try again.'},
+                {'error': 'Unable to create pallet because of a database constraint.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

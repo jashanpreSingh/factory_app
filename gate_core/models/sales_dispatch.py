@@ -635,6 +635,70 @@ class SalesDispatchGateOutItem(BaseModel):
         return f"{self.sales_dispatch.entry_no} - {self.item_code}"
 
 
+class SalesDispatchBoxScan(BaseModel):
+    """Box-level scan captured during Docking before gatepass preparation."""
+
+    company = models.ForeignKey(
+        "company.Company",
+        on_delete=models.PROTECT,
+        related_name="sales_dispatch_box_scans",
+    )
+    sales_dispatch = models.ForeignKey(
+        SalesDispatchGateOut,
+        on_delete=models.CASCADE,
+        related_name="box_scans",
+    )
+    box = models.ForeignKey(
+        "barcode.Box",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_dispatch_scans",
+    )
+    scan_log = models.ForeignKey(
+        "barcode.ScanLog",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_dispatch_box_scans",
+    )
+    box_barcode = models.CharField(max_length=100)
+    barcode_raw = models.CharField(max_length=500, blank=True)
+    item_code = models.CharField(max_length=100, blank=True)
+    item_name = models.CharField(max_length=255, blank=True)
+    batch_number = models.CharField(max_length=100, blank=True)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    uom = models.CharField(max_length=20, blank=True)
+    box_status = models.CharField(max_length=20, blank=True)
+    warehouse_code = models.CharField(max_length=50, blank=True)
+    pallet_code = models.CharField(max_length=100, blank=True)
+    scanned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales_dispatch_box_scans",
+    )
+    scanned_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-scanned_at", "-id"]
+        indexes = [
+            models.Index(fields=["company", "sales_dispatch"]),
+            models.Index(fields=["box_barcode"]),
+            models.Index(fields=["scanned_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sales_dispatch", "box_barcode"],
+                name="unique_sales_dispatch_box_scan",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.sales_dispatch.entry_no} - {self.box_barcode}"
+
+
 class SalesDispatchAttachment(models.Model):
     sales_dispatch = models.ForeignKey(
         SalesDispatchGateOut,

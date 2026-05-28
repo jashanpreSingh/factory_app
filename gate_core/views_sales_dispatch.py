@@ -5,11 +5,13 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from barcode.models import Box, BoxStatus, EntityType, ScanResult
+from barcode.services.scan_service import ScanService
 from company.permissions import HasCompanyContext
 from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import Driver, VehicleEntry
@@ -21,6 +23,7 @@ from gate_core.models import (
     EmptyVehicleGateIn,
     SalesDispatchAttachment,
     SalesDispatchAttachmentType,
+    SalesDispatchBoxScan,
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
     SalesDispatchGateOutDocument,
@@ -34,6 +37,8 @@ from gate_core.models.empty_vehicle_gate_in import EmptyVehicleGateInReason
 from gate_core.serializers_sales_dispatch import (
     SalesDispatchAttachmentSerializer,
     SalesDispatchAttachmentUploadSerializer,
+    SalesDispatchBoxScanCreateSerializer,
+    SalesDispatchBoxScanSerializer,
     SalesDispatchDocumentSerializer,
     SalesDispatchGateOutCreateSerializer,
     SalesDispatchGateOutSerializer,
@@ -77,7 +82,7 @@ def sales_dispatch_queryset(company):
             "transporter",
             "driver",
         )
-        .prefetch_related("documents", "items", "attachments")
+        .prefetch_related("documents", "items", "attachments", "box_scans")
         .prefetch_related("gatepass_print_logs")
     )
 
@@ -176,6 +181,9 @@ def pending_dispatch_plan_queryset(company):
             "transporter",
             "driver",
             "linked_vehicle_entry",
+            "linked_vehicle_entry__vehicle",
+            "linked_vehicle_entry__vehicle__transporter",
+            "linked_vehicle_entry__driver",
         )
         .order_by("dispatch_date", "updated_at", "id")
     )
@@ -253,8 +261,8 @@ def pending_booking_group_key(plan):
     dispatch_date = plan.dispatch_date.isoformat() if plan.dispatch_date else ""
     return (
         plan.linked_vehicle_entry_id or 0,
-        plan.vehicle_id or 0,
-        plan.driver_id or 0,
+        pending_booking_vehicle_id(plan) or 0,
+        pending_booking_driver_id(plan) or 0,
         plan.transporter_id or 0,
         plan.bilty_no.strip().upper(),
         bilty_date,
@@ -310,7 +318,7 @@ def serialize_pending_booking_group(plans):
             for plan in plans
             if plan.invoice_weight is not None
         ),
-        "vehicle": primary.vehicle_id,
+        "vehicle": pending_booking_vehicle_id(primary),
         "vehicle_entry": primary.linked_vehicle_entry_id,
         "vehicle_entry_no": (
             primary.linked_vehicle_entry.entry_no
@@ -323,12 +331,16 @@ def serialize_pending_booking_group(plans):
         "transporter_gstin": primary.transporter_gstin,
         "transporter_contact_person": primary.contact_person,
         "transporter_mobile_no": primary.mobile_no,
-        "driver": primary.driver_id,
+        "driver": pending_booking_driver_id(primary),
         "driver_name": driver_name(primary),
-        "driver_mobile_no": primary.driver_mobile_no,
-        "driver_license_no": primary.driver_license_no,
-        "driver_id_proof_type": primary.driver_id_proof_type,
-        "driver_id_proof_number": primary.driver_id_proof_number,
+        "driver_mobile_no": driver_field(primary, "mobile_no", "driver_mobile_no"),
+        "driver_license_no": driver_field(primary, "license_no", "driver_license_no"),
+        "driver_id_proof_type": driver_field(primary, "id_proof_type", "driver_id_proof_type"),
+        "driver_id_proof_number": driver_field(
+            primary,
+            "id_proof_number",
+            "driver_id_proof_number",
+        ),
         "bilty_no": primary.bilty_no,
         "bilty_date": primary.bilty_date,
         "freight": sum_decimal(plan.freight for plan in plans if plan.freight is not None),
@@ -377,6 +389,8 @@ def serialize_pending_booking_document(plan):
 
 
 def vehicle_number(plan):
+    if plan.linked_vehicle_entry_id and plan.linked_vehicle_entry.vehicle_id:
+        return plan.linked_vehicle_entry.vehicle.vehicle_number
     if plan.vehicle_no:
         return plan.vehicle_no
     if plan.vehicle_id:
@@ -389,16 +403,47 @@ def transporter_name(plan):
         return plan.transporter_name
     if plan.transporter_id:
         return plan.transporter.name
+    if (
+        plan.linked_vehicle_entry_id
+        and plan.linked_vehicle_entry.vehicle_id
+        and plan.linked_vehicle_entry.vehicle.transporter_id
+    ):
+        return plan.linked_vehicle_entry.vehicle.transporter.name
     if plan.vehicle_id and plan.vehicle.transporter_id:
         return plan.vehicle.transporter.name
     return ""
 
 
 def driver_name(plan):
+    if plan.linked_vehicle_entry_id and plan.linked_vehicle_entry.driver_id:
+        return plan.linked_vehicle_entry.driver.name
     if plan.driver_name:
         return plan.driver_name
     if plan.driver_id:
         return plan.driver.name
+    return ""
+
+
+def pending_booking_vehicle_id(plan):
+    if plan.linked_vehicle_entry_id:
+        return plan.linked_vehicle_entry.vehicle_id
+    return plan.vehicle_id
+
+
+def pending_booking_driver_id(plan):
+    if plan.linked_vehicle_entry_id:
+        return plan.linked_vehicle_entry.driver_id
+    return plan.driver_id
+
+
+def driver_field(plan, driver_attr, plan_attr):
+    if plan.linked_vehicle_entry_id and plan.linked_vehicle_entry.driver_id:
+        return getattr(plan.linked_vehicle_entry.driver, driver_attr, "")
+    snapshot_value = getattr(plan, plan_attr, "")
+    if snapshot_value:
+        return snapshot_value
+    if plan.driver_id:
+        return getattr(plan.driver, driver_attr, "")
     return ""
 
 
@@ -433,6 +478,14 @@ def sales_dispatch_locked_response(company):
         },
         status=423,
     )
+
+
+def ensure_sales_dispatch_scan_permission(user):
+    if user.has_perm("gate_core.can_create_sales_dispatch_out") or user.has_perm(
+        "gate_core.can_edit_sales_dispatch_out"
+    ):
+        return
+    raise PermissionDenied("You do not have permission to scan Docking boxes.")
 
 
 class SalesDispatchLockView(APIView):
@@ -754,8 +807,6 @@ class SalesDispatchGateOutListCreateView(APIView):
                 freight=data.get("freight"),
                 total_freight=data.get("total_freight"),
                 dock_incharge=data.get("dock_incharge", ""),
-                gate_out_date=data.get("gate_out_date"),
-                out_time=data.get("out_time"),
                 security_name=data.get("security_name", ""),
                 remarks=data.get("remarks", ""),
                 created_by=request.user,
@@ -1093,6 +1144,137 @@ class SalesDispatchAttachmentListCreateView(APIView):
         )
 
 
+class SalesDispatchBoxScanListCreateView(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = {
+        "GET": "gate_core.can_view_sales_dispatch_out",
+    }
+
+    def get(self, request, entry_id):
+        entry = get_sales_dispatch_or_404(request.company.company, entry_id)
+        scans = (
+            entry.box_scans
+            .filter(is_active=True)
+            .select_related("box", "scan_log", "scanned_by")
+        )
+        return Response(SalesDispatchBoxScanSerializer(scans, many=True).data)
+
+    def post(self, request, entry_id):
+        ensure_sales_dispatch_scan_permission(request.user)
+        entry = get_sales_dispatch_or_404(request.company.company, entry_id)
+        if not can_edit(entry):
+            return Response(
+                {"detail": "Box scans cannot be changed in this Docking status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = SalesDispatchBoxScanCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        barcode_raw = serializer.validated_data["barcode_raw"]
+
+        scan_service = ScanService(company_code=request.company.company.code)
+        scan_result = scan_service.process_scan(
+            barcode_raw=barcode_raw,
+            scan_type="SHIP",
+            context_ref_type="SALES_DISPATCH",
+            context_ref_id=entry.id,
+            user=request.user,
+            device_info=request.META.get("HTTP_USER_AGENT", "")[:500],
+        )
+
+        if scan_result["result"] != ScanResult.SUCCESS:
+            return Response(
+                {"detail": "Box barcode was not found.", "scan": scan_result},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if scan_result["entity_type"] != EntityType.BOX:
+            return Response(
+                {"detail": "Only box barcodes can be scanned for Docking.", "scan": scan_result},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        box = get_object_or_404(
+            Box.objects.select_related("pallet"),
+            id=scan_result["entity_id"],
+            company=request.company.company,
+        )
+        if box.status not in (BoxStatus.ACTIVE, BoxStatus.PARTIAL):
+            return Response(
+                {"detail": f"Box {box.box_barcode} is {box.status} and cannot be dispatched."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        scan, created = SalesDispatchBoxScan.objects.get_or_create(
+            sales_dispatch=entry,
+            box_barcode=box.box_barcode,
+            defaults={
+                "company": request.company.company,
+                "box": box,
+                "scan_log_id": scan_result["scan_id"],
+                "barcode_raw": barcode_raw,
+                "item_code": box.item_code,
+                "item_name": box.item_name,
+                "batch_number": box.batch_number,
+                "quantity": box.qty,
+                "uom": box.uom,
+                "box_status": box.status,
+                "warehouse_code": box.current_warehouse,
+                "pallet_code": box.pallet.pallet_id if box.pallet else "",
+                "scanned_by": request.user,
+                "created_by": request.user,
+                "updated_by": request.user,
+            },
+        )
+        if not created and not scan.is_active:
+            scan.is_active = True
+            scan.box = box
+            scan.scan_log_id = scan_result["scan_id"]
+            scan.barcode_raw = barcode_raw
+            scan.item_code = box.item_code
+            scan.item_name = box.item_name
+            scan.batch_number = box.batch_number
+            scan.quantity = box.qty
+            scan.uom = box.uom
+            scan.box_status = box.status
+            scan.warehouse_code = box.current_warehouse
+            scan.pallet_code = box.pallet.pallet_id if box.pallet else ""
+            scan.scanned_by = request.user
+            scan.scanned_at = timezone.now()
+            scan.updated_by = request.user
+            scan.save()
+            created = True
+
+        response_data = SalesDispatchBoxScanSerializer(scan).data
+        response_data["duplicate"] = not created
+        return Response(
+            response_data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class SalesDispatchBoxScanDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
+    required_permissions = {}
+
+    def delete(self, request, entry_id, scan_id):
+        ensure_sales_dispatch_scan_permission(request.user)
+        entry = get_sales_dispatch_or_404(request.company.company, entry_id)
+        if not can_edit(entry):
+            return Response(
+                {"detail": "Box scans cannot be changed in this Docking status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        scan = get_object_or_404(
+            SalesDispatchBoxScan,
+            id=scan_id,
+            sales_dispatch=entry,
+            company=request.company.company,
+            is_active=True,
+        )
+        scan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class SalesDispatchGatepassPreviewView(APIView):
     permission_classes = [IsAuthenticated, HasCompanyContext, HasRequiredDjangoPermission]
     required_permissions = "gate_core.can_print_sales_dispatch_gatepass"
@@ -1292,12 +1474,16 @@ class SalesDispatchMarkDispatchedView(APIView):
             )
         with transaction.atomic():
             entry.status = SalesDispatchGateOutStatus.DISPATCHED
+            entry.gate_out_date = timezone.localdate()
+            entry.out_time = timezone.localtime().time().replace(microsecond=0)
             entry.dispatched_by = request.user
             entry.dispatched_at = timezone.now()
             entry.updated_by = request.user
             entry.save(
                 update_fields=[
                     "status",
+                    "gate_out_date",
+                    "out_time",
                     "dispatched_by",
                     "dispatched_at",
                     "updated_by",

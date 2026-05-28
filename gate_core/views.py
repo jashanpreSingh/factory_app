@@ -505,9 +505,10 @@ class EmptyVehicleGateInDetailView(APIView):
             )
 
         sap_transfer = None
+        item_payload = data.get("items") if "items" in data else None
         actual_quantities = (
-            parse_line_quantities(data.get("items"), "actual_quantity", "Actual quantity")
-            if "items" in data
+            parse_line_quantities(item_payload, "actual_quantity", "Actual quantity")
+            if item_payload
             else None
         )
         if actual_quantities is not None and gate_in.reason != "BST":

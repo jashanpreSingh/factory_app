@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -7,11 +8,14 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
 
+from barcode.models import Box
 from company.models import Company, UserCompany, UserRole
 from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import Driver, VehicleEntry
 from gate_core.models import (
     BSTGateIn,
+    EmptyVehicleGateIn,
+    SalesDispatchBoxScan,
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
     SalesDispatchGateOutDocument,
@@ -215,6 +219,42 @@ class SalesDispatchAPITests(APITestCase):
             )
         return entry
 
+    def create_barcode_box(self, suffix, *, item_code=None):
+        box_barcode = f"BOX-20260527-L1-{int(suffix):04d}"
+        return Box.objects.create(
+            company=self.company,
+            box_barcode=box_barcode,
+            item_code=item_code or f"ITEM-{suffix}",
+            item_name="Test Item",
+            batch_number=f"BATCH-{suffix}",
+            qty=Decimal("10.00"),
+            uom="BOX",
+            mfg_date=timezone.localdate(),
+            exp_date=timezone.localdate() + timedelta(days=180),
+            current_warehouse="FG0000318",
+            created_by=self.user,
+        )
+
+    def create_box_scan(self, entry, suffix="1"):
+        box = self.create_barcode_box(suffix)
+        return SalesDispatchBoxScan.objects.create(
+            company=self.company,
+            sales_dispatch=entry,
+            box=box,
+            box_barcode=box.box_barcode,
+            barcode_raw=box.box_barcode,
+            item_code=box.item_code,
+            item_name=box.item_name,
+            batch_number=box.batch_number,
+            quantity=box.qty,
+            uom=box.uom,
+            box_status=box.status,
+            warehouse_code=box.current_warehouse,
+            scanned_by=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
     def create_dispatched_stock_transfer(self, suffix="70"):
         entry = self.create_sales_dispatch(
             suffix,
@@ -261,6 +301,9 @@ class SalesDispatchAPITests(APITestCase):
             ("get", f"/api/v1/gate-core/sales-dispatch/by-vehicle-entry/{entry.vehicle_entry_id}/", None),
             ("get", f"/api/v1/gate-core/sales-dispatch/{entry.id}/attachments/", None),
             ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/attachments/", {}),
+            ("get", f"/api/v1/gate-core/sales-dispatch/{entry.id}/box-scans/", None),
+            ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/box-scans/", {}),
+            ("delete", f"/api/v1/gate-core/sales-dispatch/{entry.id}/box-scans/1/", None),
             ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/preview/", {}),
             ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/", {}),
             ("post", f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/reprint/", {"reprint_reason": "Copy"}),
@@ -354,6 +397,7 @@ class SalesDispatchAPITests(APITestCase):
             with_item=True,
             with_weighment=True,
         )
+        self.create_box_scan(entry, "3")
 
         response = self.client.post(
             f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/",
@@ -389,6 +433,7 @@ class SalesDispatchAPITests(APITestCase):
             with_item=True,
             with_weighment=True,
         )
+        self.create_box_scan(entry, "4")
         self.client.post(
             f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/",
             {},
@@ -418,6 +463,65 @@ class SalesDispatchAPITests(APITestCase):
         self.assertEqual(logs[1].copy_number, 2)
         self.assertEqual(logs[1].reprint_reason, "Original copy damaged")
         self.assertEqual(logs[1].printer_name, "Security Printer")
+
+    def test_box_scan_endpoint_records_box_for_docking(self):
+        entry = self.create_sales_dispatch("6", with_item=True)
+        box = self.create_barcode_box("6", item_code="ITEM-6")
+
+        response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/box-scans/",
+            {"barcode_raw": box.box_barcode},
+            format="json",
+            **self.company_header,
+        )
+        duplicate_response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/box-scans/",
+            {"barcode_raw": box.box_barcode},
+            format="json",
+            **self.company_header,
+        )
+        list_response = self.client.get(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/box-scans/",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["box_barcode"], box.box_barcode)
+        self.assertFalse(response.data["duplicate"])
+        self.assertEqual(duplicate_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(duplicate_response.data["duplicate"])
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(list_response.data), 1)
+        self.assertEqual(SalesDispatchBoxScan.objects.filter(sales_dispatch=entry).count(), 1)
+
+    def test_gatepass_print_requires_box_scans_not_weighment(self):
+        entry = self.create_sales_dispatch(
+            "7",
+            status_value=SalesDispatchGateOutStatus.READY_FOR_GATEPASS,
+            with_photo=True,
+            with_item=True,
+            with_weighment=False,
+        )
+
+        missing_scan_response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/",
+            {},
+            format="json",
+            **self.company_header,
+        )
+        self.create_box_scan(entry, "7")
+        print_response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/gatepass/print/",
+            {},
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(missing_scan_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("box_scans", missing_scan_response.data["detail"])
+        self.assertEqual(print_response.status_code, status.HTTP_200_OK)
+        entry.refresh_from_db()
+        self.assertTrue(entry.gatepass_no)
 
     def test_gatepass_print_history_endpoint_returns_logs(self):
         entry = self.create_sales_dispatch(
@@ -499,8 +603,20 @@ class SalesDispatchAPITests(APITestCase):
             company=self.company,
             vehicle=self.vehicle,
             driver=self.driver,
-            entry_type="SALES_DISPATCH",
-            status="BOOKED",
+            entry_type="EMPTY_VEHICLE",
+            status="COMPLETED",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        EmptyVehicleGateIn.objects.create(
+            company=self.company,
+            entry_no=linked_vehicle_entry.entry_no,
+            vehicle_entry=linked_vehicle_entry,
+            vehicle=self.vehicle,
+            driver=self.driver,
+            reason="DISPATCH",
+            gate_in_date=timezone.localdate(),
+            in_time=timezone.now().time(),
             created_by=self.user,
             updated_by=self.user,
         )
@@ -571,6 +687,74 @@ class SalesDispatchAPITests(APITestCase):
         self.assertEqual(group["total_litres"], Decimal("100.000"))
         self.assertEqual(group["total_weight"], Decimal("30.000"))
         self.assertEqual(len(group["documents"]), 2)
+
+    def test_pending_bookings_use_empty_vehicle_gate_in_driver(self):
+        planning_driver = Driver.objects.create(
+            name="Planning Driver",
+            mobile_no="9888888888",
+            license_no="DL-PLAN-001",
+        )
+        gate_driver = Driver.objects.create(
+            name="Gate Driver",
+            mobile_no="9777777777",
+            license_no="DL-GATE-001",
+            id_proof_type="Aadhaar",
+            id_proof_number="1234",
+        )
+        linked_vehicle_entry = VehicleEntry.objects.create(
+            entry_no="EVGI-LINK-1",
+            company=self.company,
+            vehicle=self.vehicle,
+            driver=gate_driver,
+            entry_type="EMPTY_VEHICLE",
+            status="COMPLETED",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        EmptyVehicleGateIn.objects.create(
+            company=self.company,
+            entry_no=linked_vehicle_entry.entry_no,
+            vehicle_entry=linked_vehicle_entry,
+            vehicle=self.vehicle,
+            driver=gate_driver,
+            reason="DISPATCH",
+            gate_in_date=timezone.localdate(),
+            in_time=timezone.now().time(),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=80003,
+            sap_invoice_doc_num="80003",
+            booking_status=DispatchPlanStatus.BOOKED,
+            dispatch_date=timezone.localdate(),
+            vehicle=self.vehicle,
+            transporter=self.transporter,
+            driver=planning_driver,
+            driver_name="Planning Driver Snapshot",
+            driver_mobile_no="9666666666",
+            linked_vehicle_entry=linked_vehicle_entry,
+            bilty_no="BLT-GATE-DRIVER",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.get(
+            "/api/v1/gate-core/sales-dispatch/pending-bookings/",
+            {"dispatch_plan_ids": str(plan.id)},
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        group = response.data[0]
+        self.assertEqual(group["driver"], gate_driver.id)
+        self.assertEqual(group["driver_name"], "Gate Driver")
+        self.assertEqual(group["driver_mobile_no"], "9777777777")
+        self.assertEqual(group["driver_license_no"], "DL-GATE-001")
+        self.assertEqual(group["driver_id_proof_type"], "Aadhaar")
+        self.assertEqual(group["driver_id_proof_number"], "1234")
 
     def test_pending_bookings_excludes_already_docked_plans(self):
         plan = DispatchPlan.objects.create(

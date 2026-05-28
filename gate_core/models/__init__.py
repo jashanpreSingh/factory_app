@@ -11,6 +11,7 @@ from .bst_gate_return import BSTGateReturn
 from .job_work_gate_in import JobWorkGateIn, JobWorkGateInItem
 from .sales_dispatch import (
     SalesDispatchAttachment,
+    SalesDispatchBoxScan,
     SalesDispatchAttachmentType,
     SalesDispatchDocumentType,
     SalesDispatchGateOut,

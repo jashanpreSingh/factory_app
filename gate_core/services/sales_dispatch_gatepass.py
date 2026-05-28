@@ -22,15 +22,8 @@ def get_gatepass_readiness(entry: SalesDispatchGateOut) -> Dict:
     if not (has_model_photo or has_attachment_photo):
         missing.append("truck_photo_geolocation")
 
-    weighment = getattr(entry.vehicle_entry, "weighment", None)
-    if (
-        not weighment
-        or weighment.gross_weight is None
-        or weighment.tare_weight is None
-        or weighment.gross_weight <= 0
-        or weighment.tare_weight <= 0
-    ):
-        missing.append("weighment")
+    if not entry.box_scans.filter(is_active=True).exists():
+        missing.append("box_scans")
 
     if not entry.items.exists():
         missing.append("document_items")
@@ -39,7 +32,8 @@ def get_gatepass_readiness(entry: SalesDispatchGateOut) -> Dict:
         "ready": not missing,
         "missing": missing,
         "has_truck_photo_geolocation": "truck_photo_geolocation" not in missing,
-        "has_weighment": "weighment" not in missing,
+        "has_box_scans": "box_scans" not in missing,
+        "has_weighment": True,
         "has_items": "document_items" not in missing,
     }
 

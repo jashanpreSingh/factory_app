@@ -204,6 +204,36 @@ class BarcodeWorkflowTests(TestCase):
         self.assertIsNone(other_box.pallet)
         self.assertEqual(pallet.box_count, 1)
 
+    def test_active_empty_pallet_with_stale_context_is_reused(self):
+        boxes = self._generate_boxes(count=2, batch='BATCH-NEW')
+        pallet = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        pallet.item_code = 'OLD-FG'
+        pallet.item_name = 'Old Finished Good'
+        pallet.batch_number = 'OLD-BATCH'
+        pallet.uom = 'PCS'
+        pallet.save(update_fields=['item_code', 'item_name', 'batch_number', 'uom'])
+
+        updated = self.service.add_boxes_to_pallet(
+            pallet.id,
+            [box.id for box in boxes],
+            user=self.user,
+        )
+
+        self.assertEqual(updated.status, PalletStatus.ACTIVE)
+        self.assertEqual(updated.box_count, 2)
+        self.assertEqual(updated.total_qty, Decimal('25.00'))
+        self.assertEqual(updated.item_code, 'FG001')
+        self.assertEqual(updated.item_name, 'Test Finished Good')
+        self.assertEqual(updated.batch_number, 'BATCH-NEW')
+
     def test_add_boxes_to_pallet_enforces_capacity(self):
         boxes = self._generate_boxes(count=2)
         pallet = self.service.create_pallet(

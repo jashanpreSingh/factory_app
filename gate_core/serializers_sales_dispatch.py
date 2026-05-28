@@ -5,6 +5,7 @@ from rest_framework import serializers
 from gate_core.models import (
     SalesDispatchAttachment,
     SalesDispatchAttachmentType,
+    SalesDispatchBoxScan,
     SalesDispatchDocumentType,
     SalesDispatchGateOut,
     SalesDispatchGateOutDocument,
@@ -173,6 +174,38 @@ class SalesDispatchAttachmentSerializer(serializers.ModelSerializer):
         return user_display_name(obj.uploaded_by)
 
 
+class SalesDispatchBoxScanSerializer(serializers.ModelSerializer):
+    scanned_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SalesDispatchBoxScan
+        fields = [
+            "id",
+            "sales_dispatch",
+            "box",
+            "scan_log",
+            "box_barcode",
+            "barcode_raw",
+            "item_code",
+            "item_name",
+            "batch_number",
+            "quantity",
+            "uom",
+            "box_status",
+            "warehouse_code",
+            "pallet_code",
+            "scanned_by",
+            "scanned_by_name",
+            "scanned_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_scanned_by_name(self, obj):
+        return user_display_name(obj.scanned_by)
+
+
 class SalesDispatchLockSerializer(serializers.ModelSerializer):
     changed_by_name = serializers.SerializerMethodField()
 
@@ -248,6 +281,7 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
     items = SalesDispatchGateOutItemSerializer(many=True, read_only=True)
     documents = SalesDispatchGateOutDocumentSerializer(many=True, read_only=True)
     attachments = SalesDispatchAttachmentSerializer(many=True, read_only=True)
+    box_scans = serializers.SerializerMethodField()
     gatepass_print_logs = SalesDispatchGatepassPrintLogSerializer(many=True, read_only=True)
     gatepass_readiness = serializers.SerializerMethodField()
     document_count = serializers.SerializerMethodField()
@@ -352,6 +386,7 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
             "gatepass_readiness",
             "items",
             "attachments",
+            "box_scans",
             "gatepass_print_logs",
             "created_at",
             "updated_at",
@@ -398,6 +433,12 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
     def get_net_weight(self, obj):
         return self._weighment_value(obj, "net_weight")
 
+    def get_box_scans(self, obj):
+        return SalesDispatchBoxScanSerializer(
+            obj.box_scans.filter(is_active=True),
+            many=True,
+        ).data
+
 
 class SalesDispatchGateOutCreateSerializer(serializers.Serializer):
     document_type = serializers.ChoiceField(
@@ -413,8 +454,6 @@ class SalesDispatchGateOutCreateSerializer(serializers.Serializer):
     vehicle_id = serializers.IntegerField()
     driver_id = serializers.IntegerField()
     dispatch_plan_id = serializers.IntegerField(required=False, allow_null=True)
-    gate_out_date = serializers.DateField(required=False, allow_null=True)
-    out_time = serializers.TimeField(required=False, allow_null=True)
     security_name = serializers.CharField(required=False, allow_blank=True, default="")
     bilty_no = serializers.CharField(required=False, allow_blank=True, default="")
     bilty_date = serializers.DateField(required=False, allow_null=True)
@@ -490,8 +529,6 @@ class SalesDispatchGateOutCreateSerializer(serializers.Serializer):
 
 
 class SalesDispatchGateOutUpdateSerializer(serializers.Serializer):
-    gate_out_date = serializers.DateField(required=False, allow_null=True)
-    out_time = serializers.TimeField(required=False, allow_null=True)
     security_name = serializers.CharField(required=False, allow_blank=True)
     bilty_no = serializers.CharField(required=False, allow_blank=True)
     bilty_date = serializers.DateField(required=False, allow_null=True)
@@ -544,6 +581,10 @@ class SalesDispatchAttachmentUploadSerializer(serializers.Serializer):
                 {field_name: f"Coordinate must be between {minimum} and {maximum}."}
             )
         return decimal_value
+
+
+class SalesDispatchBoxScanCreateSerializer(serializers.Serializer):
+    barcode_raw = serializers.CharField(max_length=500, trim_whitespace=True)
 
 
 class SalesDispatchGatepassPrintSerializer(serializers.Serializer):
