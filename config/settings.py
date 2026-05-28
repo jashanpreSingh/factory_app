@@ -126,6 +126,16 @@ DATABASES = {
         'PORT': config('DB_PORT', default='5432'),
     }
 }
+AI_DB_NAME = config('AI_DB_NAME', default='')
+if AI_DB_NAME:
+    DATABASES['ai_readonly'] = {
+        'ENGINE': config('AI_DB_ENGINE', default=config('DB_ENGINE', default='django.db.backends.postgresql')),
+        'NAME': AI_DB_NAME,
+        'USER': config('AI_DB_USER'),
+        'PASSWORD': config('AI_DB_PASSWORD'),
+        'HOST': config('AI_DB_HOST', default=config('DB_HOST')),
+        'PORT': config('AI_DB_PORT', default=config('DB_PORT', default='5432')),
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -291,3 +301,7 @@ GEMINI_FALLBACK_MODELS = config(
 )
 AI_ASSISTANT_TIMEOUT_SECONDS = config('AI_ASSISTANT_TIMEOUT_SECONDS', default=45, cast=int)
 AI_ASSISTANT_MAX_CONTEXT_ROWS = config('AI_ASSISTANT_MAX_CONTEXT_ROWS', default=5, cast=int)
+AI_ASSISTANT_SQL_DATABASE_ALIAS = config(
+    'AI_ASSISTANT_SQL_DATABASE_ALIAS',
+    default='ai_readonly' if AI_DB_NAME else 'default',
+)
