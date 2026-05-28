@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    GRPODashboardSummaryAPI,
     AllGRPOEntriesListAPI,
     PendingGRPOListAPI,
     GRPOPreviewAPI,
@@ -18,6 +19,9 @@ from .views import (
 )
 
 urlpatterns = [
+    # Material GRPO dashboard insight totals
+    path("summary/", GRPODashboardSummaryAPI.as_view(), name="grpo-summary"),
+
     # List all RAW_MATERIAL gate entries (including in-flight ones)
     path("all-entries/", AllGRPOEntriesListAPI.as_view(), name="grpo-all-entries"),
 

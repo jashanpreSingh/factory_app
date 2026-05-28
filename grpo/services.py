@@ -9,7 +9,7 @@ from datetime import date
 from django.core.files import File
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 
 from gate_core.enums import GateEntryStatus
 from dispatch_plans.hana_reader import HanaDispatchBillReader
@@ -670,6 +670,64 @@ class GRPOService:
             "po_receipts__items",
             "grpo_postings"
         ).order_by("-entry_time")
+
+    def get_grpo_dashboard_summary(self) -> Dict[str, Any]:
+        """
+        Build the material GRPO dashboard summary from the correct sources.
+
+        Pending metrics come from GRPO-ready gate entries and unposted POs.
+        QC accepted/rejected metrics come from PO item receipt quantities.
+        Posting metrics come from GRPOPosting history statuses.
+        """
+        pending_entry_count = 0
+        pending_po_count = 0
+
+        for entry in self.get_pending_grpo_entries():
+            po_receipts = list(entry.po_receipts.all())
+            posted_po_ids = set()
+
+            for grpo in entry.grpo_postings.filter(status=GRPOStatus.POSTED):
+                posted_po_ids.update(grpo.po_receipts.values_list("id", flat=True))
+                if grpo.po_receipt_id:
+                    posted_po_ids.add(grpo.po_receipt_id)
+
+            entry_pending_po_count = sum(
+                1 for po_receipt in po_receipts if po_receipt.id not in posted_po_ids
+            )
+            if entry_pending_po_count:
+                pending_entry_count += 1
+                pending_po_count += entry_pending_po_count
+
+        item_totals = POItemReceipt.objects.filter(
+            is_active=True,
+            po_receipt__is_active=True,
+            po_receipt__vehicle_entry__company__code=self.company_code,
+            po_receipt__vehicle_entry__entry_type="RAW_MATERIAL",
+        ).exclude(
+            po_receipt__vehicle_entry__status=GateEntryStatus.CANCELLED,
+        ).aggregate(
+            accepted_qty=Sum("accepted_qty"),
+            rejected_qty=Sum("rejected_qty"),
+        )
+
+        posting_counts = {
+            status_key: GRPOPosting.objects.filter(
+                vehicle_entry__company__code=self.company_code,
+                status=status_key,
+            ).count()
+            for status_key in GRPOStatus.values
+        }
+
+        return {
+            "pending_entry_count": pending_entry_count,
+            "pending_po_count": pending_po_count,
+            "qc_accepted_qty": item_totals["accepted_qty"] or Decimal("0"),
+            "qc_rejected_qty": item_totals["rejected_qty"] or Decimal("0"),
+            "posting_pending_count": posting_counts[GRPOStatus.PENDING],
+            "posted_count": posting_counts[GRPOStatus.POSTED],
+            "failed_count": posting_counts[GRPOStatus.FAILED],
+            "partially_posted_count": posting_counts[GRPOStatus.PARTIALLY_POSTED],
+        }
 
     def get_all_grpo_visible_entries(self) -> List[VehicleEntry]:
         """

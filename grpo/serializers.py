@@ -40,6 +40,19 @@ class AllGRPOEntrySerializer(serializers.Serializer):
     po_numbers = serializers.ListField(child=serializers.CharField())
 
 
+class GRPODashboardSummarySerializer(serializers.Serializer):
+    """Summary numbers used by the material GRPO dashboard insights."""
+
+    pending_entry_count = serializers.IntegerField()
+    pending_po_count = serializers.IntegerField()
+    qc_accepted_qty = serializers.DecimalField(max_digits=18, decimal_places=3)
+    qc_rejected_qty = serializers.DecimalField(max_digits=18, decimal_places=3)
+    posting_pending_count = serializers.IntegerField()
+    posted_count = serializers.IntegerField()
+    failed_count = serializers.IntegerField()
+    partially_posted_count = serializers.IntegerField()
+
+
 class GRPOLineDetailSerializer(serializers.Serializer):
     """Serializer for GRPO line item details (for preview/preparation)"""
     po_item_receipt_id = serializers.IntegerField()

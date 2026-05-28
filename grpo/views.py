@@ -19,6 +19,7 @@ from .serializers import (
     GRPOAttachmentSerializer,
     GRPOAttachmentUploadSerializer,
     AllGRPOEntrySerializer,
+    GRPODashboardSummarySerializer,
     ServiceGRPOPendingEntrySerializer,
     ServiceGRPOPreviewSerializer,
     ServiceGRPOPostRequestSerializer,
@@ -36,6 +37,20 @@ from .permissions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class GRPODashboardSummaryAPI(APIView):
+    """
+    Returns material GRPO dashboard insight totals.
+
+    GET /api/grpo/summary/
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewPendingGRPO]
+
+    def get(self, request):
+        service = GRPOService(company_code=request.company.company.code)
+        summary = service.get_grpo_dashboard_summary()
+        return Response(GRPODashboardSummarySerializer(summary).data)
 
 
 class AllGRPOEntriesListAPI(APIView):
