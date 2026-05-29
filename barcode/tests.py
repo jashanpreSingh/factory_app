@@ -42,7 +42,12 @@ from .services.barcode_service import BarcodeService
 from .services.label_service import LabelService
 from .services.production_release_service import ProductionReleaseOilService
 from .services.scan_service import ScanService
-from .services.dispatch_service import BarcodeDispatchService, SapDispatchAdapter, SapUpdateResult
+from .services.dispatch_service import (
+    BarcodeDispatchService,
+    DispatchValidationError,
+    SapDispatchAdapter,
+    SapUpdateResult,
+)
 from .views import _list_response
 
 
@@ -933,7 +938,7 @@ class BarcodeDispatchWorkflowTests(TestCase):
         self.assertEqual(scan.result, DispatchScanResult.REJECTED)
         self.assertEqual(scan.reject_code, 'WRONG_MATERIAL')
 
-    def test_scan_rejects_wrong_material_and_over_quantity(self):
+    def test_scan_rejects_wrong_material_and_auto_allocates_pending_quantity(self):
         session = self.dispatch_service.create_session('900001', self.user)
         wrong_box = self._box(item_code='FG009', batch='BATCH-009', qty='1.00')
         over_box = self._box(item_code='FG001', batch='BATCH-001', qty='11.00')
@@ -951,9 +956,12 @@ class BarcodeDispatchWorkflowTests(TestCase):
 
         self.assertEqual(wrong_scan.result, DispatchScanResult.REJECTED)
         self.assertEqual(wrong_scan.reject_code, 'WRONG_MATERIAL')
-        self.assertEqual(over_scan.result, DispatchScanResult.REJECTED)
-        self.assertEqual(over_scan.reject_code, 'OVER_QUANTITY')
-        self.assertEqual(DispatchScanLog.objects.filter(result='REJECTED').count(), 2)
+        self.assertEqual(over_scan.result, DispatchScanResult.ACCEPTED)
+        unit = DispatchScannedUnit.objects.get(box=over_box)
+        self.assertEqual(unit.total_box_qty, Decimal('11.000'))
+        self.assertEqual(unit.dispatch_qty, Decimal('10.000'))
+        self.assertEqual(unit.remaining_qty, Decimal('1.000'))
+        self.assertEqual(DispatchScanLog.objects.filter(result='REJECTED').count(), 1)
 
     def test_scan_accepts_correct_sequence_and_blocks_duplicate_barcode(self):
         session = self.dispatch_service.create_session('900001', self.user)
@@ -976,11 +984,92 @@ class BarcodeDispatchWorkflowTests(TestCase):
         self.assertEqual(line1.scanned_qty, Decimal('10.000'))
         self.assertEqual(line1.status, 'COMPLETE')
         self.assertEqual(duplicate.result, DispatchScanResult.REJECTED)
-        self.assertEqual(duplicate.reject_code, 'BOX_ALREADY_DISPATCHED')
+        self.assertEqual(duplicate.reject_code, 'BOX_ALREADY_SCANNED')
         self.assertEqual(DispatchScannedUnit.objects.count(), 1)
         item1_box.refresh_from_db()
-        self.assertEqual(item1_box.status, BoxStatus.DISPATCHED)
-        self.assertEqual(item1_box.dispatch_session_id, session.id)
+        self.assertEqual(item1_box.status, BoxStatus.ACTIVE)
+        self.assertIsNone(item1_box.dispatch_session_id)
+
+    def test_scanned_box_quantity_can_be_reduced_and_remaining_is_calculated(self):
+        self.adapter = FakeDispatchSapAdapter(self._bill(item1_qty='20.000', item2_qty='5.000'))
+        self.dispatch_service = BarcodeDispatchService(
+            company_code=self.company.code,
+            sap_adapter=self.adapter,
+        )
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='20.00')
+
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        unit = DispatchScannedUnit.objects.get(box=item1_box)
+        self.assertEqual(unit.total_box_qty, Decimal('20.000'))
+        self.assertEqual(unit.dispatch_qty, Decimal('20.000'))
+
+        updated = self.dispatch_service.update_scanned_box_qty(session.id, unit.id, Decimal('12'), self.user)
+        unit.refresh_from_db()
+        line = updated.lines.get(sequence_no=1)
+        self.assertEqual(unit.dispatch_qty, Decimal('12.000'))
+        self.assertEqual(unit.remaining_qty, Decimal('8.000'))
+        self.assertEqual(line.scanned_qty, Decimal('12.000'))
+
+        dispatched = self.dispatch_service.mark_dispatched(session.id, self.user)
+        item1_box.refresh_from_db()
+        self.assertEqual(dispatched.total_scanned_qty, Decimal('12.000'))
+        self.assertEqual(item1_box.status, BoxStatus.PARTIAL)
+        self.assertEqual(item1_box.qty, Decimal('8.000'))
+
+    def test_box_scan_auto_dispatches_only_pending_quantity(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='20.00')
+
+        scan = self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+
+        self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
+        unit = DispatchScannedUnit.objects.get(box=item1_box)
+        self.assertEqual(unit.total_box_qty, Decimal('20.000'))
+        self.assertEqual(unit.dispatch_qty, Decimal('10.000'))
+        self.assertEqual(unit.remaining_qty, Decimal('10.000'))
+        self.assertEqual(session.lines.get(sequence_no=1).scanned_qty, Decimal('10.000'))
+
+        self.dispatch_service.mark_dispatched(session.id, self.user)
+        item1_box.refresh_from_db()
+        self.assertEqual(item1_box.status, BoxStatus.PARTIAL)
+        self.assertEqual(item1_box.qty, Decimal('10.000'))
+
+    def test_scanned_box_quantity_validation_rejects_zero_negative_and_over_box_qty(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        unit = DispatchScannedUnit.objects.get(box=item1_box)
+
+        with self.assertRaises(DispatchValidationError) as zero_ctx:
+            self.dispatch_service.update_scanned_box_qty(session.id, unit.id, Decimal('0'), self.user)
+        self.assertEqual(zero_ctx.exception.code, 'INVALID_DISPATCH_QTY')
+
+        with self.assertRaises(DispatchValidationError) as negative_ctx:
+            self.dispatch_service.update_scanned_box_qty(session.id, unit.id, Decimal('-1'), self.user)
+        self.assertEqual(negative_ctx.exception.code, 'INVALID_DISPATCH_QTY')
+
+        with self.assertRaises(DispatchValidationError) as over_ctx:
+            self.dispatch_service.update_scanned_box_qty(session.id, unit.id, Decimal('11'), self.user)
+        self.assertEqual(over_ctx.exception.code, 'DISPATCH_QTY_GT_BOX_QTY')
+
+    def test_remove_scanned_box_excludes_it_from_dispatch_totals(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        unit = DispatchScannedUnit.objects.get(box=item1_box)
+
+        updated = self.dispatch_service.remove_scanned_box(session.id, unit.id, self.user)
+        unit.refresh_from_db()
+        line = updated.lines.get(sequence_no=1)
+        self.assertEqual(unit.scan_status, 'REMOVED')
+        self.assertEqual(unit.dispatch_qty, Decimal('0.000'))
+        self.assertEqual(line.scanned_qty, Decimal('0.000'))
+        self.assertEqual(updated.total_scanned_qty, Decimal('0.000'))
+
+        item1_box.refresh_from_db()
+        self.assertEqual(item1_box.status, BoxStatus.ACTIVE)
+        self.assertIsNone(item1_box.dispatch_session_id)
 
     def test_mark_dispatched_requires_all_lines_and_logs_sap_sync(self):
         session = self.dispatch_service.create_session('900001', self.user)
@@ -1024,11 +1113,16 @@ class BarcodeDispatchWorkflowTests(TestCase):
 
         self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
         pallet.refresh_from_db()
+        self.assertEqual(pallet.status, PalletStatus.ACTIVE)
+        self.assertIsNone(pallet.dispatch_session_id)
+        self.assertEqual(DispatchScannedUnit.objects.filter(pallet=pallet, entity_type='BOX').count(), 2)
+
+        self.dispatch_service.mark_dispatched(session.id, self.user)
+        pallet.refresh_from_db()
         self.assertEqual(pallet.status, PalletStatus.DISPATCHED)
         self.assertEqual(pallet.dispatch_session_id, session.id)
         self.assertEqual(pallet.dispatched_boxes, 2)
         self.assertEqual(Box.objects.filter(id__in=[box.id for box in boxes], status=BoxStatus.DISPATCHED).count(), 2)
-        self.assertEqual(DispatchScannedUnit.objects.filter(pallet=pallet, entity_type='BOX').count(), 2)
 
     def test_box_scan_from_pallet_removes_box_and_keeps_pallet_partial(self):
         session = self.dispatch_service.create_session('900001', self.user)
@@ -1038,6 +1132,13 @@ class BarcodeDispatchWorkflowTests(TestCase):
         scan = self.dispatch_service.submit_scan(session.id, boxes[0].box_barcode, user=self.user)
 
         self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
+        boxes[0].refresh_from_db()
+        pallet.refresh_from_db()
+        self.assertEqual(boxes[0].pallet_id, pallet.id)
+        self.assertEqual(boxes[0].status, BoxStatus.ACTIVE)
+        self.assertIsNone(boxes[0].removed_from_pallet_at)
+
+        self.dispatch_service.mark_dispatched(session.id, self.user)
         boxes[0].refresh_from_db()
         pallet.refresh_from_db()
         self.assertIsNone(boxes[0].pallet_id)
@@ -1057,9 +1158,12 @@ class BarcodeDispatchWorkflowTests(TestCase):
 
         self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
         pallet.refresh_from_db()
-        self.assertEqual(pallet.status, PalletStatus.DISPATCHED)
         self.assertIn('already dispatched or removed', scan.parsed_barcode.get('warning', ''))
         self.assertEqual(session.lines.get(sequence_no=1).scanned_qty, Decimal('10.000'))
+
+        self.dispatch_service.mark_dispatched(session.id, self.user)
+        pallet.refresh_from_db()
+        self.assertEqual(pallet.status, PalletStatus.DISPATCHED)
 
     def test_partial_pallet_dispatch_can_be_rejected_by_setting(self):
         DispatchSettings.objects.update_or_create(
