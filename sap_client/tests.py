@@ -221,6 +221,7 @@ class AttachmentWriterTests(TestCase):
             "username": "test_user",
             "password": "test_pass",
         }
+        self.mock_context.company_code = "JIVO_OIL"
         self.writer = AttachmentWriter(self.mock_context)
 
     def _temp_file(self, suffix=".pdf"):
@@ -315,6 +316,8 @@ class AttachmentWriterTests(TestCase):
         self.assertEqual(line["FileName"], "proof_v2")
         self.assertEqual(line["FileExtension"], "jpeg")
         self.assertEqual(line["CopyToTargetDoc"], "tYES")
+        self.assertEqual(line["U_CHK"], "1")
+        self.assertEqual(line["U_CHK2"], "OK")
         mock_get.assert_called_once()
 
     @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
@@ -516,6 +519,8 @@ class AttachmentWriterTests(TestCase):
         payload = mock_patch.call_args.kwargs["json"]
         self.assertEqual(len(payload["Attachments2_Lines"]), 2)
         self.assertEqual(payload["Attachments2_Lines"][1]["FileName"], "extra_v2")
+        self.assertEqual(payload["Attachments2_Lines"][1]["U_CHK"], "1")
+        self.assertEqual(payload["Attachments2_Lines"][1]["U_CHK2"], "OK")
         self.assertEqual(mock_get.call_count, 2)
 
     @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")

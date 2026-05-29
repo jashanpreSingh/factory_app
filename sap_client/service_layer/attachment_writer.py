@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import uuid
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 import requests
@@ -141,6 +142,60 @@ class AttachmentWriter:
         )
         return file_stem, file_extension
 
+    @staticmethod
+    @lru_cache(maxsize=16)
+    def _get_attachment_udf_columns(company_code: str) -> frozenset[str]:
+        fallback_columns = {
+            "JIVO_OIL": frozenset({"U_CHK", "U_CHK2"}),
+            "JIVO_BEVERAGES": frozenset({"U_CHK", "U_CHK2"}),
+            "JIVO_MART": frozenset(),
+        }
+        if not isinstance(company_code, str):
+            return frozenset()
+        company_code = company_code.upper()
+        try:
+            from ..context import CompanyContext
+
+            context = CompanyContext(company_code)
+            connection = HanaConnection(context.hana)
+            conn = None
+            cursor = None
+            try:
+                conn = connection.connect()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                        SELECT "COLUMN_NAME"
+                        FROM "SYS"."TABLE_COLUMNS"
+                        WHERE "SCHEMA_NAME" = ? AND "TABLE_NAME" = 'ATC1'
+                          AND "COLUMN_NAME" LIKE 'U_%'
+                    """,
+                    [connection.schema],
+                )
+                return frozenset(row[0] for row in cursor.fetchall())
+            finally:
+                if cursor:
+                    cursor.close()
+                if conn:
+                    conn.close()
+        except Exception as exc:
+            logger.warning(
+                "Could not inspect SAP ATC1 UDF columns for %s: %s",
+                company_code,
+                exc,
+            )
+            return fallback_columns.get(company_code, frozenset())
+
+    def _attachment_approval_fields(self) -> dict:
+        company_code = getattr(self.context, "company_code", "").upper()
+        udf_columns = self._get_attachment_udf_columns(company_code)
+        fields = {}
+        if "U_CHK" in udf_columns:
+            fields["U_CHK"] = "1"
+        if "U_CHK2" in udf_columns:
+            fields["U_CHK2"] = "OK"
+        return fields
+
     def _metadata_line_for_uploaded_file(
         self,
         uploaded_file: dict,
@@ -168,6 +223,7 @@ class AttachmentWriter:
             "FileExtension": file_extension,
             "Override": "tYES",
             "CopyToTargetDoc": "tYES",
+            **self._attachment_approval_fields(),
         }
 
     def _attachment_line_matches(self, line: dict, expected_line: dict) -> bool:
@@ -455,6 +511,7 @@ class AttachmentWriter:
                     "FileExtension": extension,
                     "Override": "tYES",
                     "CopyToTargetDoc": "tYES",
+                    **self._attachment_approval_fields(),
                 }
             ]
         }
@@ -559,6 +616,7 @@ class AttachmentWriter:
                     "FileExtension": extension,
                     "Override": "tYES",
                     "CopyToTargetDoc": "tYES",
+                    **self._attachment_approval_fields(),
                 }
             )
             response = requests.patch(
@@ -613,8 +671,7 @@ class AttachmentWriter:
                     "FileName": name_without_ext,
                     "FileExtension": file_ext,
                     "Override": "tYES",
-                    "U_CHK2": "OK",
-                    "U_CHK": "1",
+                    **self._attachment_approval_fields(),
                 }
             ]
         }
@@ -673,6 +730,7 @@ class AttachmentWriter:
                 "FileName": name_without_ext,
                 "FileExtension": file_ext,
                 "Override": "tYES",
+                **self._attachment_approval_fields(),
             }
         )
 
