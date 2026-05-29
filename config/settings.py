@@ -19,6 +19,15 @@ def cast_debug(value):
     raise ValueError(f"Invalid DEBUG value: {value}")
 
 
+def cast_optional_int(value):
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    return int(normalized)
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -278,6 +287,50 @@ SAP_ATTACHMENT_DIRECT_COPY_CREDENTIALS = {
             default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL,
         ),
     },
+}
+
+SAP_FILE_UPLOADER_ENABLED = config(
+    "SAP_FILE_UPLOADER_ENABLED",
+    default=False,
+    cast=cast_debug,
+)
+SAP_FILE_UPLOADER_BASE_URL = config(
+    "SAP_FILE_UPLOADER_BASE_URL",
+    default="",
+)
+SAP_FILE_UPLOADER_API_KEY = config(
+    "SAP_FILE_UPLOADER_API_KEY",
+    default="",
+)
+SAP_FILE_UPLOADER_TIMEOUT_SECONDS = config(
+    "SAP_FILE_UPLOADER_TIMEOUT_SECONDS",
+    default=120,
+    cast=int,
+)
+SAP_FILE_UPLOADER_FOLDER_IDS = {
+    "JIVO_OIL": config(
+        "SAP_FILE_UPLOADER_FOLDER_ID_JIVO_OIL",
+        default="",
+        cast=cast_optional_int,
+    ),
+    "JIVO_MART": config(
+        "SAP_FILE_UPLOADER_FOLDER_ID_JIVO_MART",
+        default="",
+        cast=cast_optional_int,
+    ),
+    "JIVO_BEVERAGES": config(
+        "SAP_FILE_UPLOADER_FOLDER_ID_JIVO_BEVERAGES",
+        default="",
+        cast=cast_optional_int,
+    ),
+}
+SAP_FILE_UPLOADER_SOURCE_PATHS = {
+    "JIVO_OIL": config("SAP_FILE_UPLOADER_SOURCE_PATH_JIVO_OIL", default=""),
+    "JIVO_MART": config("SAP_FILE_UPLOADER_SOURCE_PATH_JIVO_MART", default=""),
+    "JIVO_BEVERAGES": config(
+        "SAP_FILE_UPLOADER_SOURCE_PATH_JIVO_BEVERAGES",
+        default="",
+    ),
 }
 
 # Firebase Cloud Messaging

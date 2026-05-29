@@ -13,6 +13,7 @@ from django.conf import settings
 from ..exceptions import SAPConnectionError, SAPDataError, SAPValidationError
 from ..hana.connection import HanaConnection
 from .auth import ServiceLayerSession
+from .file_uploader_client import FileUploaderClient
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,227 @@ class AttachmentWriter:
             or "linux mount point" in value
             or "attachmentsfolderpath" in value
             or "internal error (-43)" in value
+        )
+
+    @staticmethod
+    def _normalize_attachment_path(path: str) -> str:
+        return str(path or "").strip().replace("/", "\\").rstrip("\\").lower()
+
+    @staticmethod
+    def _sap_source_path(path: str) -> str:
+        return str(path or "").strip().rstrip("\\/")
+
+    def _get_file_uploader_source_path(self, cookies=None) -> str:
+        company_code = getattr(self.context, "company_code", "").upper()
+        source_paths = getattr(settings, "SAP_FILE_UPLOADER_SOURCE_PATHS", {}) or {}
+        configured_path = (source_paths.get(company_code) or "").strip()
+        if configured_path:
+            return self._sap_source_path(configured_path)
+        return self._sap_source_path(self._get_attachment_source_path(cookies=cookies))
+
+    @staticmethod
+    def _split_stored_filename(stored_name: str, fallback_filename: str) -> tuple[str, str]:
+        stored_name = Path(stored_name or fallback_filename).name
+        fallback_filename = Path(fallback_filename or stored_name).name
+        file_stem = Path(stored_name).stem or Path(fallback_filename).stem
+        file_extension = (
+            Path(stored_name).suffix.lstrip(".")
+            or Path(fallback_filename).suffix.lstrip(".")
+        )
+        return file_stem, file_extension
+
+    def _metadata_line_for_uploaded_file(
+        self,
+        uploaded_file: dict,
+        filename: str,
+        cookies,
+        source_path: str = "",
+    ) -> dict:
+        source_path = self._sap_source_path(
+            source_path or self._get_file_uploader_source_path(cookies=cookies)
+        )
+        if not source_path:
+            raise SAPValidationError(
+                "SAP file uploader saved the attachment, but SAP AttachPath could "
+                "not be resolved for Attachments2 metadata."
+            )
+
+        stored_name = uploaded_file.get("stored_name") or filename
+        file_stem, file_extension = self._split_stored_filename(stored_name, filename)
+        if not file_stem:
+            raise SAPDataError("SAP file uploader returned an empty stored filename")
+
+        return {
+            "SourcePath": source_path,
+            "FileName": file_stem,
+            "FileExtension": file_extension,
+            "Override": "tYES",
+            "CopyToTargetDoc": "tYES",
+        }
+
+    def _attachment_line_matches(self, line: dict, expected_line: dict) -> bool:
+        return (
+            self._normalize_attachment_path(line.get("SourcePath"))
+            == self._normalize_attachment_path(expected_line.get("SourcePath"))
+            and str(line.get("FileName") or "").strip().lower()
+            == str(expected_line.get("FileName") or "").strip().lower()
+            and str(line.get("FileExtension") or "").strip().lower()
+            == str(expected_line.get("FileExtension") or "").strip().lower()
+        )
+
+    def _get_attachment_entry(self, absolute_entry: int, cookies) -> dict:
+        response = requests.get(
+            f"{self.sl_config['base_url']}/b1s/v2/Attachments2({absolute_entry})",
+            cookies=cookies,
+            timeout=30,
+            verify=False,
+        )
+        if response.status_code == 200:
+            return response.json()
+        error_msg = self._extract_error_message(response)
+        raise SAPDataError(
+            f"Failed to read back SAP Attachments2({absolute_entry}): {error_msg}"
+        )
+
+    def _verify_attachment_line(
+        self,
+        absolute_entry: int,
+        expected_line: dict,
+        cookies,
+    ) -> None:
+        entry = self._get_attachment_entry(absolute_entry, cookies)
+        lines = entry.get("Attachments2_Lines", []) or []
+        if any(self._attachment_line_matches(line, expected_line) for line in lines):
+            return
+
+        expected_file = (
+            f"{expected_line.get('FileName')}.{expected_line.get('FileExtension')}"
+            if expected_line.get("FileExtension")
+            else str(expected_line.get("FileName") or "")
+        )
+        raise SAPDataError(
+            f"SAP Attachments2({absolute_entry}) was created, but no attachment "
+            f"line points to uploaded file '{expected_file}' in "
+            f"'{expected_line.get('SourcePath')}'."
+        )
+
+    @staticmethod
+    def _attach_uploader_details(result: dict, uploaded_file: dict, line: dict) -> dict:
+        result["UploaderFileId"] = uploaded_file.get("id")
+        result["StoredFileName"] = uploaded_file.get("stored_name")
+        result["AttachmentSourcePath"] = line.get("SourcePath")
+        result["AttachmentFileName"] = line.get("FileName")
+        result["AttachmentFileExtension"] = line.get("FileExtension")
+        return result
+
+    def _create_attachment_from_file_uploader(
+        self,
+        file_path: str,
+        filename: str,
+        cookies,
+        url: str,
+    ) -> dict:
+        uploader = FileUploaderClient(getattr(self.context, "company_code", ""))
+        uploaded_file = uploader.upload(file_path=file_path, filename=filename)
+        file_id = uploaded_file.get("id")
+        line = self._metadata_line_for_uploaded_file(
+            uploaded_file=uploaded_file,
+            filename=filename,
+            cookies=cookies,
+        )
+        payload = {"Attachments2_Lines": [line]}
+
+        try:
+            response = requests.post(
+                url,
+                json=payload,
+                cookies=cookies,
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+                verify=False,
+            )
+        except Exception:
+            uploader.delete(file_id)
+            raise
+
+        if response.status_code != 201:
+            uploader.delete(file_id)
+            error_msg = self._extract_error_message(response)
+            raise SAPValidationError(
+                "SAP attachment metadata registration failed after uploader "
+                f"saved the file: {error_msg}"
+            )
+
+        result = response.json()
+        absolute_entry = result.get("AbsoluteEntry")
+        if not absolute_entry:
+            raise SAPDataError("SAP did not return AbsoluteEntry for attachment")
+
+        self._verify_attachment_line(absolute_entry, line, cookies)
+        logger.info(
+            "Attachment uploaded through SAP file uploader and registered. "
+            "AbsoluteEntry: %s, file: %s",
+            absolute_entry,
+            uploaded_file.get("stored_name"),
+        )
+        return self._attach_uploader_details(result, uploaded_file, line)
+
+    def _add_line_from_file_uploader(
+        self,
+        absolute_entry: int,
+        file_path: str,
+        filename: str,
+        cookies,
+        patch_url: str,
+    ) -> dict:
+        existing_data = self._get_attachment_entry(absolute_entry, cookies)
+        existing_lines = existing_data.get("Attachments2_Lines", []) or []
+        source_path = ""
+        if existing_lines:
+            source_path = existing_lines[0].get("SourcePath") or ""
+
+        uploader = FileUploaderClient(getattr(self.context, "company_code", ""))
+        uploaded_file = uploader.upload(file_path=file_path, filename=filename)
+        file_id = uploaded_file.get("id")
+        line = self._metadata_line_for_uploaded_file(
+            uploaded_file=uploaded_file,
+            filename=filename,
+            cookies=cookies,
+            source_path=source_path,
+        )
+
+        try:
+            response = requests.patch(
+                patch_url,
+                json={"Attachments2_Lines": [*existing_lines, line]},
+                cookies=cookies,
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+                verify=False,
+            )
+        except Exception:
+            uploader.delete(file_id)
+            raise
+
+        if response.status_code not in (200, 204):
+            uploader.delete(file_id)
+            error_msg = self._extract_error_message(response)
+            raise SAPValidationError(
+                "SAP attachment metadata line registration failed after uploader "
+                f"saved the file: {error_msg}"
+            )
+
+        self._verify_attachment_line(absolute_entry, line, cookies)
+        logger.info(
+            "Attachment line uploaded through SAP file uploader and registered "
+            "on Attachments2(%s): %s",
+            absolute_entry,
+            uploaded_file.get("stored_name"),
+        )
+        return self._attach_uploader_details(
+            {"AbsoluteEntry": absolute_entry, "FileName": filename},
+            uploaded_file,
+            line,
         )
 
     def _get_direct_copy_path(self, sap_source_path: str) -> str:
@@ -495,6 +717,14 @@ class AttachmentWriter:
         url = f"{self.sl_config['base_url']}/b1s/v2/Attachments2"
 
         try:
+            if FileUploaderClient.is_enabled():
+                return self._create_attachment_from_file_uploader(
+                    file_path=file_path,
+                    filename=filename,
+                    cookies=cookies,
+                    url=url,
+                )
+
             content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
             with open(file_path, "rb") as f:
                 files = {
@@ -625,6 +855,15 @@ class AttachmentWriter:
         )
 
         try:
+            if FileUploaderClient.is_enabled():
+                return self._add_line_from_file_uploader(
+                    absolute_entry=absolute_entry,
+                    file_path=file_path,
+                    filename=filename,
+                    cookies=cookies,
+                    patch_url=patch_url,
+                )
+
             content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
             with open(file_path, "rb") as f:
                 files = {"files": (filename, f, content_type)}
