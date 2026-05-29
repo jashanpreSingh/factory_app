@@ -28,7 +28,7 @@ from .serializers import (
     LooseStockListSerializer, LooseStockDetailSerializer,
     ScanRequestSerializer, ScanLogSerializer,
     DispatchBillLookupSerializer, DispatchSessionCreateSerializer,
-    DispatchScanSubmitSerializer, DispatchCancelSerializer,
+    DispatchScanSubmitSerializer, DispatchScannedBoxQtySerializer, DispatchCancelSerializer,
     DispatchSessionSerializer, DispatchScanLogSerializer,
     DispatchSapSyncLogSerializer, DispatchSettingsSerializer,
     PalletBoxHistorySerializer,
@@ -830,6 +830,39 @@ class DispatchSessionScanAPI(APIView):
                     else status.HTTP_400_BAD_REQUEST
                 ),
             )
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchScannedBoxQtyAPI(APIView):
+    """Update the staged dispatch quantity for one scanned box."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def patch(self, request, session_id, unit_id):
+        serializer = DispatchScannedBoxQtySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.update_scanned_box_qty(
+                session_id=session_id,
+                unit_id=unit_id,
+                dispatch_qty=serializer.validated_data['dispatch_qty'],
+                user=request.user,
+            )
+            return Response(DispatchSessionSerializer(session).data)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchScannedBoxRemoveAPI(APIView):
+    """Remove one scanned box from the current dispatch list."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, session_id, unit_id):
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.remove_scanned_box(session_id=session_id, unit_id=unit_id, user=request.user)
+            return Response(DispatchSessionSerializer(session).data)
         except DispatchValidationError as e:
             return _dispatch_error_response(e)
 

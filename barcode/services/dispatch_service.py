@@ -32,6 +32,7 @@ from ..models import (
     DispatchScanLog,
     DispatchScanResult,
     DispatchScannedUnit,
+    DispatchScannedUnitStatus,
     DispatchSession,
     DispatchSessionLine,
     DispatchSessionStatus,
@@ -329,7 +330,9 @@ class BarcodeDispatchService:
                 .prefetch_related(
                     "lines",
                     "scan_logs",
-                    "scanned_units",
+                    "scanned_units__box",
+                    "scanned_units__scan_log__scanned_by",
+                    "scanned_units__session",
                     "sap_sync_logs",
                     "dispatched_boxes",
                     "dispatched_pallets",
@@ -565,6 +568,7 @@ class BarcodeDispatchService:
         session.status = DispatchSessionStatus.COMPLETED if sap_success else DispatchSessionStatus.SAP_SYNC_FAILED
         self._refresh_session_totals(session, save=False)
         session.save()
+        self._apply_scanned_box_dispatch(session, user)
         return self.get_session(session.id)
 
     @transaction.atomic
@@ -649,6 +653,65 @@ class BarcodeDispatchService:
         session.save()
         return self.get_session(session.id)
 
+    @transaction.atomic
+    def update_scanned_box_qty(
+        self,
+        session_id: int,
+        unit_id: int,
+        dispatch_qty: Any,
+        user,
+    ) -> DispatchSession:
+        session = self._get_editable_session_for_units(session_id)
+        unit = self._get_active_box_unit(session, unit_id)
+        new_qty = self._to_decimal(dispatch_qty)
+        if new_qty <= 0:
+            raise DispatchValidationError(
+                "INVALID_DISPATCH_QTY",
+                "Dispatch quantity must be at least 1.",
+            )
+        if new_qty > unit.total_box_qty:
+            raise DispatchValidationError(
+                "DISPATCH_QTY_GT_BOX_QTY",
+                "Dispatch quantity cannot be greater than total box quantity.",
+            )
+
+        old_qty = unit.dispatch_qty
+        delta = new_qty - old_qty
+        if delta > 0 and unit.line.scanned_qty + delta > unit.line.bill_qty:
+            raise DispatchValidationError(
+                "OVER_QUANTITY",
+                "Dispatch quantity is greater than remaining bill quantity.",
+            )
+
+        unit.dispatch_qty = new_qty
+        unit.remaining_qty = max(unit.total_box_qty - new_qty, Decimal("0"))
+        unit.qty = new_qty
+        unit.save(update_fields=["dispatch_qty", "remaining_qty", "qty"])
+        unit.scan_log.qty = new_qty
+        unit.scan_log.save(update_fields=["qty"])
+
+        self._adjust_line(unit.line, delta)
+        self._refresh_session_after_scan(session, user)
+        return self.get_session(session.id)
+
+    @transaction.atomic
+    def remove_scanned_box(self, session_id: int, unit_id: int, user) -> DispatchSession:
+        session = self._get_editable_session_for_units(session_id)
+        unit = self._get_active_box_unit(session, unit_id)
+
+        removed_qty = unit.dispatch_qty
+        unit.scan_status = DispatchScannedUnitStatus.REMOVED
+        unit.dispatch_qty = Decimal("0")
+        unit.remaining_qty = unit.total_box_qty
+        unit.qty = Decimal("0")
+        unit.save(update_fields=["scan_status", "dispatch_qty", "remaining_qty", "qty"])
+        unit.scan_log.qty = Decimal("0")
+        unit.scan_log.save(update_fields=["qty"])
+
+        self._adjust_line(unit.line, -removed_qty)
+        self._refresh_session_after_scan(session, user)
+        return self.get_session(session.id)
+
     def get_settings(self) -> DispatchSettings:
         return self.settings
 
@@ -679,7 +742,7 @@ class BarcodeDispatchService:
             dispatched_boxes = DispatchScannedUnit.objects.filter(
                 session=session,
                 entity_type=DispatchScanEntityType.BOX,
-            ).count()
+            ).exclude(scan_status=DispatchScannedUnitStatus.REMOVED).count()
             rows.append({
                 "session_id": session.id,
                 "bill_number": session.bill_number,
@@ -713,7 +776,7 @@ class BarcodeDispatchService:
         dispatched_boxes = DispatchScannedUnit.objects.filter(
             session=session,
             entity_type=DispatchScanEntityType.BOX,
-        ).count()
+        ).exclude(scan_status=DispatchScannedUnitStatus.REMOVED).count()
         return {
             "session": {
                 "session_id": session.id,
@@ -737,8 +800,20 @@ class BarcodeDispatchService:
                     "dispatched_qty": str(line.scanned_qty),
                     "pending_qty": str(max(line.bill_qty - line.scanned_qty, Decimal("0"))),
                     "expected_boxes": str(line.bill_boxes or Decimal("0")),
-                    "dispatched_boxes": str(line.scanned_units.filter(entity_type=DispatchScanEntityType.BOX).count()),
-                    "pending_boxes": str(max((line.bill_boxes or Decimal("0")) - line.scanned_units.filter(entity_type=DispatchScanEntityType.BOX).count(), Decimal("0"))),
+                    "dispatched_boxes": str(
+                        line.scanned_units
+                        .filter(entity_type=DispatchScanEntityType.BOX)
+                        .exclude(scan_status=DispatchScannedUnitStatus.REMOVED)
+                        .count()
+                    ),
+                    "pending_boxes": str(max(
+                        (line.bill_boxes or Decimal("0"))
+                        - line.scanned_units
+                        .filter(entity_type=DispatchScanEntityType.BOX)
+                        .exclude(scan_status=DispatchScannedUnitStatus.REMOVED)
+                        .count(),
+                        Decimal("0"),
+                    )),
                     "uom": line.uom,
                     "status": line.status,
                 }
@@ -906,7 +981,14 @@ class BarcodeDispatchService:
             id=resolved["box"].id,
             company=self.company,
         )
-        resolved = {**resolved, "box": box, "pallet": box.pallet, "qty": self._to_decimal(box.qty)}
+        available_qty = self._to_decimal(box.qty)
+        resolved = {
+            **resolved,
+            "box": box,
+            "pallet": box.pallet,
+            "qty": available_qty,
+            "warehouse_code": box.current_warehouse,
+        }
         active_line = self._get_active_line(session)
 
         if box.status == BoxStatus.DISPATCHED or box.dispatch_session_id:
@@ -969,76 +1051,71 @@ class BarcodeDispatchService:
         )
         if rejection:
             return rejection
-        qty = self._to_decimal(box.qty)
-        if qty <= 0:
+        if available_qty <= 0:
             return self._reject_quantity(session, line, raw_barcode, resolved, user, device_id, request_id, ip_address)
-        if qty > line.bill_qty - line.scanned_qty:
+        pending_qty = max(line.bill_qty - line.scanned_qty, Decimal("0"))
+        if pending_qty <= 0:
             return self._reject_over_quantity(session, line, raw_barcode, resolved, user, device_id, request_id, ip_address)
+        dispatch_qty = min(available_qty, pending_qty)
+        remaining_qty = max(available_qty - dispatch_qty, Decimal("0"))
+        status_after_scan = "Partial Dispatch" if remaining_qty > 0 else "Full Dispatch"
+        warehouse_warning = (resolved.get("parsed") or {}).get("warehouse_warning", "")
+        resolved_for_scan = {
+            **resolved,
+            "qty": dispatch_qty,
+            "parsed": {
+                **(resolved.get("parsed") or {}),
+                "original_qty": str(available_qty),
+                "available_qty": str(available_qty),
+                "required_pending_qty": str(pending_qty),
+                "dispatched_qty": str(dispatch_qty),
+                "remaining_qty": str(remaining_qty),
+                "status_after_scan": status_after_scan,
+                "success_message": (
+                    f"Box scanned successfully. Required Qty: {pending_qty}, "
+                    f"Box Available Qty: {available_qty}, Dispatched Qty: {dispatch_qty}, "
+                    f"Remaining Qty: {remaining_qty}. Status: {status_after_scan}."
+                    + (f" Warning: {warehouse_warning}" if warehouse_warning else "")
+                ),
+            },
+        }
 
-        old_pallet = box.pallet
-        now = timezone.now()
-        if old_pallet:
-            old_pallet = Pallet.objects.select_for_update().get(id=old_pallet.id, company=self.company)
+        existing_unit = (
+            DispatchScannedUnit.objects
+            .select_for_update()
+            .filter(
+                session=session,
+                barcode_value=box.box_barcode,
+                entity_type=DispatchScanEntityType.BOX,
+            )
+            .exclude(scan_status=DispatchScannedUnitStatus.REMOVED)
+            .first()
+        )
+        if existing_unit:
+            return self._log_rejected_scan(
+                session=session,
+                line=existing_unit.line,
+                raw_barcode=raw_barcode,
+                resolved={**resolved, "qty": existing_unit.dispatch_qty},
+                reject_code="BOX_ALREADY_SCANNED",
+                reject_message="This box is already scanned.",
+                user=user,
+                device_id=device_id,
+                request_id=request_id,
+                ip_address=ip_address,
+            )
 
         scan_log = self._create_accepted_scan_log(
             session=session,
             line=line,
             raw_barcode=raw_barcode,
-            resolved=resolved,
-            qty=qty,
+            resolved=resolved_for_scan,
+            qty=dispatch_qty,
             user=user,
             device_id=device_id,
             request_id=request_id,
             ip_address=ip_address,
         )
-
-        old_status = box.status
-        if old_pallet:
-            box.pallet = None
-            box.removed_from_pallet_at = now
-            box.removed_from_pallet_reason = "Dispatched separately from pallet."
-            PalletBoxHistory.objects.create(
-                company=self.company,
-                pallet=old_pallet,
-                box=box,
-                action="BOX_DISPATCHED_SEPARATELY",
-                old_status=old_status,
-                new_status=BoxStatus.DISPATCHED,
-                dispatch_session=session,
-                remarks="Box removed from pallet because it was dispatched separately.",
-                created_by=user,
-            )
-            BoxMovement.objects.create(
-                company=self.company,
-                box=box,
-                movement_type=BoxMovementType.REMOVE_FOR_DISPATCH,
-                from_warehouse=box.current_warehouse,
-                from_pallet=old_pallet,
-                performed_by=user,
-            )
-
-        box.status = BoxStatus.DISPATCHED
-        box.dispatch_session = session
-        box.dispatched_at = now
-        box.save(update_fields=[
-            "status",
-            "pallet",
-            "dispatch_session",
-            "dispatched_at",
-            "removed_from_pallet_at",
-            "removed_from_pallet_reason",
-            "updated_at",
-        ])
-        BoxMovement.objects.create(
-            company=self.company,
-            box=box,
-            movement_type=BoxMovementType.DISPATCH,
-            from_warehouse=box.current_warehouse,
-            from_pallet=old_pallet,
-            performed_by=user,
-        )
-        if old_pallet:
-            self._recalculate_pallet_state(old_pallet)
 
         self._create_scanned_unit(
             session=session,
@@ -1047,14 +1124,17 @@ class BarcodeDispatchService:
             barcode_value=box.box_barcode,
             entity_type=DispatchScanEntityType.BOX,
             box=box,
-            pallet=old_pallet,
-            qty=qty,
+            pallet=box.pallet,
+            qty=dispatch_qty,
+            total_box_qty=available_qty,
+            dispatch_qty=dispatch_qty,
+            remaining_qty=remaining_qty,
             material_code=box.item_code,
             batch_number=box.batch_number,
             uom=box.uom,
         )
 
-        self._increment_line(line, qty)
+        self._increment_line(line, dispatch_qty)
         self._refresh_session_after_scan(session, user)
         return scan_log
 
@@ -1125,12 +1205,21 @@ class BarcodeDispatchService:
             box for box in boxes
             if box.status == BoxStatus.DISPATCHED or box.dispatch_session_id
         ]
+        staged_box_ids = set(
+            DispatchScannedUnit.objects.filter(
+                session=session,
+                entity_type=DispatchScanEntityType.BOX,
+                box__in=boxes,
+            )
+            .exclude(scan_status=DispatchScannedUnitStatus.REMOVED)
+            .values_list("box_id", flat=True)
+        )
         removed_box_count = PalletBoxHistory.objects.filter(
             company=self.company,
             pallet=pallet,
             action="BOX_DISPATCHED_SEPARATELY",
         ).count()
-        if (dispatched_boxes or removed_box_count) and not self.settings.allow_partial_pallet_dispatch:
+        if (dispatched_boxes or removed_box_count or staged_box_ids) and not self.settings.allow_partial_pallet_dispatch:
             return self._log_rejected_scan(
                 session=session,
                 line=active_line,
@@ -1145,7 +1234,11 @@ class BarcodeDispatchService:
             )
         dispatchable_boxes = [
             box for box in boxes
-            if box.status in (BoxStatus.ACTIVE, BoxStatus.PARTIAL) and not box.dispatch_session_id
+            if (
+                box.status in (BoxStatus.ACTIVE, BoxStatus.PARTIAL)
+                and not box.dispatch_session_id
+                and box.id not in staged_box_ids
+            )
         ]
         if not dispatchable_boxes:
             return self._log_rejected_scan(
@@ -1163,8 +1256,10 @@ class BarcodeDispatchService:
 
         line_quantities: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
         line_by_id: dict[int, DispatchSessionLine] = {}
-        box_line_map: dict[int, DispatchSessionLine] = {}
+        allocations: list[dict[str, Any]] = []
+        warehouse_warnings: list[str] = []
         for box in dispatchable_boxes:
+            available_qty = self._to_decimal(box.qty)
             box_resolved = {
                 **resolved,
                 "entity_type": DispatchScanEntityType.BOX,
@@ -1172,9 +1267,10 @@ class BarcodeDispatchService:
                 "barcode_value": box.box_barcode,
                 "material_code": box.item_code,
                 "batch_number": box.batch_number,
-                "qty": self._to_decimal(box.qty),
+                "qty": available_qty,
                 "uom": box.uom,
                 "box": box,
+                "warehouse_code": box.current_warehouse,
             }
             line, rejection = self._select_line_for_material(
                 session=session,
@@ -1189,45 +1285,73 @@ class BarcodeDispatchService:
             )
             if rejection:
                 return rejection
-            qty = self._to_decimal(box.qty)
-            if qty <= 0:
+            warehouse_warning = (box_resolved.get("parsed") or {}).get("warehouse_warning", "")
+            if warehouse_warning and warehouse_warning not in warehouse_warnings:
+                warehouse_warnings.append(warehouse_warning)
+            if available_qty <= 0:
                 return self._reject_quantity(session, line, raw_barcode, box_resolved, user, device_id, request_id, ip_address)
-            line_quantities[line.id] += qty
+            pending_qty = max(line.bill_qty - line.scanned_qty - line_quantities[line.id], Decimal("0"))
+            if pending_qty <= 0:
+                continue
+            dispatch_qty = min(available_qty, pending_qty)
+            remaining_qty = max(available_qty - dispatch_qty, Decimal("0"))
+            line_quantities[line.id] += dispatch_qty
             line_by_id[line.id] = line
-            box_line_map[box.id] = line
+            allocations.append({
+                "box": box,
+                "line": line,
+                "available_qty": available_qty,
+                "dispatch_qty": dispatch_qty,
+                "remaining_qty": remaining_qty,
+            })
 
-        for line_id, qty in line_quantities.items():
-            line = line_by_id[line_id]
-            if qty > line.bill_qty - line.scanned_qty:
-                return self._log_rejected_scan(
-                    session=session,
-                    line=line,
-                    raw_barcode=raw_barcode,
-                    resolved=resolved,
-                    reject_code="OVER_QUANTITY",
-                    reject_message="Pallet quantity is greater than remaining bill quantity.",
-                    user=user,
-                    device_id=device_id,
-                    request_id=request_id,
-                    ip_address=ip_address,
-                )
+        if not allocations:
+            return self._log_rejected_scan(
+                session=session,
+                line=active_line,
+                raw_barcode=raw_barcode,
+                resolved=resolved,
+                reject_code="PALLET_NO_REQUIRED_QTY",
+                reject_message="No required pending quantity is available for this pallet.",
+                user=user,
+                device_id=device_id,
+                request_id=request_id,
+                ip_address=ip_address,
+            )
 
         warning = ""
-        skipped_box_count = len(dispatched_boxes) + removed_box_count
+        skipped_box_count = len(dispatched_boxes) + removed_box_count + len(staged_box_ids)
         if skipped_box_count:
             warning = f"{skipped_box_count} boxes were already dispatched or removed; only remaining boxes were dispatched."
+        total_dispatch_qty = sum((allocation["dispatch_qty"] for allocation in allocations), Decimal("0"))
+        total_available_qty = sum((allocation["available_qty"] for allocation in allocations), Decimal("0"))
+        total_remaining_qty = sum((allocation["remaining_qty"] for allocation in allocations), Decimal("0"))
+        status_after_scan = "Partial Dispatch" if total_remaining_qty > 0 else "Full Dispatch"
+        warehouse_warning = "; ".join(warehouse_warnings)
         resolved_with_warning = {
             **resolved,
             "parsed": {
                 **(resolved.get("parsed") or {}),
                 "warning": warning,
-                "box_count_dispatched": len(dispatchable_boxes),
+                "box_count_dispatched": len(allocations),
+                "original_qty": str(total_available_qty),
+                "available_qty": str(total_available_qty),
+                "required_pending_qty": str(total_dispatch_qty),
+                "dispatched_qty": str(total_dispatch_qty),
+                "remaining_qty": str(total_remaining_qty),
+                "status_after_scan": status_after_scan,
+                "success_message": (
+                    f"Pallet scanned successfully. Required Qty: {total_dispatch_qty}, "
+                    f"Pallet Available Qty: {total_available_qty}, Dispatched Qty: {total_dispatch_qty}, "
+                    f"Remaining Qty: {total_remaining_qty}. Status: {status_after_scan}."
+                    + (f" Warning: {warehouse_warning}" if warehouse_warning else "")
+                ),
             },
-            "qty": sum((self._to_decimal(box.qty) for box in dispatchable_boxes), Decimal("0")),
+            "qty": total_dispatch_qty,
         }
         scan_log = self._create_accepted_scan_log(
             session=session,
-            line=active_line or box_line_map[dispatchable_boxes[0].id],
+            line=active_line or allocations[0]["line"],
             raw_barcode=raw_barcode,
             resolved=resolved_with_warning,
             qty=resolved_with_warning["qty"],
@@ -1237,33 +1361,9 @@ class BarcodeDispatchService:
             ip_address=ip_address,
         )
 
-        now = timezone.now()
-        for box in dispatchable_boxes:
-            old_status = box.status
-            line = box_line_map[box.id]
-            qty = self._to_decimal(box.qty)
-            box.status = BoxStatus.DISPATCHED
-            box.dispatch_session = session
-            box.dispatched_at = now
-            PalletBoxHistory.objects.create(
-                company=self.company,
-                pallet=pallet,
-                box=box,
-                action="PALLET_DISPATCHED",
-                old_status=old_status,
-                new_status=BoxStatus.DISPATCHED,
-                dispatch_session=session,
-                remarks="Box dispatched through pallet scan.",
-                created_by=user,
-            )
-            BoxMovement.objects.create(
-                company=self.company,
-                box=box,
-                movement_type=BoxMovementType.DISPATCH,
-                from_warehouse=box.current_warehouse,
-                from_pallet=pallet,
-                performed_by=user,
-            )
+        for allocation in allocations:
+            box = allocation["box"]
+            line = allocation["line"]
             self._create_scanned_unit(
                 session=session,
                 line=line,
@@ -1272,40 +1372,17 @@ class BarcodeDispatchService:
                 entity_type=DispatchScanEntityType.BOX,
                 box=box,
                 pallet=pallet,
-                qty=qty,
+                qty=allocation["dispatch_qty"],
+                total_box_qty=allocation["available_qty"],
+                dispatch_qty=allocation["dispatch_qty"],
+                remaining_qty=allocation["remaining_qty"],
                 material_code=box.item_code,
                 batch_number=box.batch_number,
                 uom=box.uom,
             )
-        Box.objects.bulk_update(dispatchable_boxes, ["status", "dispatch_session", "dispatched_at", "updated_at"])
 
         for line_id, qty in line_quantities.items():
             self._increment_line(line_by_id[line_id], qty)
-
-        pallet.status = PalletStatus.DISPATCHED
-        pallet.dispatch_session = session
-        pallet.dispatched_at = now
-        pallet.dispatched_boxes = len([box for box in boxes if box.status == BoxStatus.DISPATCHED]) or len(dispatchable_boxes)
-        pallet.available_boxes = 0
-        pallet.total_boxes = len(boxes)
-        pallet.save(update_fields=[
-            "status",
-            "dispatch_session",
-            "dispatched_at",
-            "total_boxes",
-            "available_boxes",
-            "dispatched_boxes",
-            "updated_at",
-        ])
-        PalletMovement.objects.create(
-            company=self.company,
-            pallet=pallet,
-            movement_type=PalletMovementType.DISPATCH,
-            from_warehouse=pallet.current_warehouse,
-            quantity=resolved_with_warning["qty"],
-            performed_by=user,
-            notes=warning or "Pallet dispatched.",
-        )
         self._refresh_session_after_scan(session, user)
         return scan_log
 
@@ -1564,6 +1641,13 @@ class BarcodeDispatchService:
                 request_id=request_id,
                 ip_address=ip_address,
             )
+        scanned_warehouse = (resolved.get("warehouse_code") or "").strip()
+        if line.warehouse_code and scanned_warehouse and scanned_warehouse != line.warehouse_code:
+            parsed = resolved.setdefault("parsed", {})
+            parsed["warehouse_warning"] = (
+                f"Scanned warehouse {scanned_warehouse} does not match "
+                f"dispatch warehouse {line.warehouse_code}."
+            )
         return line, None
 
     def _create_accepted_scan_log(
@@ -1612,7 +1696,18 @@ class BarcodeDispatchService:
         box: Box | None = None,
         pallet: Pallet | None = None,
         serial_number: str = "",
+        total_box_qty: Decimal | None = None,
+        dispatch_qty: Decimal | None = None,
+        remaining_qty: Decimal | None = None,
+        scan_status: str = DispatchScannedUnitStatus.ACTIVE,
     ) -> DispatchScannedUnit:
+        dispatch_qty = dispatch_qty if dispatch_qty is not None else qty
+        total_box_qty = total_box_qty if total_box_qty is not None else qty
+        remaining_qty = (
+            remaining_qty
+            if remaining_qty is not None
+            else max(total_box_qty - dispatch_qty, Decimal("0"))
+        )
         return DispatchScannedUnit.objects.create(
             session=session,
             line=line,
@@ -1624,14 +1719,182 @@ class BarcodeDispatchService:
             serial_number=serial_number,
             material_code=material_code,
             batch_number=batch_number,
+            total_box_qty=total_box_qty,
+            dispatch_qty=dispatch_qty,
+            remaining_qty=remaining_qty,
             qty=qty,
             uom=uom,
+            scan_status=scan_status,
         )
 
     def _increment_line(self, line: DispatchSessionLine, qty: Decimal) -> None:
-        line.scanned_qty += qty
+        self._adjust_line(line, qty)
+
+    def _adjust_line(self, line: DispatchSessionLine, qty_delta: Decimal) -> None:
+        line.scanned_qty = max(line.scanned_qty + qty_delta, Decimal("0"))
         line.status = "COMPLETE" if line.scanned_qty >= line.bill_qty else "PARTIAL"
+        if line.scanned_qty == 0:
+            line.status = "PENDING"
         line.save(update_fields=["scanned_qty", "status", "updated_at"])
+
+    def _get_editable_session_for_units(self, session_id: int) -> DispatchSession:
+        try:
+            session = DispatchSession.objects.select_for_update().get(
+                id=session_id,
+                company=self.company,
+            )
+        except DispatchSession.DoesNotExist:
+            raise DispatchValidationError("SESSION_NOT_FOUND", "Dispatch session not found.", 404)
+        if session.status in self.CLOSED_STATUSES:
+            raise DispatchValidationError(
+                "SESSION_CLOSED",
+                "Completed or closed dispatch cannot be edited.",
+            )
+        return session
+
+    def _get_active_box_unit(self, session: DispatchSession, unit_id: int) -> DispatchScannedUnit:
+        try:
+            return (
+                DispatchScannedUnit.objects
+                .select_for_update(of=("self",))
+                .select_related("line", "box", "scan_log")
+                .get(
+                    id=unit_id,
+                    session=session,
+                    entity_type=DispatchScanEntityType.BOX,
+                    scan_status=DispatchScannedUnitStatus.ACTIVE,
+                )
+            )
+        except DispatchScannedUnit.DoesNotExist:
+            raise DispatchValidationError(
+                "SCANNED_BOX_NOT_FOUND",
+                "Scanned box was not found or is already removed.",
+                404,
+            )
+
+    def _apply_scanned_box_dispatch(self, session: DispatchSession, user) -> None:
+        units = (
+            DispatchScannedUnit.objects
+            .select_for_update(of=("self",))
+            .select_related("box", "pallet")
+            .filter(
+                session=session,
+                entity_type=DispatchScanEntityType.BOX,
+                scan_status=DispatchScannedUnitStatus.ACTIVE,
+            )
+            .order_by("id")
+        )
+        now = timezone.now()
+        pallets_to_recalculate: dict[int, Pallet] = {}
+        pallet_dispatch_qty: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        for unit in units:
+            if not unit.box_id:
+                continue
+            box = Box.objects.select_for_update(of=("self",)).select_related("pallet").get(
+                id=unit.box_id,
+                company=self.company,
+            )
+            old_pallet = box.pallet
+            old_status = box.status
+            dispatch_qty = unit.dispatch_qty
+            remaining_qty = max(unit.total_box_qty - dispatch_qty, Decimal("0"))
+            if old_pallet:
+                pallet_dispatch_qty[old_pallet.id] += dispatch_qty
+            if dispatch_qty <= 0:
+                unit.scan_status = DispatchScannedUnitStatus.REMOVED
+                unit.remaining_qty = unit.total_box_qty
+                unit.qty = Decimal("0")
+                unit.save(update_fields=["scan_status", "remaining_qty", "qty"])
+                continue
+
+            if remaining_qty <= 0:
+                if old_pallet:
+                    box.pallet = None
+                    box.removed_from_pallet_at = box.removed_from_pallet_at or now
+                    box.removed_from_pallet_reason = (
+                        box.removed_from_pallet_reason
+                        or "Dispatched separately from pallet."
+                    )
+                    PalletBoxHistory.objects.create(
+                        company=self.company,
+                        pallet=old_pallet,
+                        box=box,
+                        action="BOX_DISPATCHED_SEPARATELY",
+                        old_status=old_status,
+                        new_status=BoxStatus.DISPATCHED,
+                        dispatch_session=session,
+                        remarks="Box removed from pallet because it was dispatched separately.",
+                        created_by=user,
+                    )
+                    BoxMovement.objects.create(
+                        company=self.company,
+                        box=box,
+                        movement_type=BoxMovementType.REMOVE_FOR_DISPATCH,
+                        from_warehouse=box.current_warehouse,
+                        from_pallet=old_pallet,
+                        performed_by=user,
+                    )
+                    pallets_to_recalculate[old_pallet.id] = old_pallet
+
+                box.status = BoxStatus.DISPATCHED
+                box.dispatch_session = session
+                box.dispatched_at = now
+                box.qty = Decimal("0")
+                box.save(update_fields=[
+                    "status",
+                    "pallet",
+                    "qty",
+                    "dispatch_session",
+                    "dispatched_at",
+                    "removed_from_pallet_at",
+                    "removed_from_pallet_reason",
+                    "updated_at",
+                ])
+            else:
+                box.qty = remaining_qty
+                box.status = BoxStatus.PARTIAL
+                box.save(update_fields=["qty", "status", "updated_at"])
+                if old_pallet:
+                    PalletBoxHistory.objects.create(
+                        company=self.company,
+                        pallet=old_pallet,
+                        box=box,
+                        action="BOX_PARTIAL_DISPATCH",
+                        old_status=old_status,
+                        new_status=BoxStatus.PARTIAL,
+                        dispatch_session=session,
+                        remarks=(
+                            f"Partial box dispatch. Dispatched {dispatch_qty} "
+                            f"{unit.uom or box.uom}; remaining {remaining_qty}."
+                        ),
+                        created_by=user,
+                    )
+                    pallets_to_recalculate[old_pallet.id] = old_pallet
+
+            BoxMovement.objects.create(
+                company=self.company,
+                box=box,
+                movement_type=BoxMovementType.DISPATCH,
+                from_warehouse=box.current_warehouse,
+                from_pallet=old_pallet,
+                performed_by=user,
+            )
+            unit.remaining_qty = remaining_qty
+            unit.qty = dispatch_qty
+            unit.scan_status = DispatchScannedUnitStatus.DISPATCHED
+            unit.save(update_fields=["remaining_qty", "qty", "scan_status"])
+
+        for pallet in pallets_to_recalculate.values():
+            self._recalculate_pallet_state(pallet)
+            PalletMovement.objects.create(
+                company=self.company,
+                pallet=pallet,
+                movement_type=PalletMovementType.DISPATCH,
+                from_warehouse=pallet.current_warehouse,
+                quantity=pallet_dispatch_qty[pallet.id],
+                performed_by=user,
+                notes=f"Dispatched through barcode dispatch {session.bill_number}.",
+            )
 
     def _refresh_session_after_scan(self, session: DispatchSession, user) -> None:
         if session.started_at is None:
@@ -1680,7 +1943,15 @@ class BarcodeDispatchService:
         pallet.box_count = len(active_boxes)
         pallet.total_qty = sum((box.qty for box in active_boxes), Decimal("0"))
         if pallet.status != PalletStatus.DISPATCHED:
-            if active_boxes and (dispatched_boxes or removed_box_count):
+            if not active_boxes and (dispatched_boxes or removed_box_count):
+                pallet.status = PalletStatus.DISPATCHED
+                pallet.dispatch_session = (
+                    dispatched_boxes[0].dispatch_session
+                    if dispatched_boxes and dispatched_boxes[0].dispatch_session_id
+                    else pallet.dispatch_session
+                )
+                pallet.dispatched_at = pallet.dispatched_at or timezone.now()
+            elif active_boxes and (dispatched_boxes or removed_box_count):
                 pallet.status = PalletStatus.PARTIAL
             elif not active_boxes:
                 pallet.status = PalletStatus.EMPTY
@@ -1688,6 +1959,8 @@ class BarcodeDispatchService:
                 pallet.status = PalletStatus.ACTIVE
         pallet.save(update_fields=[
             "status",
+            "dispatch_session",
+            "dispatched_at",
             "box_count",
             "total_boxes",
             "available_boxes",

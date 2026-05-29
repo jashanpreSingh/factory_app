@@ -144,6 +144,12 @@ class DispatchScanEntityType(models.TextChoices):
     UNKNOWN = "UNKNOWN", "Unknown"
 
 
+class DispatchScannedUnitStatus(models.TextChoices):
+    ACTIVE = "ACTIVE", "Active"
+    REMOVED = "REMOVED", "Removed"
+    DISPATCHED = "DISPATCHED", "Dispatched"
+
+
 class BarcodeMasterType(models.TextChoices):
     ITEM = "ITEM", "Item"
     BOX = "BOX", "Box"
@@ -667,7 +673,7 @@ class DispatchSettings(models.Model):
         on_delete=models.CASCADE,
         related_name='barcode_dispatch_settings',
     )
-    allow_partial_dispatch = models.BooleanField(default=False)
+    allow_partial_dispatch = models.BooleanField(default=True)
     allow_partial_pallet_dispatch = models.BooleanField(default=True)
     allow_box_dispatch_from_pallet = models.BooleanField(default=True)
     require_sequential_item_scanning = models.BooleanField(default=True)
@@ -944,8 +950,16 @@ class DispatchScannedUnit(models.Model):
     serial_number = models.CharField(max_length=120, blank=True, default='')
     material_code = models.CharField(max_length=80)
     batch_number = models.CharField(max_length=120, blank=True, default='')
+    total_box_qty = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    dispatch_qty = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    remaining_qty = models.DecimalField(max_digits=18, decimal_places=3, default=0)
     qty = models.DecimalField(max_digits=18, decimal_places=3)
     uom = models.CharField(max_length=30, blank=True, default='')
+    scan_status = models.CharField(
+        max_length=20,
+        choices=DispatchScannedUnitStatus.choices,
+        default=DispatchScannedUnitStatus.ACTIVE,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -963,6 +977,7 @@ class DispatchScannedUnit(models.Model):
         ]
         indexes = [
             models.Index(fields=['session', 'line']),
+            models.Index(fields=['session', 'scan_status']),
             models.Index(fields=['barcode_value']),
         ]
 
