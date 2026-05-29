@@ -669,6 +669,16 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
     lines = ServiceGRPOLinePostingSerializer(many=True, read_only=True)
     attachments = ServiceGRPOAttachmentSerializer(many=True, read_only=True)
     dispatch_bill_no = serializers.SerializerMethodField()
+    bilty_no = serializers.CharField(
+        source="dispatch_plan.bilty_no",
+        allow_blank=True,
+        read_only=True,
+    )
+    bilty_date = serializers.DateField(
+        source="dispatch_plan.bilty_date",
+        allow_null=True,
+        read_only=True,
+    )
     effective_month = serializers.DateField(
         allow_null=True,
         format="%Y-%m",
@@ -697,6 +707,8 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
             "id",
             "dispatch_plan",
             "dispatch_bill_no",
+            "bilty_no",
+            "bilty_date",
             "sap_invoice_doc_entry",
             "vehicle_no",
             "transporter_name",
