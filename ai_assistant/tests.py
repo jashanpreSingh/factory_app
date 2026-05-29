@@ -17,6 +17,7 @@ from production_execution.models import ProductionLine, ProductionRun
 from raw_material_gatein.models import POReceipt
 from vehicle_management.models import Vehicle
 from warehouse.models import FGReceiptStatus, FinishedGoodsReceipt
+from .models import AIAssistantInteraction
 from .services import FactoryAssistantService
 
 
@@ -221,6 +222,7 @@ class AssistantChatAPITests(TestCase):
     @override_settings(GEMINI_API_KEY='test-key', GEMINI_MODEL='test-model')
     @patch('ai_assistant.services.requests.post')
     def test_chat_can_answer_deep_question_with_read_only_sql(self, mock_post):
+        self.user.user_permissions.add(Permission.objects.get(codename='can_query_factory_database'))
         planner_response = Mock()
         planner_response.status_code = 200
         planner_response.json.return_value = {
@@ -271,6 +273,39 @@ class AssistantChatAPITests(TestCase):
             any(source['type'] == 'factory_database_sql' for source in response.data['sources'])
         )
         self.assertEqual(mock_post.call_count, 2)
+
+    @override_settings(GEMINI_API_KEY='test-key', GEMINI_MODEL='test-model')
+    @patch('ai_assistant.services.requests.post')
+    def test_chat_does_not_use_sql_without_ai_database_permission(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'candidates': [
+                {
+                    'content': {
+                        'parts': [{'text': 'Inventory context answer without SQL.'}],
+                    },
+                },
+            ],
+        }
+        mock_post.return_value = mock_response
+
+        response = self.client.post(
+            '/api/v1/ai/assistant/chat/',
+            {'question': 'Give deep inventory insight by box status', 'page': '/barcode/boxes'},
+            format='json',
+            HTTP_COMPANY_CODE=self.company.code,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['mode'], 'read_only')
+        self.assertEqual(response.data['answer'], 'Inventory context answer without SQL.')
+        self.assertFalse(
+            any(source['type'] == 'factory_database_sql' for source in response.data['sources'])
+        )
+        self.assertEqual(mock_post.call_count, 1)
+        interaction = AIAssistantInteraction.objects.latest('created_at')
+        self.assertEqual(interaction.validation_status, 'permission_denied')
 
     def test_read_only_sql_rejects_write_queries(self):
         service = FactoryAssistantService(

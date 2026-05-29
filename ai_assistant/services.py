@@ -1,6 +1,8 @@
 import json
 import logging
 import re
+import time
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -8,10 +10,13 @@ import requests
 import sqlparse
 from django.apps import apps
 from django.conf import settings
-from django.db import DatabaseError, connection, transaction
+from django.db import DatabaseError, connection, connections, transaction
 from django.db.models import Count, Q
+from django.utils import timezone
 
 from barcode.models import Box, LabelPrintLog, Pallet
+from construction_gatein.models import ConstructionGateEntry
+from daily_needs_gatein.models import DailyNeedGateEntry
 from barcode.services.production_release_service import (
     ProductionReleaseOilService,
     ProductionReleaseReadError,
@@ -19,6 +24,7 @@ from barcode.services.production_release_service import (
 from driver_management.models import VehicleEntry
 from grpo.services import GRPOService
 from grpo.models import GRPOPosting
+from maintenance_gatein.models import MaintenanceGateEntry
 from quality_control.models import MaterialArrivalSlip, RawMaterialInspection
 from raw_material_gatein.models import POReceipt
 from security_checks.models import SecurityCheck
@@ -30,6 +36,7 @@ from production_execution.models import (
     ProductionRun,
     WasteLog,
 )
+from .models import AIAssistantInteraction
 
 logger = logging.getLogger(__name__)
 
@@ -87,44 +94,80 @@ class FactoryAssistantService:
         self.company_code = company_code
         self.user = user
         self.max_rows = settings.AI_ASSISTANT_MAX_CONTEXT_ROWS
+        self._last_database_audit: dict[str, Any] = {}
 
     def answer(self, *, question: str, page: str = '') -> dict[str, Any]:
-        context = self._build_context(question=question, page=page)
-        direct_answer = self._direct_answer(question=question, context=context)
-        if direct_answer:
-            return {
-                'answer': direct_answer,
+        started = time.monotonic()
+        self._last_database_audit = {}
+        try:
+            context = self._build_context(question=question, page=page)
+            direct_answer = self._direct_answer(question=question, context=context)
+            if direct_answer:
+                result = {
+                    'answer': direct_answer,
+                    'sources': context['sources'],
+                    'context_summary': context['summary'],
+                    'model': 'factory-context',
+                    'provider': 'local',
+                    'mode': 'read_only',
+                }
+                self._audit_interaction(
+                    question=question,
+                    page=page,
+                    result=result,
+                    started=started,
+                )
+                return result
+
+            database_result = self._answer_from_database(question=question, page=page, context=context)
+            if database_result:
+                context_summary = {
+                    **context['summary'],
+                    'database_query': database_result['summary'],
+                }
+                result = {
+                    'answer': database_result['answer'],
+                    'sources': [*context['sources'], database_result['source']],
+                    'context_summary': context_summary,
+                    'model': database_result['model'],
+                    'provider': 'gemini',
+                    'mode': 'read_only_sql',
+                }
+                self._audit_interaction(
+                    question=question,
+                    page=page,
+                    result=result,
+                    started=started,
+                )
+                return result
+
+            provider_result = self._call_gemini(question=question, page=page, context=context)
+            result = {
+                'answer': provider_result['text'],
                 'sources': context['sources'],
                 'context_summary': context['summary'],
-                'model': 'factory-context',
-                'provider': 'local',
+                'model': provider_result['model'],
+                'provider': 'gemini',
                 'mode': 'read_only',
             }
-
-        database_result = self._answer_from_database(question=question, page=page, context=context)
-        if database_result:
-            context_summary = {
-                **context['summary'],
-                'database_query': database_result['summary'],
-            }
-            return {
-                'answer': database_result['answer'],
-                'sources': [*context['sources'], database_result['source']],
-                'context_summary': context_summary,
-                'model': database_result['model'],
-                'provider': 'gemini',
-                'mode': 'read_only_sql',
-            }
-
-        provider_result = self._call_gemini(question=question, page=page, context=context)
-        return {
-            'answer': provider_result['text'],
-            'sources': context['sources'],
-            'context_summary': context['summary'],
-            'model': provider_result['model'],
-            'provider': 'gemini',
-            'mode': 'read_only',
-        }
+            self._audit_interaction(
+                question=question,
+                page=page,
+                result=result,
+                started=started,
+            )
+            return result
+        except (AssistantConfigError, AssistantProviderError) as exc:
+            self._audit_interaction(
+                question=question,
+                page=page,
+                result={},
+                started=started,
+                status=AIAssistantInteraction.STATUS_ERROR,
+                error_code=exc.__class__.__name__,
+                blocked_reason=str(exc),
+            )
+            raise
 
     def _build_context(self, *, question: str, page: str) -> dict[str, Any]:
         tokens = self._extract_search_terms(question)
@@ -166,6 +209,7 @@ class FactoryAssistantService:
             'summary': {
                 'company_code': self.company_code,
                 'page': page,
+                'date_context': self._date_context(),
                 'tokens_used_for_lookup': tokens,
                 'box_count': len(boxes),
                 'pallet_count': len(pallets),
@@ -234,6 +278,48 @@ class FactoryAssistantService:
             )
             if count is not None:
                 return f'There are {count} matching gate entries.'
+
+        if any(term in lower_question for term in ['daily need', 'daily needs', 'canteen']):
+            section = operations.get('daily_needs', {})
+            count = self._matching_status_count(
+                lower_question,
+                section.get('vehicle_status_counts', []),
+                fallback=section.get('total_count'),
+            )
+            if count is not None:
+                return f'There are {count} matching daily needs gate entries.'
+
+        if any(term in lower_question for term in ['maintenance', 'repair', 'work order']):
+            section = operations.get('maintenance_gatein', {})
+            urgency_count = self._matching_status_count(
+                lower_question,
+                section.get('urgency_counts', []),
+            )
+            if urgency_count is not None:
+                return f'There are {urgency_count} matching maintenance gate entries.'
+            count = self._matching_status_count(
+                lower_question,
+                section.get('vehicle_status_counts', []),
+                fallback=section.get('total_count'),
+            )
+            if count is not None:
+                return f'There are {count} matching maintenance gate entries.'
+
+        if any(term in lower_question for term in ['construction', 'civil', 'contractor']):
+            section = operations.get('construction_gatein', {})
+            approval_count = self._matching_status_count(
+                lower_question,
+                section.get('security_approval_counts', []),
+            )
+            if approval_count is not None:
+                return f'There are {approval_count} matching construction gate entries.'
+            count = self._matching_status_count(
+                lower_question,
+                section.get('vehicle_status_counts', []),
+                fallback=section.get('total_count'),
+            )
+            if count is not None:
+                return f'There are {count} matching construction gate entries.'
 
         if 'grpo' in lower_question:
             section = operations.get('grpo_postings', {})
@@ -349,6 +435,9 @@ class FactoryAssistantService:
             'gate_entries': self._gate_entry_context,
             'security_checks': self._security_check_context,
             'raw_material_pos': self._raw_material_po_context,
+            'daily_needs': self._daily_needs_context,
+            'maintenance_gatein': self._maintenance_gatein_context,
+            'construction_gatein': self._construction_gatein_context,
             'grpo_postings': self._grpo_posting_context,
             'quality_control': self._quality_control_context,
             'weighment': self._weighment_context,
@@ -395,6 +484,12 @@ class FactoryAssistantService:
             sections.add('security_checks')
         if any(term in text for term in ['raw material', 'po receipt', 'purchase order', 'supplier']):
             sections.add('raw_material_pos')
+        if any(term in text for term in ['daily need', 'daily needs', 'canteen']):
+            sections.add('daily_needs')
+        if any(term in text for term in ['maintenance', 'repair', 'work order', 'equipment']):
+            sections.add('maintenance_gatein')
+        if any(term in text for term in ['construction', 'civil', 'contractor', 'project']):
+            sections.add('construction_gatein')
         if any(term in text for term in ['quality', 'qc', 'inspection', 'arrival slip']):
             sections.add('quality_control')
         if 'weigh' in text:
@@ -410,6 +505,9 @@ class FactoryAssistantService:
             'gate_entries',
             'security_checks',
             'raw_material_pos',
+            'daily_needs',
+            'maintenance_gatein',
+            'construction_gatein',
             'grpo_postings',
             'quality_control',
             'weighment',
@@ -518,6 +616,158 @@ class FactoryAssistantService:
                     'created_at': po.created_at.isoformat() if po.created_at else '',
                 }
                 for po in recent
+            ],
+        }
+
+    def _daily_needs_context(self, *, tokens: list[str]) -> dict[str, Any]:
+        qs = DailyNeedGateEntry.objects.filter(vehicle_entry__company=self.company)
+        matched = self._token_filter(
+            qs,
+            tokens,
+            [
+                'vehicle_entry__entry_no',
+                'vehicle_entry__status',
+                'supplier_name',
+                'material_name',
+                'bill_number',
+                'delivery_challan_number',
+                'item_category__category_name',
+                'receiving_department__name',
+            ],
+        )
+        recent = matched.select_related(
+            'vehicle_entry',
+            'item_category',
+            'unit',
+            'receiving_department',
+        ).order_by('-created_at')[: self.max_rows]
+        return {
+            'total_count': qs.count(),
+            'vehicle_status_counts': self._counts_by(qs, 'vehicle_entry__status'),
+            'category_counts': self._counts_by(qs, 'item_category__category_name'),
+            'department_counts': self._counts_by(qs, 'receiving_department__name'),
+            'matching_records': [
+                {
+                    'id': entry.id,
+                    'entry_no': entry.vehicle_entry.entry_no,
+                    'status': entry.vehicle_entry.status,
+                    'category': entry.item_category.category_name if entry.item_category_id else '',
+                    'supplier_name': entry.supplier_name,
+                    'material_name': entry.material_name,
+                    'quantity': str(entry.quantity),
+                    'unit': str(entry.unit) if entry.unit_id else '',
+                    'receiving_department': (
+                        entry.receiving_department.name if entry.receiving_department_id else ''
+                    ),
+                    'bill_number': entry.bill_number or '',
+                    'delivery_challan_number': entry.delivery_challan_number or '',
+                    'created_at': entry.created_at.isoformat() if entry.created_at else '',
+                }
+                for entry in recent
+            ],
+        }
+
+    def _maintenance_gatein_context(self, *, tokens: list[str]) -> dict[str, Any]:
+        qs = MaintenanceGateEntry.objects.filter(vehicle_entry__company=self.company)
+        matched = self._token_filter(
+            qs,
+            tokens,
+            [
+                'vehicle_entry__entry_no',
+                'vehicle_entry__status',
+                'work_order_number',
+                'supplier_name',
+                'material_description',
+                'part_number',
+                'equipment_id',
+                'urgency_level',
+                'maintenance_type__type_name',
+                'receiving_department__name',
+            ],
+        )
+        recent = matched.select_related(
+            'vehicle_entry',
+            'maintenance_type',
+            'unit',
+            'receiving_department',
+        ).order_by('-created_at')[: self.max_rows]
+        return {
+            'total_count': qs.count(),
+            'vehicle_status_counts': self._counts_by(qs, 'vehicle_entry__status'),
+            'urgency_counts': self._counts_by(qs, 'urgency_level'),
+            'maintenance_type_counts': self._counts_by(qs, 'maintenance_type__type_name'),
+            'matching_records': [
+                {
+                    'id': entry.id,
+                    'entry_no': entry.vehicle_entry.entry_no,
+                    'status': entry.vehicle_entry.status,
+                    'work_order_number': entry.work_order_number or '',
+                    'maintenance_type': (
+                        entry.maintenance_type.type_name if entry.maintenance_type_id else ''
+                    ),
+                    'supplier_name': entry.supplier_name,
+                    'material_description': entry.material_description,
+                    'equipment_id': entry.equipment_id or '',
+                    'urgency_level': entry.urgency_level,
+                    'quantity': str(entry.quantity),
+                    'unit': str(entry.unit) if entry.unit_id else '',
+                    'receiving_department': (
+                        entry.receiving_department.name if entry.receiving_department_id else ''
+                    ),
+                    'created_at': entry.created_at.isoformat() if entry.created_at else '',
+                }
+                for entry in recent
+            ],
+        }
+
+    def _construction_gatein_context(self, *, tokens: list[str]) -> dict[str, Any]:
+        qs = ConstructionGateEntry.objects.filter(vehicle_entry__company=self.company)
+        matched = self._token_filter(
+            qs,
+            tokens,
+            [
+                'vehicle_entry__entry_no',
+                'vehicle_entry__status',
+                'project_name',
+                'work_order_number',
+                'contractor_name',
+                'material_description',
+                'security_approval',
+                'material_category__category_name',
+                'challan_number',
+                'invoice_number',
+            ],
+        )
+        recent = matched.select_related(
+            'vehicle_entry',
+            'material_category',
+            'unit',
+        ).order_by('-created_at')[: self.max_rows]
+        return {
+            'total_count': qs.count(),
+            'vehicle_status_counts': self._counts_by(qs, 'vehicle_entry__status'),
+            'security_approval_counts': self._counts_by(qs, 'security_approval'),
+            'material_category_counts': self._counts_by(qs, 'material_category__category_name'),
+            'matching_records': [
+                {
+                    'id': entry.id,
+                    'entry_no': entry.vehicle_entry.entry_no,
+                    'status': entry.vehicle_entry.status,
+                    'project_name': entry.project_name or '',
+                    'work_order_number': entry.work_order_number or '',
+                    'contractor_name': entry.contractor_name,
+                    'material_category': (
+                        entry.material_category.category_name if entry.material_category_id else ''
+                    ),
+                    'material_description': entry.material_description,
+                    'security_approval': entry.security_approval,
+                    'quantity': str(entry.quantity),
+                    'unit': str(entry.unit) if entry.unit_id else '',
+                    'challan_number': entry.challan_number or '',
+                    'invoice_number': entry.invoice_number or '',
+                    'created_at': entry.created_at.isoformat() if entry.created_at else '',
+                }
+                for entry in recent
             ],
         }
 
@@ -758,6 +1008,12 @@ class FactoryAssistantService:
     ) -> dict[str, Any]:
         if not self._should_use_database_query(question):
             return {}
+        if not self.user.has_perm('ai_assistant.can_query_factory_database'):
+            self._last_database_audit = {
+                'validation_status': 'permission_denied',
+                'blocked_reason': 'User lacks ai_assistant.can_query_factory_database.',
+            }
+            return {}
 
         schema = self._database_schema_context()
         if not schema['tables']:
@@ -765,14 +1021,26 @@ class FactoryAssistantService:
 
         plan = self._generate_database_sql(question=question, page=page, schema=schema)
         sql = str(plan.get('sql') or '').strip()
+        self._last_database_audit = {
+            'generated_sql': self._compact_sql(sql) if sql else '',
+            'validation_status': 'planned' if sql else 'empty_plan',
+        }
         if not sql:
             return {}
 
         try:
             safe_sql = self._validate_read_only_sql(sql, schema=schema)
+            self._last_database_audit.update({
+                'generated_sql': self._compact_sql(safe_sql),
+                'validation_status': 'passed',
+            })
             query_result = self._execute_read_only_sql(safe_sql)
         except (DatabaseError, ValueError) as exc:
             logger.info('AI assistant SQL path skipped: %s', exc)
+            self._last_database_audit.update({
+                'validation_status': 'blocked',
+                'blocked_reason': str(exc),
+            })
             return {}
 
         summary_result = self._summarize_database_answer(
@@ -990,6 +1258,8 @@ class FactoryAssistantService:
         user_prompt = (
             f'Current page: {page or "unknown"}\n'
             f'Question: {question}\n\n'
+            'Date context JSON:\n'
+            f'{json.dumps(self._date_context(), default=str, ensure_ascii=False)}\n\n'
             'Schema JSON:\n'
             f'{json.dumps(schema_prompt, default=str, ensure_ascii=False)}\n\n'
             'Return example: {"sql": "SELECT ...", "reason": "why this query answers it"}\n'
@@ -1069,9 +1339,11 @@ class FactoryAssistantService:
 
     def _execute_read_only_sql(self, sql: str) -> dict[str, Any]:
         limited_sql = self._wrap_sql_with_limit(sql)
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                if connection.vendor == 'postgresql':
+        alias = settings.AI_ASSISTANT_SQL_DATABASE_ALIAS
+        db_connection = connections[alias]
+        with transaction.atomic(using=alias):
+            with db_connection.cursor() as cursor:
+                if db_connection.vendor == 'postgresql':
                     cursor.execute('SET TRANSACTION READ ONLY')
                     cursor.execute('SET LOCAL statement_timeout = 10000')
                 cursor.execute(limited_sql)
@@ -1112,6 +1384,8 @@ class FactoryAssistantService:
         user_prompt = (
             f'Current page: {page or "unknown"}\n'
             f'Question: {question}\n\n'
+            'Date context JSON:\n'
+            f'{json.dumps(self._date_context(), default=str, ensure_ascii=False)}\n\n'
             f'SQL used:\n{sql}\n\n'
             f'Rows are capped at {self.SQL_RESULT_ROW_LIMIT}.\n'
             'SQL result JSON:\n'
@@ -1187,6 +1461,8 @@ class FactoryAssistantService:
         user_prompt = (
             f'Current page: {page or "unknown"}\n'
             f'User question: {question}\n\n'
+            'Date context JSON:\n'
+            f'{json.dumps(self._date_context(), default=str, ensure_ascii=False)}\n\n'
             'Factory context JSON:\n'
             f'{json.dumps(context, default=str, ensure_ascii=False)}'
         )
@@ -1529,13 +1805,7 @@ class FactoryAssistantService:
 
     def _search_documents(self, question: str, tokens: list[str]) -> list[dict[str, str]]:
         docs: list[dict[str, str]] = []
-        root_dir = settings.BASE_DIR.parent
-        paths = [
-            root_dir / 'AI_INTEGRATION_GUIDE.md',
-            root_dir / 'AI_ASSISTANT_REQUIREMENTS.md',
-            root_dir / 'BARCODE_SYSTEM_TASKS.md',
-            root_dir / 'FactoryFlow' / 'docs' / 'modules' / 'barcode-implementation.md',
-        ]
+        paths = self._assistant_document_paths()
         terms = [token.lower() for token in tokens] + [
             word.lower()
             for word in re.findall(r'[A-Za-z]{4,}', question)
@@ -1547,10 +1817,35 @@ class FactoryAssistantService:
                 continue
             snippet = self._document_snippet(path, terms)
             if snippet:
-                docs.append({'title': path.name, 'snippet': snippet})
+                try:
+                    title = str(path.relative_to(settings.BASE_DIR))
+                except ValueError:
+                    title = path.name
+                docs.append({'title': title, 'snippet': snippet})
             if len(docs) >= self.max_rows:
                 break
         return docs
+
+    @staticmethod
+    def _assistant_document_paths() -> list[Path]:
+        base_dir = settings.BASE_DIR
+        ignored_parts = {
+            '.git',
+            '.venv',
+            '__pycache__',
+            'migrations',
+            'node_modules',
+            'staticfiles',
+            'media',
+        }
+        paths: list[Path] = []
+        for path in sorted(base_dir.rglob('*.md')):
+            if any(part in ignored_parts for part in path.parts):
+                continue
+            paths.append(path)
+            if len(paths) >= 250:
+                break
+        return paths
 
     @staticmethod
     def _document_snippet(path: Path, terms: list[str]) -> str:
@@ -1565,6 +1860,54 @@ class FactoryAssistantService:
         start = max(min(positions) - 250, 0)
         end = min(start + 1200, len(text))
         return text[start:end].strip()
+
+    def _audit_interaction(
+        self,
+        *,
+        question: str,
+        page: str,
+        result: dict[str, Any],
+        started: float,
+        status: str = AIAssistantInteraction.STATUS_SUCCESS,
+        error_code: str = '',
+        blocked_reason: str = '',
+    ) -> None:
+        try:
+            database_audit = self._last_database_audit or {}
+            database_summary = (result.get('context_summary') or {}).get('database_query') or {}
+            row_count = database_summary.get('row_count')
+            AIAssistantInteraction.objects.create(
+                user=self.user if getattr(self.user, 'is_authenticated', False) else None,
+                company=self.company,
+                question=question,
+                page=page or '',
+                mode=str(result.get('mode') or ''),
+                provider=str(result.get('provider') or ''),
+                model=str(result.get('model') or ''),
+                status=status,
+                generated_sql=str(database_audit.get('generated_sql') or ''),
+                validation_status=str(database_audit.get('validation_status') or ''),
+                blocked_reason=str(blocked_reason or database_audit.get('blocked_reason') or ''),
+                row_count=int(row_count) if row_count is not None else None,
+                latency_ms=max(int((time.monotonic() - started) * 1000), 0),
+                error_code=error_code,
+            )
+        except Exception as exc:
+            logger.info('AI assistant audit logging skipped: %s', exc)
+
+    @staticmethod
+    def _date_context() -> dict[str, str]:
+        today = timezone.localdate()
+        week_start = today - timedelta(days=today.weekday())
+        return {
+            'timezone': settings.TIME_ZONE,
+            'today': today.isoformat(),
+            'yesterday': (today - timedelta(days=1)).isoformat(),
+            'this_week_start': week_start.isoformat(),
+            'this_month_start': today.replace(day=1).isoformat(),
+            'last_7_days_start': (today - timedelta(days=6)).isoformat(),
+            'last_30_days_start': (today - timedelta(days=29)).isoformat(),
+        }
 
     @staticmethod
     def _counts_by(queryset, field: str) -> list[dict[str, Any]]:
