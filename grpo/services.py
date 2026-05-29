@@ -2148,7 +2148,9 @@ class GRPOService:
         queryset = ServiceGRPOPosting.objects.select_related(
             "dispatch_plan",
             "posted_by",
-        ).prefetch_related("lines", "attachments")
+        ).prefetch_related("lines", "attachments").filter(
+            dispatch_plan__company__code=self.company_code,
+        )
 
         if dispatch_plan_id:
             queryset = queryset.filter(dispatch_plan_id=dispatch_plan_id)
