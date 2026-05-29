@@ -896,6 +896,10 @@ class ProductionMovementItemSerializer(serializers.Serializer):
     reference = serializers.CharField(allow_blank=True)
     doc_num = serializers.CharField(allow_blank=True)
     created_by = serializers.CharField(allow_blank=True)
+    from_warehouse = serializers.CharField(allow_blank=True)
+    from_warehouse_name = serializers.CharField(allow_blank=True)
+    to_warehouse = serializers.CharField(allow_blank=True)
+    to_warehouse_name = serializers.CharField(allow_blank=True)
 
 
 class ProductionMovementSummarySerializer(serializers.Serializer):
@@ -946,6 +950,105 @@ class ProductionMovementReportSerializer(serializers.Serializer):
     warehouse_summary = ProductionMovementWarehouseSummarySerializer(many=True)
     movement_type_summary = ProductionMovementTypeSummarySerializer(many=True)
     meta = ProductionMovementMetaSerializer()
+
+
+# ---------------------------------------------------------------------------
+# Inventory Reconciliation Dashboard Serializers
+# ---------------------------------------------------------------------------
+
+class InventoryReconciliationFilterSerializer(serializers.Serializer):
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
+    warehouse = serializers.CharField(required=False, max_length=20, allow_blank=True)
+    search = serializers.CharField(required=False, max_length=100, allow_blank=True)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=1000, default=500)
+
+    def validate(self, attrs):
+        date_from = attrs.get("date_from")
+        date_to = attrs.get("date_to")
+        if date_from and date_to and date_from > date_to:
+            raise serializers.ValidationError("date_from cannot be after date_to.")
+        return attrs
+
+
+class InventoryReconciliationSummarySerializer(serializers.Serializer):
+    total_rows = serializers.IntegerField()
+    total_issues = serializers.IntegerField()
+    transfer_mismatches = serializers.IntegerField()
+    production_shortfalls = serializers.IntegerField()
+    component_gaps = serializers.IntegerField()
+    balanced_rows = serializers.IntegerField()
+    total_difference_qty = serializers.FloatField()
+
+
+class TransferReconciliationSerializer(serializers.Serializer):
+    source_type = serializers.CharField()
+    document = serializers.CharField(allow_blank=True)
+    doc_entry = serializers.CharField(allow_blank=True)
+    date = serializers.CharField(allow_blank=True)
+    item_code = serializers.CharField(allow_blank=True)
+    item_name = serializers.CharField(allow_blank=True)
+    from_warehouse = serializers.CharField(allow_blank=True)
+    from_warehouse_name = serializers.CharField(allow_blank=True)
+    to_warehouse = serializers.CharField(allow_blank=True)
+    to_warehouse_name = serializers.CharField(allow_blank=True)
+    expected_qty = serializers.FloatField()
+    actual_qty = serializers.FloatField()
+    difference_qty = serializers.FloatField()
+    entry_count = serializers.IntegerField()
+    status = serializers.CharField()
+    entries = ProductionMovementItemSerializer(many=True)
+
+
+class ProductionReconciliationSerializer(serializers.Serializer):
+    source_type = serializers.CharField()
+    document = serializers.CharField(allow_blank=True)
+    doc_entry = serializers.CharField(allow_blank=True)
+    date = serializers.CharField(allow_blank=True)
+    due_date = serializers.CharField(allow_blank=True)
+    item_code = serializers.CharField(allow_blank=True)
+    item_name = serializers.CharField(allow_blank=True)
+    warehouse = serializers.CharField(allow_blank=True)
+    warehouse_name = serializers.CharField(allow_blank=True)
+    expected_qty = serializers.FloatField()
+    actual_qty = serializers.FloatField()
+    difference_qty = serializers.FloatField()
+    rejected_qty = serializers.FloatField()
+    status = serializers.CharField()
+
+
+class ComponentReconciliationSerializer(serializers.Serializer):
+    source_type = serializers.CharField()
+    document = serializers.CharField(allow_blank=True)
+    doc_entry = serializers.CharField(allow_blank=True)
+    date = serializers.CharField(allow_blank=True)
+    due_date = serializers.CharField(allow_blank=True)
+    parent_item_code = serializers.CharField(allow_blank=True)
+    parent_item_name = serializers.CharField(allow_blank=True)
+    item_code = serializers.CharField(allow_blank=True)
+    item_name = serializers.CharField(allow_blank=True)
+    warehouse = serializers.CharField(allow_blank=True)
+    warehouse_name = serializers.CharField(allow_blank=True)
+    expected_qty = serializers.FloatField()
+    actual_qty = serializers.FloatField()
+    difference_qty = serializers.FloatField()
+    status = serializers.CharField()
+
+
+class InventoryReconciliationMetaSerializer(serializers.Serializer):
+    date_from = serializers.CharField()
+    date_to = serializers.CharField()
+    warehouse = serializers.CharField(allow_blank=True)
+    search = serializers.CharField(allow_blank=True)
+    limit = serializers.IntegerField()
+
+
+class InventoryReconciliationReportSerializer(serializers.Serializer):
+    summary = InventoryReconciliationSummarySerializer()
+    transfer_reconciliations = TransferReconciliationSerializer(many=True)
+    production_reconciliations = ProductionReconciliationSerializer(many=True)
+    component_reconciliations = ComponentReconciliationSerializer(many=True)
+    meta = InventoryReconciliationMetaSerializer()
 
 
 # ---------------------------------------------------------------------------

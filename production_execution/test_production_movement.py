@@ -70,6 +70,8 @@ class ProductionMovementReaderTests(SimpleTestCase):
 
         self.assertIn('SELECT TOP 25', query)
         self.assertIn('INNER JOIN ProductionWarehouses P', query)
+        self.assertIn('LEFT JOIN "TEST_SCHEMA"."WTR1" T', query)
+        self.assertIn('T."LineNum" = O."DocLineNum"', query)
         self.assertIn('O."Warehouse" = ?', query)
         self.assertIn('COALESCE(O."OutQty", 0) > 0', query)
         self.assertIn('O."TransType" IN (?, ?)', query)
@@ -87,6 +89,35 @@ class ProductionMovementReaderTests(SimpleTestCase):
         )
 
         self.assertNotIn('INNER JOIN ProductionWarehouses P', query)
+
+    def test_map_movement_row_includes_transfer_warehouses(self):
+        reader = ProductionMovementReader.__new__(ProductionMovementReader)
+        row = [
+            date(2026, 5, 21),
+            "FG000001",
+            "Finished Item",
+            "Finished Goods",
+            "BH-BS",
+            "Bhakharpur Basement",
+            0,
+            25,
+            -1000,
+            67,
+            "12345",
+            999,
+            55,
+            "BH-BS",
+            "Bhakharpur Basement",
+            "BH-PC",
+            "Bhakharpur Production Consumption",
+        ]
+
+        result = reader._map_movement_row(row)
+
+        self.assertEqual(result["from_warehouse"], "BH-BS")
+        self.assertEqual(result["from_warehouse_name"], "Bhakharpur Basement")
+        self.assertEqual(result["to_warehouse"], "BH-PC")
+        self.assertEqual(result["to_warehouse_name"], "Bhakharpur Production Consumption")
 
     def test_build_stock_balance_query_uses_date_boundaries_and_warehouse(self):
         reader = ProductionMovementReader.__new__(ProductionMovementReader)
