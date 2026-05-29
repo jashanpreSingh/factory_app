@@ -126,6 +126,7 @@ def apply_sales_dispatch_filters(qs, query_params):
     if search:
         qs = qs.filter(
             Q(entry_no__icontains=search)
+            | Q(gatepass_no__icontains=search)
             | Q(sap_doc_num__icontains=search)
             | Q(documents__sap_doc_num__icontains=search)
             | Q(vehicle_no__icontains=search)
