@@ -498,6 +498,66 @@ class GRPOService:
                     return matched_code
         return ""
 
+    @staticmethod
+    def _normalize_dimension_search_text(value: Any) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+    def _product_dimension_candidates_from_summary(
+        self,
+        item_summary: str,
+    ) -> List[str]:
+        normalized_summary = self._normalize_dimension_search_text(item_summary)
+        if not normalized_summary:
+            return []
+
+        candidates = []
+        active_codes = self._get_active_dimension_codes(self.company_code, 1) or {}
+
+        # Prefer exact SAP master-data matches from invoice text. This catches
+        # cases like "COLD PRESS SUNFLOWER" -> OcrCode "SUNFLOWR".
+        for code, name in active_codes.items():
+            for value in (name, code):
+                token = self._normalize_dimension_search_text(value)
+                if len(token) >= 4 and token in normalized_summary:
+                    candidates.append(code)
+                    break
+
+        synonym_candidates = [
+            (("sunflower",), ["SUNFLOWER", "SUNFLOWR"]),
+            (("groundnut", "peanut"), ["GROUNDNUT", "GROUNDNT"]),
+            (("mustard",), ["MUSTARD"]),
+            (("canola",), ["CANOLA"]),
+            (("coconut",), ["COCONUT"]),
+            (("olive",), ["OLIVE"]),
+            (("palm",), ["PALM OIL"]),
+            (("rice bran", "ricebran"), ["RICE BRAN", "RICEBRAN"]),
+            (("soyabean", "soybean", "soya"), ["SOYABEAN"]),
+            (("sesame",), ["SESAME"]),
+            (("cotton seed", "cottonseed"), ["COTTON SEED", "COTTONSD"]),
+            (("ghee",), ["GHEE"]),
+            (("water", "mineral"), ["WATER", "WATRCMPR"]),
+            (("juice",), ["JUICE"]),
+            (("drink", "beverage"), ["BEVERAGE"]),
+        ]
+        for tokens, values in synonym_candidates:
+            if any(token in normalized_summary for token in tokens):
+                candidates.extend(values)
+
+        return candidates
+
+    def _resolve_product_dimension_code(
+        self,
+        item_summary: str,
+        product_variety: str,
+        service_description: str,
+    ) -> str:
+        candidates = [
+            *self._product_dimension_candidates_from_summary(item_summary),
+            product_variety,
+            service_description,
+        ]
+        return self._resolve_active_dimension_code(1, *candidates)
+
     def _infer_budget_delivery_point(self, dispatch_plan: DispatchPlan) -> str:
         active_budget_codes = self._get_active_budget_codes(self.company_code) or {}
         saved_budget = (dispatch_plan.budget_delivery_point or "").strip()
@@ -1841,8 +1901,8 @@ class GRPOService:
                 supply_state=line_data["source_state"],
             )
             line_data["tax_code"] = line_tax_code
-            product_dimension = self._resolve_active_dimension_code(
-                1,
+            product_dimension = self._resolve_product_dimension_code(
+                line_snapshot.get("item_summary", ""),
                 line_data["product_variety"],
                 line_data["service_description"],
             )

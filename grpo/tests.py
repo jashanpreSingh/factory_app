@@ -309,6 +309,26 @@ class GRPOServiceTests(TestCase):
             "WATER",
         )
 
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    def test_service_grpo_product_dimension_uses_invoice_item_summary(
+        self, mock_dimension_codes
+    ):
+        """Specific invoice items should map to SAP variety codes, not generic Oil."""
+        mock_dimension_codes.return_value = {
+            "SUNFLOWR": "SUNFLOWER",
+            "CANOLA": "CANOLA",
+        }
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_product_dimension_code(
+                "FG0000053 - COLD PRESS SUNFLOWER 5 LTR",
+                "Oil",
+                "Oil",
+            ),
+            "SUNFLOWR",
+        )
+
     def test_get_grpo_preview_data(self):
         """Test getting GRPO preview data returns all PO details for pre-fill"""
         service = GRPOService(company_code="TC001")
