@@ -261,6 +261,62 @@ class AttachmentWriterTests(TestCase):
         self.assertIn("not accessible from the backend host", str(context.exception))
         mock_post.assert_called_once()
 
+    def test_upload_uses_file_uploader_and_validates_sap_metadata(self):
+        self.mock_context.company_code = "JIVO_OIL"
+        with (
+            patch("sap_client.service_layer.attachment_writer.ServiceLayerSession") as mock_session_class,
+            patch("sap_client.service_layer.attachment_writer.FileUploaderClient") as mock_uploader_class,
+            patch("sap_client.service_layer.attachment_writer.requests.post") as mock_post,
+            patch("sap_client.service_layer.attachment_writer.requests.get") as mock_get,
+            patch.object(
+                self.writer,
+                "_get_attachment_source_path",
+                return_value=r"C:\SAP Attachments\Jivo Oil\Attachments\\",
+            ),
+        ):
+            mock_session = MagicMock()
+            mock_session.login.return_value = {"B1SESSION": "abc123"}
+            mock_session_class.return_value = mock_session
+
+            mock_uploader_class.is_enabled.return_value = True
+            mock_uploader = mock_uploader_class.return_value
+            mock_uploader.upload.return_value = {
+                "id": 321,
+                "original_name": "proof.jpeg",
+                "stored_name": "proof_v2.jpeg",
+            }
+
+            post_response = MagicMock()
+            post_response.status_code = 201
+            post_response.json.return_value = {"AbsoluteEntry": 987}
+            mock_post.return_value = post_response
+
+            get_response = MagicMock()
+            get_response.status_code = 200
+            get_response.json.return_value = {
+                "Attachments2_Lines": [
+                    {
+                        "SourcePath": r"C:\SAP Attachments\Jivo Oil\Attachments",
+                        "FileName": "proof_v2",
+                        "FileExtension": "jpeg",
+                    }
+                ]
+            }
+            mock_get.return_value = get_response
+
+            result = self.writer.upload(self._temp_file(".jpeg"), "proof.jpeg")
+
+        self.assertEqual(result["AbsoluteEntry"], 987)
+        self.assertEqual(result["UploaderFileId"], 321)
+        self.assertEqual(result["StoredFileName"], "proof_v2.jpeg")
+        payload = mock_post.call_args.kwargs["json"]
+        line = payload["Attachments2_Lines"][0]
+        self.assertEqual(line["SourcePath"], r"C:\SAP Attachments\Jivo Oil\Attachments")
+        self.assertEqual(line["FileName"], "proof_v2")
+        self.assertEqual(line["FileExtension"], "jpeg")
+        self.assertEqual(line["CopyToTargetDoc"], "tYES")
+        mock_get.assert_called_once()
+
     @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
     @patch("sap_client.service_layer.attachment_writer.requests.post")
     def test_upload_can_create_metadata_entry_when_direct_copy_is_not_accessible(
@@ -395,6 +451,72 @@ class AttachmentWriterTests(TestCase):
         kwargs = mock_patch.call_args.kwargs
         self.assertIn("files", kwargs)
         self.assertNotIn("json", kwargs)
+
+    def test_add_line_uses_file_uploader_and_validates_sap_metadata(self):
+        self.mock_context.company_code = "JIVO_OIL"
+        with (
+            patch("sap_client.service_layer.attachment_writer.ServiceLayerSession") as mock_session_class,
+            patch("sap_client.service_layer.attachment_writer.FileUploaderClient") as mock_uploader_class,
+            patch("sap_client.service_layer.attachment_writer.requests.get") as mock_get,
+            patch("sap_client.service_layer.attachment_writer.requests.patch") as mock_patch,
+        ):
+            mock_session = MagicMock()
+            mock_session.login.return_value = {"B1SESSION": "abc123"}
+            mock_session_class.return_value = mock_session
+
+            mock_uploader_class.is_enabled.return_value = True
+            mock_uploader = mock_uploader_class.return_value
+            mock_uploader.upload.return_value = {
+                "id": 654,
+                "original_name": "extra.pdf",
+                "stored_name": "extra_v2.pdf",
+            }
+
+            existing_response = MagicMock()
+            existing_response.status_code = 200
+            existing_response.json.return_value = {
+                "Attachments2_Lines": [
+                    {
+                        "SourcePath": r"C:\SAP Attachments\Jivo Oil\Attachments",
+                        "FileName": "existing",
+                        "FileExtension": "pdf",
+                    }
+                ]
+            }
+            verify_response = MagicMock()
+            verify_response.status_code = 200
+            verify_response.json.return_value = {
+                "Attachments2_Lines": [
+                    {
+                        "SourcePath": r"C:\SAP Attachments\Jivo Oil\Attachments",
+                        "FileName": "existing",
+                        "FileExtension": "pdf",
+                    },
+                    {
+                        "SourcePath": r"C:\SAP Attachments\Jivo Oil\Attachments",
+                        "FileName": "extra_v2",
+                        "FileExtension": "pdf",
+                    },
+                ]
+            }
+            mock_get.side_effect = [existing_response, verify_response]
+
+            patch_response = MagicMock()
+            patch_response.status_code = 204
+            mock_patch.return_value = patch_response
+
+            result = self.writer.add_line_to_existing_attachment(
+                absolute_entry=123,
+                file_path=self._temp_file(".pdf"),
+                filename="extra.pdf",
+            )
+
+        self.assertEqual(result["AbsoluteEntry"], 123)
+        self.assertEqual(result["UploaderFileId"], 654)
+        payload = mock_patch.call_args.kwargs["json"]
+        self.assertEqual(len(payload["Attachments2_Lines"]), 2)
+        self.assertEqual(payload["Attachments2_Lines"][1]["FileName"], "extra_v2")
+        self.assertEqual(mock_get.call_count, 2)
 
     @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
     @patch("sap_client.service_layer.attachment_writer.requests.get")
