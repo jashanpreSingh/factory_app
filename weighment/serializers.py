@@ -23,3 +23,18 @@ class WeighmentSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def validate(self, attrs):
+        gross_weight = attrs.get("gross_weight", getattr(self.instance, "gross_weight", None))
+        tare_weight = attrs.get("tare_weight", getattr(self.instance, "tare_weight", None))
+
+        if gross_weight is not None and gross_weight < 0:
+            raise serializers.ValidationError({"gross_weight": "Gross weight cannot be negative."})
+        if tare_weight is not None and tare_weight < 0:
+            raise serializers.ValidationError({"tare_weight": "Tare weight cannot be negative."})
+        if gross_weight is not None and tare_weight is not None and tare_weight > gross_weight:
+            raise serializers.ValidationError(
+                {"tare_weight": "Tare weight cannot be greater than gross weight."}
+            )
+
+        return attrs

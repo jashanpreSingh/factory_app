@@ -91,6 +91,23 @@ def get_sales_dispatch_or_404(company, entry_id):
     return get_object_or_404(sales_dispatch_queryset(company), id=entry_id)
 
 
+def get_sales_dispatch_dispatch_weight_error(entry):
+    weighment = getattr(entry.vehicle_entry, "weighment", None)
+    if not weighment:
+        return "Gross and tare weighment are required before marking Docking as dispatched."
+
+    gross_weight = weighment.gross_weight
+    tare_weight = weighment.tare_weight
+    if gross_weight is None or gross_weight <= 0:
+        return "Gross weight is required before marking Docking as dispatched."
+    if tare_weight is None or tare_weight < 0:
+        return "Tare weight from empty vehicle in is required before marking Docking as dispatched."
+    if tare_weight > gross_weight:
+        return "Tare weight cannot be greater than gross weight."
+
+    return ""
+
+
 def get_sales_dispatch_for_update_or_404(company, entry_id):
     return get_object_or_404(
         SalesDispatchGateOut.objects.select_for_update().filter(
@@ -1473,6 +1490,9 @@ class SalesDispatchMarkDispatchedView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        weight_error = get_sales_dispatch_dispatch_weight_error(entry)
+        if weight_error:
+            return Response({"detail": weight_error}, status=status.HTTP_400_BAD_REQUEST)
         with transaction.atomic():
             entry.status = SalesDispatchGateOutStatus.DISPATCHED
             entry.gate_out_date = timezone.localdate()

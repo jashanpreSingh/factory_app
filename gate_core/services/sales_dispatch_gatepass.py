@@ -28,12 +28,22 @@ def get_gatepass_readiness(entry: SalesDispatchGateOut) -> Dict:
     if not entry.items.exists():
         missing.append("document_items")
 
+    weighment = getattr(entry.vehicle_entry, "weighment", None)
+    has_weighment = bool(
+        weighment
+        and weighment.gross_weight is not None
+        and weighment.gross_weight > 0
+        and weighment.tare_weight is not None
+        and weighment.tare_weight >= 0
+        and weighment.tare_weight <= weighment.gross_weight
+    )
+
     return {
         "ready": not missing,
         "missing": missing,
         "has_truck_photo_geolocation": "truck_photo_geolocation" not in missing,
         "has_box_scans": "box_scans" not in missing,
-        "has_weighment": True,
+        "has_weighment": has_weighment,
         "has_items": "document_items" not in missing,
     }
 

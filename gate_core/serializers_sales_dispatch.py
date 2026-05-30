@@ -291,6 +291,9 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
     gross_weight = serializers.SerializerMethodField()
     tare_weight = serializers.SerializerMethodField()
     net_weight = serializers.SerializerMethodField()
+    weighbridge_slip_no = serializers.SerializerMethodField()
+    first_weighment_time = serializers.SerializerMethodField()
+    second_weighment_time = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesDispatchGateOut
@@ -383,6 +386,9 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
             "gross_weight",
             "tare_weight",
             "net_weight",
+            "weighbridge_slip_no",
+            "first_weighment_time",
+            "second_weighment_time",
             "gatepass_readiness",
             "items",
             "attachments",
@@ -432,6 +438,15 @@ class SalesDispatchGateOutSerializer(serializers.ModelSerializer):
 
     def get_net_weight(self, obj):
         return self._weighment_value(obj, "net_weight")
+
+    def get_weighbridge_slip_no(self, obj):
+        return self._weighment_value(obj, "weighbridge_slip_no")
+
+    def get_first_weighment_time(self, obj):
+        return self._weighment_value(obj, "first_weighment_time")
+
+    def get_second_weighment_time(self, obj):
+        return self._weighment_value(obj, "second_weighment_time")
 
     def get_box_scans(self, obj):
         return SalesDispatchBoxScanSerializer(

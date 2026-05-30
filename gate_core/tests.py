@@ -849,6 +849,33 @@ class SalesDispatchAPITests(APITestCase):
         entry.refresh_from_db()
         self.assertEqual(entry.status, SalesDispatchGateOutStatus.PRINT_COMMITTED)
 
+    def test_mark_dispatched_requires_gross_weighment(self):
+        entry = self.create_sales_dispatch(
+            "24",
+            status_value=SalesDispatchGateOutStatus.PRINT_COMMITTED,
+        )
+        entry.gatepass_no = "DCK/JIVO_OIL/2026-27/000024"
+        entry.print_committed_at = timezone.now()
+        entry.save(update_fields=["gatepass_no", "print_committed_at"])
+        Weighment.objects.create(
+            vehicle_entry=entry.vehicle_entry,
+            tare_weight=Decimal("250.000"),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.post(
+            f"/api/v1/gate-core/sales-dispatch/{entry.id}/dispatch/",
+            {},
+            format="json",
+            **self.company_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Gross weight", response.data["detail"])
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, SalesDispatchGateOutStatus.PRINT_COMMITTED)
+
     @patch("gate_core.views_sales_dispatch.SalesDispatchDocumentService.get_document")
     def test_create_sales_dispatch_keeps_single_document_payload_compatible(self, get_document):
         get_document.return_value = self.sap_document(626050342, doc_num="626050342")
