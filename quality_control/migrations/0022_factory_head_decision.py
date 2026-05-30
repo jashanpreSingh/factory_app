@@ -10,7 +10,7 @@ def ensure_factory_head_group_permissions(apps, schema_editor):
     Group = apps.get_model("auth", "Group")
     Permission = apps.get_model("auth", "Permission")
 
-    content_type = ContentType.objects.get(
+    content_type, _ = ContentType.objects.get_or_create(
         app_label="quality_control",
         model="rawmaterialinspection",
     )

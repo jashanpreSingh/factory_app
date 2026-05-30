@@ -1186,9 +1186,12 @@ class BarcodeService:
                 f"Pallet capacity exceeded. Maximum boxes allowed: {pallet.max_box_count}."
             )
 
-        reuse_cleared_pallet = pallet.status == PalletStatus.CLEARED and pallet_is_empty
+        reuse_empty_pallet = pallet_is_empty and pallet.status in (
+            PalletStatus.ACTIVE,
+            PalletStatus.CLEARED,
+        )
         pallet_has_item_context = bool(pallet.item_code or pallet.batch_number or pallet.uom)
-        if pallet_has_item_context and not reuse_cleared_pallet:
+        if pallet_has_item_context and not reuse_empty_pallet:
             for box in boxes:
                 if (
                     box.item_code != pallet.item_code or
@@ -1211,7 +1214,7 @@ class BarcodeService:
                 pallet.production_line = first_box.production_line
             if not pallet.production_run:
                 pallet.production_run = first_box.production_run
-            if reuse_cleared_pallet:
+            if reuse_empty_pallet and pallet.status == PalletStatus.CLEARED:
                 pallet.status = PalletStatus.ACTIVE
             pallet.barcode_data = self._build_pallet_barcode_data(pallet)
             pallet.save(update_fields=[

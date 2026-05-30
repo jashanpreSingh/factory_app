@@ -10,6 +10,13 @@ from .models import (
     JobWorkGateInItem,
     RejectedQCReturnEntry,
     RejectedQCReturnItem,
+    SalesDispatchAttachment,
+    SalesDispatchGateOut,
+    SalesDispatchGateOutDocument,
+    SalesDispatchGateOutItem,
+    SalesDispatchGatepassPrintLog,
+    SalesDispatchGatepassSequence,
+    SalesDispatchLock,
     UnitChoice,
 )
 
@@ -41,6 +48,139 @@ class BSTGateOutAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("entry_no", "created_at", "updated_at")
     inlines = [BSTGateOutItemInline]
+
+
+class SalesDispatchGateOutItemInline(admin.TabularInline):
+    model = SalesDispatchGateOutItem
+    extra = 0
+    readonly_fields = (
+        "document", "line_num", "item_code", "item_name", "quantity", "uom",
+        "warehouse_code", "from_warehouse", "to_warehouse",
+    )
+
+
+class SalesDispatchGateOutDocumentInline(admin.TabularInline):
+    model = SalesDispatchGateOutDocument
+    extra = 0
+    readonly_fields = (
+        "document_type", "sap_doc_entry", "sap_doc_num", "customer_name",
+        "sap_branch_id", "sap_doc_total", "dispatch_plan",
+    )
+
+
+class SalesDispatchAttachmentInline(admin.TabularInline):
+    model = SalesDispatchAttachment
+    extra = 0
+    readonly_fields = ("uploaded_at", "uploaded_by", "original_filename")
+
+
+class SalesDispatchGatepassPrintLogInline(admin.TabularInline):
+    model = SalesDispatchGatepassPrintLog
+    extra = 0
+    readonly_fields = (
+        "gatepass_no",
+        "entry_status",
+        "copy_number",
+        "print_type",
+        "reprint_reason",
+        "printed_by",
+        "printed_at",
+        "printer_name",
+        "ip_address",
+    )
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SalesDispatchGateOut)
+class SalesDispatchGateOutAdmin(admin.ModelAdmin):
+    list_display = (
+        "entry_no", "company", "document_type", "sap_doc_num",
+        "vehicle_no", "driver_name", "status", "gatepass_no", "created_at",
+    )
+    list_filter = ("company", "document_type", "status", "created_at")
+    search_fields = (
+        "entry_no", "vehicle_entry__entry_no", "sap_doc_num",
+        "vehicle_no", "driver_name", "customer_name", "gatepass_no",
+    )
+    readonly_fields = ("entry_no", "gatepass_no", "created_at", "updated_at")
+    inlines = [
+        SalesDispatchGateOutDocumentInline,
+        SalesDispatchGateOutItemInline,
+        SalesDispatchAttachmentInline,
+        SalesDispatchGatepassPrintLogInline,
+    ]
+
+
+@admin.register(SalesDispatchGateOutDocument)
+class SalesDispatchGateOutDocumentAdmin(admin.ModelAdmin):
+    list_display = (
+        "sales_dispatch", "company", "document_type", "sap_doc_num",
+        "customer_name", "sap_branch_id", "created_at",
+    )
+    list_filter = ("company", "document_type", "sap_branch_id")
+    search_fields = (
+        "sales_dispatch__entry_no", "sap_doc_num", "customer_name", "customer_code",
+    )
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(SalesDispatchGatepassSequence)
+class SalesDispatchGatepassSequenceAdmin(admin.ModelAdmin):
+    list_display = ("company", "financial_year", "last_number", "updated_at")
+    list_filter = ("company", "financial_year")
+
+
+@admin.register(SalesDispatchGatepassPrintLog)
+class SalesDispatchGatepassPrintLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "gatepass_no",
+        "company",
+        "sales_dispatch",
+        "print_type",
+        "copy_number",
+        "printed_by",
+        "printed_at",
+        "printer_name",
+    )
+    list_filter = ("company", "print_type", "printed_at")
+    search_fields = (
+        "gatepass_no",
+        "sales_dispatch__entry_no",
+        "sales_dispatch__vehicle_no",
+        "printed_by__email",
+        "printed_by__full_name",
+        "reprint_reason",
+    )
+    readonly_fields = (
+        "company",
+        "sales_dispatch",
+        "gatepass_no",
+        "entry_status",
+        "copy_number",
+        "print_type",
+        "reprint_reason",
+        "printed_by",
+        "printed_at",
+        "printer_name",
+        "ip_address",
+        "user_agent",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(SalesDispatchLock)
+class SalesDispatchLockAdmin(admin.ModelAdmin):
+    list_display = ("company", "is_locked", "changed_by", "changed_at", "updated_at")
+    list_filter = ("company", "is_locked")
+    search_fields = ("company__name", "company__code", "reason")
+    readonly_fields = ("created_at", "updated_at", "changed_at")
 
 
 class JobWorkGateInItemInline(admin.TabularInline):

@@ -9,3 +9,17 @@ from .bst_gate_out import BSTGateOut, BSTGateOutItem
 from .bst_gate_in import BSTGateIn, BSTGateInItem
 from .bst_gate_return import BSTGateReturn
 from .job_work_gate_in import JobWorkGateIn, JobWorkGateInItem
+from .sales_dispatch import (
+    SalesDispatchAttachment,
+    SalesDispatchBoxScan,
+    SalesDispatchAttachmentType,
+    SalesDispatchDocumentType,
+    SalesDispatchGateOut,
+    SalesDispatchGateOutDocument,
+    SalesDispatchGateOutItem,
+    SalesDispatchGateOutStatus,
+    SalesDispatchGatepassPrintLog,
+    SalesDispatchGatepassPrintType,
+    SalesDispatchGatepassSequence,
+    SalesDispatchLock,
+)

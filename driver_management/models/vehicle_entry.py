@@ -17,6 +17,7 @@ class VehicleEntry(GateEntryBase):
         ("BST_IN", "BST In"),
         ("BST_RETURN", "BST Return"),
         ("JOB_WORK", "Job Work"),
+        ("SALES_DISPATCH", "Sales Dispatch"),
     )
 
     company = models.ForeignKey(

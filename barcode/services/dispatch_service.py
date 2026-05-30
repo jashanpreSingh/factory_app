@@ -991,6 +991,31 @@ class BarcodeDispatchService:
         }
         active_line = self._get_active_line(session)
 
+        existing_unit = (
+            DispatchScannedUnit.objects
+            .select_for_update()
+            .filter(
+                session=session,
+                barcode_value=box.box_barcode,
+                entity_type=DispatchScanEntityType.BOX,
+            )
+            .exclude(scan_status=DispatchScannedUnitStatus.REMOVED)
+            .first()
+        )
+        if existing_unit:
+            return self._log_rejected_scan(
+                session=session,
+                line=existing_unit.line,
+                raw_barcode=raw_barcode,
+                resolved={**resolved, "qty": existing_unit.dispatch_qty},
+                reject_code="BOX_ALREADY_SCANNED",
+                reject_message="This box is already scanned.",
+                user=user,
+                device_id=device_id,
+                request_id=request_id,
+                ip_address=ip_address,
+            )
+
         if box.status == BoxStatus.DISPATCHED or box.dispatch_session_id:
             through_pallet = DispatchScannedUnit.objects.filter(box=box, pallet__isnull=False).exists()
             message = (
@@ -1080,31 +1105,6 @@ class BarcodeDispatchService:
             },
         }
 
-        existing_unit = (
-            DispatchScannedUnit.objects
-            .select_for_update()
-            .filter(
-                session=session,
-                barcode_value=box.box_barcode,
-                entity_type=DispatchScanEntityType.BOX,
-            )
-            .exclude(scan_status=DispatchScannedUnitStatus.REMOVED)
-            .first()
-        )
-        if existing_unit:
-            return self._log_rejected_scan(
-                session=session,
-                line=existing_unit.line,
-                raw_barcode=raw_barcode,
-                resolved={**resolved, "qty": existing_unit.dispatch_qty},
-                reject_code="BOX_ALREADY_SCANNED",
-                reject_message="This box is already scanned.",
-                user=user,
-                device_id=device_id,
-                request_id=request_id,
-                ip_address=ip_address,
-            )
-
         scan_log = self._create_accepted_scan_log(
             session=session,
             line=line,
@@ -1133,6 +1133,17 @@ class BarcodeDispatchService:
             batch_number=box.batch_number,
             uom=box.uom,
         )
+        if (
+            box.pallet_id
+            and remaining_qty <= 0
+            and not self.settings.allow_partial_pallet_dispatch
+        ):
+            self._remove_box_from_pallet_for_dispatch(
+                box=box,
+                session=session,
+                user=user,
+                remarks="Box removed from pallet because it was staged for separate dispatch.",
+            )
 
         self._increment_line(line, dispatch_qty)
         self._refresh_session_after_scan(session, user)
@@ -1727,6 +1738,53 @@ class BarcodeDispatchService:
             scan_status=scan_status,
         )
 
+    def _remove_box_from_pallet_for_dispatch(
+        self,
+        *,
+        box: Box,
+        session: DispatchSession,
+        user,
+        remarks: str,
+    ) -> Pallet | None:
+        old_pallet = box.pallet
+        if not old_pallet:
+            return None
+        old_status = box.status
+        now = timezone.now()
+        box.pallet = None
+        box.removed_from_pallet_at = box.removed_from_pallet_at or now
+        box.removed_from_pallet_reason = (
+            box.removed_from_pallet_reason
+            or "Dispatched separately from pallet."
+        )
+        box.save(update_fields=[
+            "pallet",
+            "removed_from_pallet_at",
+            "removed_from_pallet_reason",
+            "updated_at",
+        ])
+        PalletBoxHistory.objects.create(
+            company=self.company,
+            pallet=old_pallet,
+            box=box,
+            action="BOX_DISPATCHED_SEPARATELY",
+            old_status=old_status,
+            new_status=box.status,
+            dispatch_session=session,
+            remarks=remarks,
+            created_by=user,
+        )
+        BoxMovement.objects.create(
+            company=self.company,
+            box=box,
+            movement_type=BoxMovementType.REMOVE_FOR_DISPATCH,
+            from_warehouse=box.current_warehouse,
+            from_pallet=old_pallet,
+            performed_by=user,
+        )
+        self._recalculate_pallet_state(old_pallet)
+        return old_pallet
+
     def _increment_line(self, line: DispatchSessionLine, qty: Decimal) -> None:
         self._adjust_line(line, qty)
 
@@ -1776,7 +1834,7 @@ class BarcodeDispatchService:
         units = (
             DispatchScannedUnit.objects
             .select_for_update(of=("self",))
-            .select_related("box", "pallet")
+            .select_related("box", "pallet", "scan_log")
             .filter(
                 session=session,
                 entity_type=DispatchScanEntityType.BOX,
@@ -1798,6 +1856,12 @@ class BarcodeDispatchService:
             old_status = box.status
             dispatch_qty = unit.dispatch_qty
             remaining_qty = max(unit.total_box_qty - dispatch_qty, Decimal("0"))
+            via_pallet_scan = (
+                old_pallet is not None
+                and unit.pallet_id == old_pallet.id
+                and unit.scan_log_id
+                and unit.scan_log.entity_type == DispatchScanEntityType.PALLET
+            )
             if old_pallet:
                 pallet_dispatch_qty[old_pallet.id] += dispatch_qty
             if dispatch_qty <= 0:
@@ -1808,32 +1872,16 @@ class BarcodeDispatchService:
                 continue
 
             if remaining_qty <= 0:
-                if old_pallet:
-                    box.pallet = None
-                    box.removed_from_pallet_at = box.removed_from_pallet_at or now
-                    box.removed_from_pallet_reason = (
-                        box.removed_from_pallet_reason
-                        or "Dispatched separately from pallet."
-                    )
-                    PalletBoxHistory.objects.create(
-                        company=self.company,
-                        pallet=old_pallet,
+                if old_pallet and not via_pallet_scan:
+                    removed_pallet = self._remove_box_from_pallet_for_dispatch(
                         box=box,
-                        action="BOX_DISPATCHED_SEPARATELY",
-                        old_status=old_status,
-                        new_status=BoxStatus.DISPATCHED,
-                        dispatch_session=session,
+                        session=session,
+                        user=user,
                         remarks="Box removed from pallet because it was dispatched separately.",
-                        created_by=user,
                     )
-                    BoxMovement.objects.create(
-                        company=self.company,
-                        box=box,
-                        movement_type=BoxMovementType.REMOVE_FOR_DISPATCH,
-                        from_warehouse=box.current_warehouse,
-                        from_pallet=old_pallet,
-                        performed_by=user,
-                    )
+                    if removed_pallet:
+                        pallets_to_recalculate[removed_pallet.id] = removed_pallet
+                elif old_pallet:
                     pallets_to_recalculate[old_pallet.id] = old_pallet
 
                 box.status = BoxStatus.DISPATCHED

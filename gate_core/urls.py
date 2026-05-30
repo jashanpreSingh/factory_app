@@ -16,6 +16,7 @@ from .views import (
     BSTGateReturnEligibleOutsView,
     BSTGateReturnListCreateView,
     EmptyVehicleEligibleEntriesView,
+    EmptyVehicleGateInCompleteView,
     EmptyVehicleGateInDetailView,
     EmptyVehicleGateInEligibleView,
     EmptyVehicleGateInListCreateView,
@@ -42,6 +43,27 @@ from .views import (
     SAPStockTransferDetailView,
     SAPStockTransferListView,
 )
+from .views_sales_dispatch import (
+    SalesDispatchAttachmentListCreateView,
+    SalesDispatchBoxScanDetailView,
+    SalesDispatchBoxScanListCreateView,
+    SalesDispatchCancelView,
+    SalesDispatchCommitPrintView,
+    SalesDispatchDocumentDetailView,
+    SalesDispatchDocumentListView,
+    SalesDispatchGateOutByVehicleEntryView,
+    SalesDispatchGateOutDetailView,
+    SalesDispatchGateOutListCreateView,
+    SalesDispatchGatepassPrintHistoryView,
+    SalesDispatchGatepassPreviewView,
+    SalesDispatchGatepassPrintView,
+    SalesDispatchGatepassReprintView,
+    SalesDispatchLockView,
+    SalesDispatchMarkDispatchedView,
+    SalesDispatchPendingBookingListView,
+    SalesDispatchReportView,
+    SalesDispatchRejectView,
+)
 
 urlpatterns = [
     # Unit Choice URLs
@@ -58,6 +80,7 @@ urlpatterns = [
     path('empty-vehicle-ins/reasons/', EmptyVehicleGateInReasonListView.as_view(), name='empty_vehicle_gate_in_reasons'),
     path('empty-vehicle-ins/eligible/', EmptyVehicleGateInEligibleView.as_view(), name='empty_vehicle_gate_in_eligible'),
     path('empty-vehicle-ins/', EmptyVehicleGateInListCreateView.as_view(), name='empty_vehicle_gate_in_list_create'),
+    path('empty-vehicle-ins/<int:entry_id>/complete/', EmptyVehicleGateInCompleteView.as_view(), name='empty_vehicle_gate_in_complete'),
     path('empty-vehicle-ins/<int:entry_id>/', EmptyVehicleGateInDetailView.as_view(), name='empty_vehicle_gate_in_detail'),
 
     # Empty Vehicle gate-out URLs
@@ -74,6 +97,27 @@ urlpatterns = [
     path('bst-outs/', BSTGateOutListCreateView.as_view(), name='bst_gate_out_list_create'),
     path('bst-outs/<int:entry_id>/cancel/', BSTGateOutCancelView.as_view(), name='bst_gate_out_cancel'),
     path('bst-outs/<int:entry_id>/', BSTGateOutDetailView.as_view(), name='bst_gate_out_detail'),
+
+    # Docking / sales dispatch gate-out URLs
+    path('sales-dispatch/documents/', SalesDispatchDocumentListView.as_view(), name='sales_dispatch_documents'),
+    path('sales-dispatch/documents/<str:document_type>/<int:doc_entry>/', SalesDispatchDocumentDetailView.as_view(), name='sales_dispatch_document_detail'),
+    path('sales-dispatch/lock/', SalesDispatchLockView.as_view(), name='sales_dispatch_lock'),
+    path('sales-dispatch/reports/', SalesDispatchReportView.as_view(), name='sales_dispatch_reports'),
+    path('sales-dispatch/pending-bookings/', SalesDispatchPendingBookingListView.as_view(), name='sales_dispatch_pending_bookings'),
+    path('sales-dispatch/by-vehicle-entry/<int:vehicle_entry_id>/', SalesDispatchGateOutByVehicleEntryView.as_view(), name='sales_dispatch_by_vehicle_entry'),
+    path('sales-dispatch/<int:entry_id>/attachments/', SalesDispatchAttachmentListCreateView.as_view(), name='sales_dispatch_attachments'),
+    path('sales-dispatch/<int:entry_id>/box-scans/', SalesDispatchBoxScanListCreateView.as_view(), name='sales_dispatch_box_scans'),
+    path('sales-dispatch/<int:entry_id>/box-scans/<int:scan_id>/', SalesDispatchBoxScanDetailView.as_view(), name='sales_dispatch_box_scan_detail'),
+    path('sales-dispatch/<int:entry_id>/gatepass/preview/', SalesDispatchGatepassPreviewView.as_view(), name='sales_dispatch_gatepass_preview'),
+    path('sales-dispatch/<int:entry_id>/gatepass/print/', SalesDispatchGatepassPrintView.as_view(), name='sales_dispatch_gatepass_print'),
+    path('sales-dispatch/<int:entry_id>/gatepass/reprint/', SalesDispatchGatepassReprintView.as_view(), name='sales_dispatch_gatepass_reprint'),
+    path('sales-dispatch/<int:entry_id>/gatepass/prints/', SalesDispatchGatepassPrintHistoryView.as_view(), name='sales_dispatch_gatepass_prints'),
+    path('sales-dispatch/<int:entry_id>/commit-print/', SalesDispatchCommitPrintView.as_view(), name='sales_dispatch_commit_print'),
+    path('sales-dispatch/<int:entry_id>/dispatch/', SalesDispatchMarkDispatchedView.as_view(), name='sales_dispatch_mark_dispatched'),
+    path('sales-dispatch/<int:entry_id>/reject/', SalesDispatchRejectView.as_view(), name='sales_dispatch_reject'),
+    path('sales-dispatch/<int:entry_id>/cancel/', SalesDispatchCancelView.as_view(), name='sales_dispatch_cancel'),
+    path('sales-dispatch/<int:entry_id>/', SalesDispatchGateOutDetailView.as_view(), name='sales_dispatch_detail'),
+    path('sales-dispatch/', SalesDispatchGateOutListCreateView.as_view(), name='sales_dispatch_list_create'),
 
     # BST gate-in URLs
     path('bst-ins/eligible-outs/', BSTGateInEligibleOutsView.as_view(), name='bst_gate_in_eligible_outs'),

@@ -35,15 +35,7 @@ class WeighmentCreateUpdateAPI(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(created_by=request.user, updated_by=request.user)
 
-        return Response(
-            {
-                "id": weighment.id,
-                "gross_weight": weighment.gross_weight,
-                "tare_weight": weighment.tare_weight,
-                "net_weight": weighment.net_weight,
-            },
-            status=status.HTTP_200_OK
-        )
+        return Response(WeighmentSerializer(weighment).data, status=status.HTTP_200_OK)
 
 
 class WeighmentDetailAPI(APIView):

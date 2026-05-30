@@ -7,6 +7,24 @@ Uses Django's built-in permission system instead of role-based access.
 from rest_framework.permissions import BasePermission
 
 
+class HasRequiredDjangoPermission(BasePermission):
+    """Checks a view's required Django permission or method-permission map."""
+
+    def has_permission(self, request, view):
+        required_permissions = getattr(view, "required_permissions", None)
+        if callable(required_permissions):
+            required_permissions = required_permissions(request)
+        elif isinstance(required_permissions, dict):
+            required_permissions = required_permissions.get(request.method, [])
+
+        if not required_permissions:
+            return True
+        if isinstance(required_permissions, str):
+            required_permissions = [required_permissions]
+
+        return all(request.user.has_perm(permission) for permission in required_permissions)
+
+
 # Gate Entry Permissions
 
 class CanViewGateEntry(BasePermission):
