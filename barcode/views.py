@@ -257,7 +257,7 @@ class PalletListAPI(APIView):
 
 
 class PalletDetailAPI(APIView):
-    """Get pallet detail with boxes and movement history."""
+    """Get or delete a pallet. Delete is allowed only for empty pallets."""
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def get(self, request, pallet_id):
@@ -267,6 +267,17 @@ class PalletDetailAPI(APIView):
             return Response(PalletDetailSerializer(pallet).data)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pallet_id):
+        try:
+            svc = _get_service(request)
+            pallet_code = svc.delete_empty_pallet(pallet_id)
+            return Response(
+                {'message': f'Empty pallet {pallet_code} deleted.'},
+                status=status.HTTP_200_OK,
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ===========================================================================
