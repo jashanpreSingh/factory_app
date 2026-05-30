@@ -508,6 +508,22 @@ class BarcodeService:
             raise ValueError(f"Pallet {pallet_id} not found.")
 
     @transaction.atomic
+    def delete_empty_pallet(self, pallet_id: int) -> str:
+        pallet = self.get_pallet(pallet_id)
+        pallet_code = pallet.pallet_id
+
+        if pallet.boxes.exists():
+            raise ValueError("Only empty pallets can be deleted. This pallet has boxes attached.")
+        if pallet.dispatch_session_id or pallet.dispatched_at:
+            raise ValueError("This pallet cannot be deleted because it is linked with dispatch.")
+        if pallet.dispatch_scanned_units.exists():
+            raise ValueError("This pallet cannot be deleted because it has dispatch scan history.")
+
+        pallet.delete()
+        logger.info(f"Empty pallet {pallet_code} deleted")
+        return pallet_code
+
+    @transaction.atomic
     def void_pallet(self, pallet_id: int, reason: str, user) -> Pallet:
         pallet = self.get_pallet(pallet_id)
         if pallet.status == PalletStatus.VOID:
