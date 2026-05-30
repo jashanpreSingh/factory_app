@@ -724,6 +724,7 @@ class GRPOService:
         return VehicleEntry.objects.filter(
             company__code=self.company_code,
             entry_type="RAW_MATERIAL",
+            is_active=True,
             status__in=[GateEntryStatus.COMPLETED, GateEntryStatus.QC_COMPLETED]
         ).prefetch_related(
             "po_receipts",
@@ -763,6 +764,7 @@ class GRPOService:
             po_receipt__is_active=True,
             po_receipt__vehicle_entry__company__code=self.company_code,
             po_receipt__vehicle_entry__entry_type="RAW_MATERIAL",
+            po_receipt__vehicle_entry__is_active=True,
         ).exclude(
             po_receipt__vehicle_entry__status=GateEntryStatus.CANCELLED,
         ).aggregate(
@@ -773,6 +775,7 @@ class GRPOService:
         posting_counts = {
             status_key: GRPOPosting.objects.filter(
                 vehicle_entry__company__code=self.company_code,
+                vehicle_entry__is_active=True,
                 status=status_key,
             ).count()
             for status_key in GRPOStatus.values
@@ -798,6 +801,7 @@ class GRPOService:
         return VehicleEntry.objects.filter(
             company__code=self.company_code,
             entry_type="RAW_MATERIAL",
+            is_active=True,
         ).exclude(
             status=GateEntryStatus.CANCELLED,
         ).prefetch_related(
@@ -823,7 +827,11 @@ class GRPOService:
                 "po_receipts__items__arrival_slip",
                 "po_receipts__items__arrival_slip__inspection",
                 "grpo_postings"
-            ).get(id=vehicle_entry_id)
+            ).get(
+                id=vehicle_entry_id,
+                company__code=self.company_code,
+                is_active=True,
+            )
         except VehicleEntry.DoesNotExist:
             raise ValueError(f"Vehicle entry {vehicle_entry_id} not found")
 
@@ -978,7 +986,11 @@ class GRPOService:
         """
         # Get vehicle entry
         try:
-            vehicle_entry = VehicleEntry.objects.get(id=vehicle_entry_id)
+            vehicle_entry = VehicleEntry.objects.get(
+                id=vehicle_entry_id,
+                company__code=self.company_code,
+                is_active=True,
+            )
         except VehicleEntry.DoesNotExist:
             raise ValueError(f"Vehicle entry {vehicle_entry_id} not found")
 
@@ -2171,7 +2183,10 @@ class GRPOService:
             "vehicle_entry",
             "po_receipt",
             "posted_by"
-        ).prefetch_related("lines", "attachments", "po_receipts")
+        ).prefetch_related("lines", "attachments", "po_receipts").filter(
+            vehicle_entry__company__code=self.company_code,
+            vehicle_entry__is_active=True,
+        )
 
         if vehicle_entry_id:
             queryset = queryset.filter(vehicle_entry_id=vehicle_entry_id)

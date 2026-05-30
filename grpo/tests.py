@@ -227,6 +227,61 @@ class GRPOServiceTests(TestCase):
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0].entry_no, "VE-2024-001")
 
+    def test_inactive_gate_entries_are_hidden_from_grpo(self):
+        """Soft-deleted gate entries should not appear in material GRPO surfaces."""
+        inactive_entry = VehicleEntry.objects.create(
+            entry_no="VE-2024-INACTIVE",
+            company=self.company,
+            vehicle=self.vehicle,
+            driver=self.driver,
+            entry_type="RAW_MATERIAL",
+            status=GateEntryStatus.QC_COMPLETED,
+            is_active=False,
+        )
+        inactive_po = POReceipt.objects.create(
+            vehicle_entry=inactive_entry,
+            po_number="PO-INACTIVE",
+            supplier_code="SUP999",
+            supplier_name="Inactive Supplier",
+            sap_doc_entry=99999,
+        )
+        POItemReceipt.objects.create(
+            po_receipt=inactive_po,
+            po_item_code="ITEM-INACTIVE",
+            item_name="Inactive Item",
+            ordered_qty=Decimal("1000.000"),
+            received_qty=Decimal("1000.000"),
+            accepted_qty=Decimal("1000.000"),
+            rejected_qty=Decimal("0.000"),
+            sap_line_num=0,
+            uom="KG",
+        )
+        GRPOPosting.objects.create(
+            vehicle_entry=inactive_entry,
+            po_receipt=inactive_po,
+            status=GRPOStatus.PENDING,
+        )
+
+        service = GRPOService(company_code="TC001")
+
+        pending_entry_numbers = [entry.entry_no for entry in service.get_pending_grpo_entries()]
+        all_entry_numbers = [entry.entry_no for entry in service.get_all_grpo_visible_entries()]
+        history_entry_numbers = [
+            posting.vehicle_entry.entry_no for posting in service.get_grpo_posting_history()
+        ]
+        summary = service.get_grpo_dashboard_summary()
+
+        self.assertNotIn(inactive_entry.entry_no, pending_entry_numbers)
+        self.assertNotIn(inactive_entry.entry_no, all_entry_numbers)
+        self.assertNotIn(inactive_entry.entry_no, history_entry_numbers)
+        self.assertEqual(summary["qc_accepted_qty"], Decimal("95.000"))
+        self.assertEqual(summary["posting_pending_count"], 0)
+        with self.assertRaisesMessage(
+            ValueError,
+            f"Vehicle entry {inactive_entry.id} not found",
+        ):
+            service.get_grpo_preview_data(inactive_entry.id)
+
     @patch.object(GRPOService, "_get_sap_tax_codes")
     def test_service_line_tax_code_uses_rcm_igst_for_interstate(self, mock_tax_codes):
         """Interstate RCM service freight must use the SAP RCM IGST code."""
