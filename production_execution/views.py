@@ -10,6 +10,7 @@ from sap_client.exceptions import SAPConnectionError, SAPDataError
 
 from .services import ProductionExecutionService, ProductionMovementService
 from .services.inventory_reconciliation_service import InventoryReconciliationService
+from .services.production_flow_service import ProductionFlowService
 from .models import (
     ProductionRun, MachineBreakdown, WasteLog, BreakdownCategory,
     ResourceElectricity, ResourceWater, ResourceGas, ResourceCompressedAir,
@@ -62,6 +63,7 @@ from .serializers import (
     ProductionMovementFilterOptionsSerializer, ProductionMovementFilterSerializer,
     ProductionMovementReportSerializer,
     InventoryReconciliationFilterSerializer, InventoryReconciliationReportSerializer,
+    ProductionFlowFilterSerializer, ProductionFlowReportSerializer,
 )
 from .permissions import (
     CanManageProductionLines, CanManageMachines, CanManageChecklistTemplates,
@@ -1158,6 +1160,33 @@ class InventoryReconciliationReportAPI(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         return Response(InventoryReconciliationReportSerializer(result).data)
+
+
+class ProductionFlowReportAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewReports]
+
+    def get(self, request):
+        filter_serializer = ProductionFlowFilterSerializer(data=request.query_params)
+        if not filter_serializer.is_valid():
+            return Response(
+                {"detail": "Invalid query parameters.", "errors": filter_serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = ProductionFlowService(request.company.company.code)
+        try:
+            result = service.get_report(filter_serializer.validated_data)
+        except SAPConnectionError:
+            return Response(
+                {"detail": "SAP system is currently unavailable. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except SAPDataError as e:
+            return Response(
+                {"detail": f"SAP data error: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(ProductionFlowReportSerializer(result).data)
 
 
 # ===========================================================================

@@ -32,7 +32,7 @@ from .views import (
     DailyProductionReportAPI, YieldReportAPI,
     LineClearanceReportAPI, AnalyticsAPI,
     ProductionMovementFilterOptionsAPI, ProductionMovementReportAPI,
-    InventoryReconciliationReportAPI,
+    InventoryReconciliationReportAPI, ProductionFlowReportAPI,
     # SAP Orders & BOM
     SAPProductionOrderListAPI, SAPProductionOrderDetailAPI, SAPItemSearchAPI,
     SAPItemBOMAPI,
@@ -175,6 +175,11 @@ urlpatterns = [
         'reports/inventory-reconciliation/',
         InventoryReconciliationReportAPI.as_view(),
         name='pe-report-inventory-reconciliation',
+    ),
+    path(
+        'reports/production-flow/',
+        ProductionFlowReportAPI.as_view(),
+        name='pe-report-production-flow',
     ),
 
     # ------------------------------------------------------------------

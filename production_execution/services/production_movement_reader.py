@@ -101,6 +101,29 @@ ORDER BY W."WhsCode" ASC
         rows = self._execute(query, params)
         return [self._map_component_row(row) for row in rows]
 
+    def get_production_flow_orders(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        query, params = self._build_production_flow_orders_query(filters)
+        rows = self._execute(query, params)
+        return [self._map_production_flow_order_row(row) for row in rows]
+
+    def get_production_flow_components(self, doc_entries: List[str]) -> List[Dict[str, Any]]:
+        if not doc_entries:
+            return []
+        query, params = self._build_production_flow_components_query(doc_entries)
+        rows = self._execute(query, params)
+        return [self._map_production_flow_component_row(row) for row in rows]
+
+    def get_production_flow_movements(
+        self,
+        documents: List[str],
+        doc_entries: List[str],
+    ) -> List[Dict[str, Any]]:
+        if not documents and not doc_entries:
+            return []
+        query, params = self._build_production_flow_movements_query(documents, doc_entries)
+        rows = self._execute(query, params)
+        return [self._map_movement_row(row) for row in rows]
+
     def get_stock_balances(self, filters: Dict[str, Any]) -> Dict[str, float]:
         query, params = self._build_stock_balances_query(filters)
         rows = self._execute(query, params)
@@ -333,6 +356,207 @@ ORDER BY O."PostDate" DESC, O."DocNum" DESC, C."LineNum" ASC
 """
         return query, params
 
+    def _build_production_flow_orders_query(self, filters: Dict[str, Any]):
+        schema = self.connection.schema
+        limit = int(filters.get("limit") or 500)
+        clauses = []
+        params: List[Any] = []
+
+        if filters.get("date_from"):
+            clauses.append('O."PostDate" >= ?')
+            params.append(filters["date_from"])
+
+        if filters.get("date_to"):
+            clauses.append('O."PostDate" <= ?')
+            params.append(filters["date_to"])
+
+        if filters.get("warehouse"):
+            clauses.append(
+                '(O."Warehouse" = ? OR EXISTS ('
+                f'SELECT 1 FROM "{schema}"."WOR1" WC '
+                'WHERE WC."DocEntry" = O."DocEntry" AND WC."wareHouse" = ?'
+                '))'
+            )
+            params.extend([filters["warehouse"], filters["warehouse"]])
+
+        search = (filters.get("search") or "").strip().upper()
+        if search:
+            clauses.append(
+                '('
+                'UPPER(O."ItemCode") LIKE ? OR '
+                'UPPER(COALESCE(O."ProdName", I."ItemName", \'\')) LIKE ? OR '
+                'UPPER(CAST(O."DocNum" AS NVARCHAR)) LIKE ? OR '
+                'UPPER(COALESCE(O."Warehouse", \'\')) LIKE ?'
+                ')'
+            )
+            term = f"%{search}%"
+            params.extend([term, term, term, term])
+
+        where = " AND ".join(clauses) if clauses else "1 = 1"
+
+        query = f"""
+SELECT TOP {limit}
+    O."DocEntry",
+    O."DocNum",
+    O."PostDate",
+    O."StartDate",
+    O."DueDate",
+    O."ItemCode",
+    COALESCE(O."ProdName", I."ItemName", '') AS "ItemName",
+    O."Warehouse",
+    COALESCE(W."WhsName", O."Warehouse") AS "WarehouseName",
+    COALESCE(O."PlannedQty", 0) AS "PlannedQty",
+    COALESCE(O."CmpltQty", 0) AS "CompletedQty",
+    COALESCE(O."RjctQty", 0) AS "RejectedQty",
+    COALESCE(O."Status", '') AS "Status",
+    COALESCE(SUM(COALESCE(C."PlannedQty", 0)), 0) AS "ComponentPlannedQty",
+    COALESCE(SUM(COALESCE(C."IssuedQty", 0)), 0) AS "ComponentIssuedQty",
+    COUNT(C."LineNum") AS "ComponentCount"
+FROM "{schema}"."OWOR" O
+LEFT JOIN "{schema}"."WOR1" C
+    ON C."DocEntry" = O."DocEntry"
+LEFT JOIN "{schema}"."OITM" I
+    ON I."ItemCode" = O."ItemCode"
+LEFT JOIN "{schema}"."OWHS" W
+    ON W."WhsCode" = O."Warehouse"
+WHERE {where}
+GROUP BY
+    O."DocEntry",
+    O."DocNum",
+    O."PostDate",
+    O."StartDate",
+    O."DueDate",
+    O."ItemCode",
+    COALESCE(O."ProdName", I."ItemName", ''),
+    O."Warehouse",
+    COALESCE(W."WhsName", O."Warehouse"),
+    O."PlannedQty",
+    O."CmpltQty",
+    O."RjctQty",
+    O."Status"
+ORDER BY O."PostDate" DESC, O."DocNum" DESC
+"""
+        return query, params
+
+    def _build_production_flow_components_query(self, doc_entries: List[str]):
+        schema = self.connection.schema
+        entries = [int(entry) for entry in doc_entries if str(entry).isdigit()]
+        placeholders = ", ".join("?" for _ in entries)
+
+        query = f"""
+SELECT
+    C."DocEntry",
+    C."LineNum",
+    C."ItemCode",
+    COALESCE(C."ItemName", I."ItemName", '') AS "ItemName",
+    C."wareHouse",
+    COALESCE(W."WhsName", C."wareHouse") AS "WarehouseName",
+    COALESCE(C."PlannedQty", 0) AS "PlannedQty",
+    COALESCE(C."IssuedQty", 0) AS "IssuedQty",
+    COALESCE(C."UomCode", I."InvntryUom", '') AS "UomCode"
+FROM "{schema}"."WOR1" C
+LEFT JOIN "{schema}"."OITM" I
+    ON I."ItemCode" = C."ItemCode"
+LEFT JOIN "{schema}"."OWHS" W
+    ON W."WhsCode" = C."wareHouse"
+WHERE C."DocEntry" IN ({placeholders})
+ORDER BY C."DocEntry", C."LineNum" ASC
+"""
+        return query, entries
+
+    def _build_production_flow_movements_query(
+        self,
+        documents: List[str],
+        doc_entries: List[str],
+    ):
+        schema = self.connection.schema
+        clauses = [
+            '(COALESCE(O."InQty", 0) <> 0 OR COALESCE(O."OutQty", 0) <> 0)'
+        ]
+        params: List[Any] = []
+
+        ref_clauses = []
+
+        clean_documents = [str(document) for document in documents if str(document)]
+        if clean_documents:
+            placeholders = ", ".join("?" for _ in clean_documents)
+            ref_clauses.append(f'CAST(O."BASE_REF" AS NVARCHAR) IN ({placeholders})')
+            params.extend(clean_documents)
+
+        clean_entries = [int(entry) for entry in doc_entries if str(entry).isdigit()]
+        if clean_entries:
+            placeholders = ", ".join("?" for _ in clean_entries)
+            ref_clauses.append(
+                '('
+                'O."TransType" = 60 '
+                'AND COALESCE(GI."BaseType", 0) = 202 '
+                f'AND GI."BaseEntry" IN ({placeholders})'
+                ')'
+            )
+            params.extend(clean_entries)
+
+            placeholders = ", ".join("?" for _ in clean_entries)
+            ref_clauses.append(
+                '('
+                'O."TransType" = 59 '
+                'AND COALESCE(GR."BaseType", 0) = 202 '
+                f'AND GR."BaseEntry" IN ({placeholders})'
+                ')'
+            )
+            params.extend(clean_entries)
+
+        clauses.append("(" + " OR ".join(ref_clauses) + ")")
+        where = " AND ".join(clauses)
+
+        query = f"""
+SELECT
+    O."DocDate",
+    O."ItemCode",
+    COALESCE(I."ItemName", '') AS "ItemName",
+    COALESCE(G."ItmsGrpNam", '') AS "ItemGroup",
+    O."Warehouse",
+    COALESCE(W."WhsName", O."Warehouse") AS "WarehouseName",
+    COALESCE(O."InQty", 0) AS "InQty",
+    COALESCE(O."OutQty", 0) AS "OutQty",
+    COALESCE(O."TransValue", 0) AS "TransValue",
+    O."TransType",
+    COALESCE(O."BASE_REF", '') AS "BaseRef",
+    O."TransNum",
+    O."CreatedBy",
+    COALESCE(T."FromWhsCod", '') AS "FromWarehouse",
+    COALESCE(FW."WhsName", T."FromWhsCod", '') AS "FromWarehouseName",
+    COALESCE(T."WhsCode", '') AS "ToWarehouse",
+    COALESCE(TW."WhsName", T."WhsCode", '') AS "ToWarehouseName",
+    COALESCE(GI."BaseEntry", GR."BaseEntry") AS "SourceOrderDocEntry",
+    COALESCE(GI."BaseLine", GR."BaseLine") AS "SourceOrderLineNum"
+FROM "{schema}"."OINM" O
+LEFT JOIN "{schema}"."OITM" I
+    ON I."ItemCode" = O."ItemCode"
+LEFT JOIN "{schema}"."OITB" G
+    ON G."ItmsGrpCod" = I."ItmsGrpCod"
+LEFT JOIN "{schema}"."OWHS" W
+    ON W."WhsCode" = O."Warehouse"
+LEFT JOIN "{schema}"."WTR1" T
+    ON O."TransType" = 67
+    AND T."DocEntry" = O."CreatedBy"
+    AND T."LineNum" = O."DocLineNum"
+LEFT JOIN "{schema}"."IGE1" GI
+    ON O."TransType" = 60
+    AND GI."DocEntry" = O."CreatedBy"
+    AND GI."LineNum" = O."DocLineNum"
+LEFT JOIN "{schema}"."IGN1" GR
+    ON O."TransType" = 59
+    AND GR."DocEntry" = O."CreatedBy"
+    AND GR."LineNum" = O."DocLineNum"
+LEFT JOIN "{schema}"."OWHS" FW
+    ON FW."WhsCode" = T."FromWhsCod"
+LEFT JOIN "{schema}"."OWHS" TW
+    ON TW."WhsCode" = T."WhsCode"
+WHERE {where}
+ORDER BY O."DocDate" ASC, O."TransNum" ASC
+"""
+        return query, params
+
     def _build_stock_balances_query(self, filters: Dict[str, Any]):
         schema = self.connection.schema
         params: List[Any] = [
@@ -427,6 +651,8 @@ WHERE {where}
             "from_warehouse_name": row[14] or row[13] or "",
             "to_warehouse": row[15] or "",
             "to_warehouse_name": row[16] or row[15] or "",
+            "source_order_doc_entry": str(row[17]) if len(row) > 17 and row[17] is not None else "",
+            "source_order_line_num": int(row[18]) if len(row) > 18 and row[18] is not None else None,
         }
 
     def _map_production_order_row(self, row) -> Dict[str, Any]:
@@ -473,6 +699,51 @@ WHERE {where}
             "actual_qty": issued_qty,
             "difference_qty": difference,
             "status": row[12] or "",
+        }
+
+    def _map_production_flow_order_row(self, row) -> Dict[str, Any]:
+        planned_qty = float(row[9] or 0)
+        completed_qty = float(row[10] or 0)
+        rejected_qty = float(row[11] or 0)
+        component_planned_qty = float(row[13] or 0)
+        component_issued_qty = float(row[14] or 0)
+
+        return {
+            "doc_entry": str(row[0]) if row[0] is not None else "",
+            "document": str(row[1]) if row[1] is not None else "",
+            "post_date": row[2].isoformat() if row[2] else "",
+            "start_date": row[3].isoformat() if row[3] else "",
+            "due_date": row[4].isoformat() if row[4] else "",
+            "item_code": row[5] or "",
+            "item_name": row[6] or "",
+            "warehouse": row[7] or "",
+            "warehouse_name": row[8] or row[7] or "",
+            "planned_qty": planned_qty,
+            "completed_qty": completed_qty,
+            "rejected_qty": rejected_qty,
+            "remaining_qty": round(planned_qty - completed_qty - rejected_qty, 3),
+            "sap_status": row[12] or "",
+            "component_planned_qty": component_planned_qty,
+            "component_issued_qty": component_issued_qty,
+            "component_gap_qty": round(component_planned_qty - component_issued_qty, 3),
+            "component_count": int(row[15] or 0),
+        }
+
+    def _map_production_flow_component_row(self, row) -> Dict[str, Any]:
+        planned_qty = float(row[6] or 0)
+        issued_qty = float(row[7] or 0)
+
+        return {
+            "doc_entry": str(row[0]) if row[0] is not None else "",
+            "line_num": int(row[1] or 0),
+            "item_code": row[2] or "",
+            "item_name": row[3] or "",
+            "warehouse": row[4] or "",
+            "warehouse_name": row[5] or row[4] or "",
+            "planned_qty": planned_qty,
+            "issued_qty": issued_qty,
+            "gap_qty": round(planned_qty - issued_qty, 3),
+            "uom": row[8] or "",
         }
 
     def _execute(self, query: str, params: List[Any]) -> List:

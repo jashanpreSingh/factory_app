@@ -1052,6 +1052,115 @@ class InventoryReconciliationReportSerializer(serializers.Serializer):
 
 
 # ---------------------------------------------------------------------------
+# Production Flow Dashboard Serializers
+# ---------------------------------------------------------------------------
+
+class ProductionFlowFilterSerializer(serializers.Serializer):
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
+    warehouse = serializers.CharField(required=False, max_length=20, allow_blank=True)
+    search = serializers.CharField(required=False, max_length=100, allow_blank=True)
+    status = serializers.ChoiceField(
+        choices=[
+            "all",
+            "not_started",
+            "material_pending",
+            "production_pending",
+            "fg_pending",
+            "complete",
+        ],
+        required=False,
+        default="all",
+    )
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=1000, default=500)
+
+    def validate(self, attrs):
+        date_from = attrs.get("date_from")
+        date_to = attrs.get("date_to")
+        if date_from and date_to and date_from > date_to:
+            raise serializers.ValidationError("date_from cannot be after date_to.")
+        return attrs
+
+
+class ProductionFlowSummarySerializer(serializers.Serializer):
+    total_orders = serializers.IntegerField()
+    planned_qty = serializers.FloatField()
+    completed_qty = serializers.FloatField()
+    rejected_qty = serializers.FloatField()
+    remaining_qty = serializers.FloatField()
+    component_gap_qty = serializers.FloatField()
+    fg_gap_qty = serializers.FloatField()
+    not_started = serializers.IntegerField()
+    material_pending = serializers.IntegerField()
+    production_pending = serializers.IntegerField()
+    fg_pending = serializers.IntegerField()
+    complete = serializers.IntegerField()
+
+
+class ProductionFlowComponentSerializer(serializers.Serializer):
+    doc_entry = serializers.CharField(allow_blank=True)
+    line_num = serializers.IntegerField()
+    item_code = serializers.CharField(allow_blank=True)
+    item_name = serializers.CharField(allow_blank=True)
+    warehouse = serializers.CharField(allow_blank=True)
+    warehouse_name = serializers.CharField(allow_blank=True)
+    planned_qty = serializers.FloatField()
+    issued_qty = serializers.FloatField()
+    gap_qty = serializers.FloatField()
+    uom = serializers.CharField(allow_blank=True)
+
+
+class ProductionFlowRowSerializer(serializers.Serializer):
+    doc_entry = serializers.CharField(allow_blank=True)
+    document = serializers.CharField(allow_blank=True)
+    post_date = serializers.CharField(allow_blank=True)
+    start_date = serializers.CharField(allow_blank=True)
+    due_date = serializers.CharField(allow_blank=True)
+    item_code = serializers.CharField(allow_blank=True)
+    item_name = serializers.CharField(allow_blank=True)
+    warehouse = serializers.CharField(allow_blank=True)
+    warehouse_name = serializers.CharField(allow_blank=True)
+    planned_qty = serializers.FloatField()
+    completed_qty = serializers.FloatField()
+    rejected_qty = serializers.FloatField()
+    remaining_qty = serializers.FloatField()
+    sap_status = serializers.CharField(allow_blank=True)
+    component_planned_qty = serializers.FloatField()
+    component_issued_qty = serializers.FloatField()
+    component_gap_qty = serializers.FloatField()
+    component_count = serializers.IntegerField()
+    material_warehouse_codes = serializers.ListField(child=serializers.CharField())
+    fg_warehouse_codes = serializers.ListField(child=serializers.CharField())
+    material_movement_out_qty = serializers.FloatField()
+    fg_received_qty = serializers.FloatField()
+    fg_moved_qty = serializers.FloatField()
+    material_gap_qty = serializers.FloatField()
+    production_gap_qty = serializers.FloatField()
+    fg_gap_qty = serializers.FloatField()
+    flow_status = serializers.CharField()
+    movement_count = serializers.IntegerField()
+    components = ProductionFlowComponentSerializer(many=True)
+    material_movements = ProductionMovementItemSerializer(many=True)
+    finished_good_movements = ProductionMovementItemSerializer(many=True)
+    movement_entries = ProductionMovementItemSerializer(many=True)
+
+
+class ProductionFlowMetaSerializer(serializers.Serializer):
+    date_from = serializers.CharField()
+    date_to = serializers.CharField()
+    warehouse = serializers.CharField(allow_blank=True)
+    search = serializers.CharField(allow_blank=True)
+    status = serializers.CharField()
+    limit = serializers.IntegerField()
+
+
+class ProductionFlowReportSerializer(serializers.Serializer):
+    summary = ProductionFlowSummarySerializer()
+    data = ProductionFlowRowSerializer(many=True)
+    meta = ProductionFlowMetaSerializer()
+
+
+# ---------------------------------------------------------------------------
 # Line SKU Config
 # ---------------------------------------------------------------------------
 
