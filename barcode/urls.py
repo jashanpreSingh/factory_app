@@ -22,6 +22,7 @@ from .views import (
     DispatchPalletReportAPI, DispatchBoxReportAPI,
     DispatchRejectedScanReportAPI,
     ProductionRunLabelsAPI, ProductionRunPalletAPI, ProductionReleaseOilListAPI,
+    OitmItemListAPI,
 )
 
 urlpatterns = [
@@ -113,6 +114,7 @@ urlpatterns = [
     # ------------------------------------------------------------------
     # Production Integration
     # ------------------------------------------------------------------
+    path('items/oitm/', OitmItemListAPI.as_view(), name='bc-oitm-items'),
     path('production-release-oil/', ProductionReleaseOilListAPI.as_view(), name='bc-production-release-oil'),
     path('production/<int:run_id>/generate-labels/', ProductionRunLabelsAPI.as_view(), name='bc-production-labels'),
     path('production/<int:run_id>/create-pallet/', ProductionRunPalletAPI.as_view(), name='bc-production-pallet'),

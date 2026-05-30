@@ -17,6 +17,7 @@ from .services.production_release_service import (
     ProductionReleaseOilService,
     ProductionReleaseReadError,
 )
+from .services.oitm_item_service import OitmItemReadError, OitmItemService
 from .serializers import (
     BoxGenerateSerializer, BoxListSerializer, BoxDetailSerializer,
     PalletCreateSerializer, PalletListSerializer, PalletDetailSerializer,
@@ -1130,6 +1131,27 @@ class ProductionReleaseOilListAPI(APIView):
                 limit=request.query_params.get('limit', 100),
             )
         except ProductionReleaseReadError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(rows)
+
+
+class OitmItemListAPI(APIView):
+    """List active inventory items from SAP HANA OITM for label generation."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        try:
+            service = OitmItemService(
+                company_code=request.company.company.code,
+            )
+            rows = service.list_items(
+                search=request.query_params.get('search', '').strip(),
+                limit=request.query_params.get('limit', 100),
+            )
+        except OitmItemReadError as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
