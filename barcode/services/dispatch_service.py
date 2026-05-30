@@ -536,36 +536,14 @@ class BarcodeDispatchService:
                 "All bill items must be fully scanned before dispatch.",
             )
 
-        result = self.sap_adapter.update_dispatch_status(session)
-        success_statuses = {DispatchSapUpdateStatus.SUCCESS, DispatchSapUpdateStatus.NOT_CONFIGURED}
-        sap_success = result.status in success_statuses
-        if result.status == DispatchSapUpdateStatus.NOT_CONFIGURED and self.settings.require_sap_sync_on_completion:
-            sap_success = False
-            result = SapUpdateResult(
-                status=DispatchSapUpdateStatus.FAILED,
-                message="SAP sync is required, but SAP dispatch update is not configured.",
-                request_payload=result.request_payload,
-                response_payload=result.response_payload,
-            )
-
-        DispatchSapSyncLog.objects.create(
-            session=session,
-            operation="UPDATE_DISPATCH_STATUS",
-            request_payload=result.request_payload or {},
-            response_payload=result.response_payload or {},
-            status="SUCCESS" if sap_success else "FAILED",
-            error_message="" if sap_success else result.message,
-            attempt_no=session.sap_sync_logs.count() + 1,
-        )
-
         now = timezone.now()
         session.completed_at = session.completed_at or now
         session.dispatched_at = now
         session.dispatched_by = user
         session.updated_by = user
-        session.sap_update_status = result.status
-        session.sap_update_error = "" if sap_success else result.message
-        session.status = DispatchSessionStatus.COMPLETED if sap_success else DispatchSessionStatus.SAP_SYNC_FAILED
+        session.sap_update_status = DispatchSapUpdateStatus.NOT_CONFIGURED
+        session.sap_update_error = "SAP sync is disabled for barcode dispatch."
+        session.status = DispatchSessionStatus.COMPLETED
         self._refresh_session_totals(session, save=False)
         session.save()
         self._apply_scanned_box_dispatch(session, user)
@@ -772,11 +750,26 @@ class BarcodeDispatchService:
             .select_related("line", "scanned_by")
             .order_by("scanned_at", "id")
         )
+        scanned_units = (
+            session.scanned_units
+            .select_related("line", "scan_log__scanned_by", "box", "pallet")
+            .order_by("created_at", "id")
+        )
         expected_boxes = sum((line.bill_boxes or Decimal("0")) for line in session.lines.all())
-        dispatched_boxes = DispatchScannedUnit.objects.filter(
-            session=session,
-            entity_type=DispatchScanEntityType.BOX,
-        ).exclude(scan_status=DispatchScannedUnitStatus.REMOVED).count()
+        active_units = [
+            unit for unit in scanned_units
+            if unit.scan_status != DispatchScannedUnitStatus.REMOVED
+        ]
+        box_units = [
+            unit for unit in active_units
+            if unit.entity_type == DispatchScanEntityType.BOX
+        ]
+        pallet_barcodes = sorted({
+            unit.pallet.pallet_id
+            for unit in active_units
+            if unit.pallet_id and unit.pallet
+        })
+        dispatched_boxes = len(box_units)
         return {
             "session": {
                 "session_id": session.id,
@@ -785,10 +778,15 @@ class BarcodeDispatchService:
                 "customer_code": session.customer_code,
                 "customer_name": session.customer_name,
                 "status": session.status,
+                "started_at": session.started_at,
+                "completed_at": session.completed_at or session.dispatched_at,
+                "completed_by": self._display_user(session.dispatched_by),
                 "total_expected_qty": str(session.total_expected_qty),
                 "total_dispatched_qty": str(session.total_scanned_qty),
+                "pending_qty": str(max(session.total_expected_qty - session.total_scanned_qty, Decimal("0"))),
                 "total_expected_boxes": str(expected_boxes),
                 "total_dispatched_boxes": str(dispatched_boxes),
+                "total_pallets": len(pallet_barcodes),
             },
             "lines": [
                 {
@@ -818,6 +816,39 @@ class BarcodeDispatchService:
                     "status": line.status,
                 }
                 for line in session.lines.all()
+            ],
+            "scanned_units": [
+                {
+                    "id": unit.id,
+                    "scan_id": unit.scan_log_id,
+                    "barcode": unit.barcode_value,
+                    "barcode_type": unit.entity_type,
+                    "pallet_barcode": unit.pallet.pallet_id if unit.pallet_id and unit.pallet else "",
+                    "box_barcode": unit.box.box_barcode if unit.box_id and unit.box else "",
+                    "item_code": unit.material_code,
+                    "item_name": unit.box.item_name if unit.box_id and unit.box else unit.line.material_description,
+                    "batch_number": unit.batch_number,
+                    "warehouse": unit.box.current_warehouse if unit.box_id and unit.box else (
+                        unit.pallet.current_warehouse if unit.pallet_id and unit.pallet else ""
+                    ),
+                    "original_qty": str(unit.total_box_qty),
+                    "dispatch_qty": str(unit.dispatch_qty),
+                    "remaining_qty": str(unit.remaining_qty),
+                    "uom": unit.uom,
+                    "scan_status": unit.scan_status,
+                    "status_after_scan": (
+                        "Removed"
+                        if unit.scan_status == DispatchScannedUnitStatus.REMOVED
+                        else "Partial Dispatch"
+                        if unit.remaining_qty > 0
+                        else "Full Dispatch"
+                    ),
+                    "scanned_by": self._display_user(unit.scan_log.scanned_by) if unit.scan_log_id else "",
+                    "scanned_at": unit.created_at,
+                    "dispatch_doc_no": session.bill_number,
+                    "dispatch_date_time": session.dispatched_at,
+                }
+                for unit in scanned_units
             ],
             "scans": [
                 {
