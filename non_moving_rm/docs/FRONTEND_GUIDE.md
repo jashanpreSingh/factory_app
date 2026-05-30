@@ -57,7 +57,7 @@ Company-Code: JIVO_OIL
 
 ---
 
-### 2. GET `/api/v1/non-moving-rm/report/?age=45&item_group=105`
+### 2. GET `/api/v1/non-moving-rm/report/?age=0&item_group=105`
 
 **Purpose:** Fetch the non-moving raw material report. Call when user selects filters and clicks "Search" / "Apply".
 
@@ -65,10 +65,10 @@ Company-Code: JIVO_OIL
 
 | Parameter    | Type | Required | Description                                      | Example |
 |-------------|------|----------|--------------------------------------------------|---------|
-| `age`       | int  | Yes      | Minimum days since last movement                 | 45      |
+| `age`       | int  | Yes      | Minimum days since last movement; `0` returns all stock | 0       |
 | `item_group`| int  | No       | Item group code; omit or pass `0` for all groups  | 105     |
 
-The age filter is inclusive: `age=365` means return items whose `days_since_last_movement` is 365 or higher. A 365-day result should therefore be a subset of a 45-day result for the same item group.
+The age filter matches the workbook logic: `age=365` means return items whose `days_since_last_movement` is greater than 365. Use `age=0` for the all-stock view, including latest moved stock.
 
 **Headers:**
 ```
@@ -150,7 +150,7 @@ Company-Code: JIVO_OIL
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Age (Days) [Dropdown/Input]    Item Group [Dropdown]  [Search] │
-│  Suggested ages: 30, 45, 60, 90, 180, 365                      │
+│  Suggested ages: All Stock, 30, 45, 90, 180, 365               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -237,7 +237,7 @@ function NonMovingRMDashboard() {
     <div>
       {/* Filters */}
       <select value={age} onChange={e => setAge(Number(e.target.value))}>
-        {[30, 45, 60, 90, 180, 365].map(d => (
+        {[0, 30, 45, 90, 180, 365].map(d => (
           <option key={d} value={d}>{d} days</option>
         ))}
       </select>
@@ -313,10 +313,10 @@ function NonMovingRMDashboard() {
 
 ## Notes
 
-- The `age` parameter is the minimum number of days since the item's last stock movement.
-- The HANA query is scoped to the selected `Company-Code`, then the service re-applies `days_since_last_movement >= age`; a 365-day result should be a subset of a 45-day result for the same material group.
-- Items with no movement history are aged from the SAP item `CreateDate`.
+- The `age` parameter is the threshold used by `REPORT_BP_NON_MOVING_RM`; the API keeps rows where `days_since_last_movement > age`.
+- The report calls `JIVO_BEVERAGES_HANADB.REPORT_BP_NON_MOVING_RM` and filters the returned branch to the selected `Company-Code`.
+- The procedure output is item-level, not warehouse-level.
 - The `item_group` parameter corresponds to `ItmsGrpCod` in SAP B1's OITB table.
-- `consumption_ratio` is calculated from recent `OINM` consumption in the selected company schema.
+- `consumption_ratio` is returned by the SAP procedure as a percentage.
 - `value` is the total inventory value of the non-moving item.
 - All dates are returned in `YYYY-MM-DD HH:MM:SS` format from the report.

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import (
     GRPOPosting,
@@ -36,6 +38,19 @@ class AllGRPOEntrySerializer(serializers.Serializer):
     pending_po_count = serializers.IntegerField()
     suppliers = AllGRPOEntrySupplierSerializer(many=True)
     po_numbers = serializers.ListField(child=serializers.CharField())
+
+
+class GRPODashboardSummarySerializer(serializers.Serializer):
+    """Summary numbers used by the material GRPO dashboard insights."""
+
+    pending_entry_count = serializers.IntegerField()
+    pending_po_count = serializers.IntegerField()
+    qc_accepted_qty = serializers.DecimalField(max_digits=18, decimal_places=3)
+    qc_rejected_qty = serializers.DecimalField(max_digits=18, decimal_places=3)
+    posting_pending_count = serializers.IntegerField()
+    posted_count = serializers.IntegerField()
+    failed_count = serializers.IntegerField()
+    partially_posted_count = serializers.IntegerField()
 
 
 class GRPOLineDetailSerializer(serializers.Serializer):
@@ -124,10 +139,11 @@ class ExtraChargeInputSerializer(serializers.Serializer):
     """Serializer for additional expense charges on GRPO"""
     expense_code = serializers.IntegerField(
         required=True,
+        min_value=1,
         help_text="SAP Expense Code (from Additional Expenses setup)"
     )
     amount = serializers.DecimalField(
-        max_digits=18, decimal_places=2, required=True, min_value=0,
+        max_digits=18, decimal_places=2, required=True, min_value=Decimal("0.01"),
         help_text="Total amount for this charge"
     )
     remarks = serializers.CharField(
@@ -175,6 +191,14 @@ class GRPOPostRequestSerializer(serializers.Serializer):
     vendor_ref = serializers.CharField(
         required=False, allow_blank=True, allow_null=True,
         help_text="Vendor reference / invoice number (NumAtCard in SAP)"
+    )
+    tare_weight = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        required=False,
+        allow_null=True,
+        min_value=Decimal("0.001"),
+        help_text="Optional tare weight captured at GRPO; updates the gate weighment row when provided"
     )
     extra_charges = ExtraChargeInputSerializer(
         many=True, required=False,
@@ -448,6 +472,14 @@ class ServiceGRPOSubAccountOptionSerializer(serializers.Serializer):
     sub_account_name = serializers.CharField()
 
 
+class ServiceGRPOExpenseCodeOptionSerializer(serializers.Serializer):
+    expense_code = serializers.IntegerField()
+    expense_name = serializers.CharField()
+    expense_account = serializers.CharField(allow_blank=True)
+    revenue_account = serializers.CharField(allow_blank=True)
+    sac_code = serializers.CharField(allow_blank=True)
+
+
 class ServiceGRPOOptionsSerializer(serializers.Serializer):
     branches = ServiceGRPOBranchOptionSerializer(many=True)
     tax_codes = ServiceGRPOTaxCodeOptionSerializer(many=True)
@@ -456,6 +488,7 @@ class ServiceGRPOOptionsSerializer(serializers.Serializer):
     locations = ServiceGRPOLocationOptionSerializer(many=True)
     projects = ServiceGRPOProjectOptionSerializer(many=True)
     sub_accounts = ServiceGRPOSubAccountOptionSerializer(many=True)
+    expense_codes = ServiceGRPOExpenseCodeOptionSerializer(many=True)
 
 
 class GRPOLinePostingSerializer(serializers.ModelSerializer):
@@ -636,6 +669,16 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
     lines = ServiceGRPOLinePostingSerializer(many=True, read_only=True)
     attachments = ServiceGRPOAttachmentSerializer(many=True, read_only=True)
     dispatch_bill_no = serializers.SerializerMethodField()
+    bilty_no = serializers.CharField(
+        source="dispatch_plan.bilty_no",
+        allow_blank=True,
+        read_only=True,
+    )
+    bilty_date = serializers.DateField(
+        source="dispatch_plan.bilty_date",
+        allow_null=True,
+        read_only=True,
+    )
     effective_month = serializers.DateField(
         allow_null=True,
         format="%Y-%m",
@@ -664,6 +707,8 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
             "id",
             "dispatch_plan",
             "dispatch_bill_no",
+            "bilty_no",
+            "bilty_date",
             "sap_invoice_doc_entry",
             "vehicle_no",
             "transporter_name",

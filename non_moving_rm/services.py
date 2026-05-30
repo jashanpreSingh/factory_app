@@ -11,9 +11,12 @@ from typing import Any, Dict, List
 
 from sap_client.context import CompanyContext
 
-from .hana_reader import HanaNonMovingRMReader
+from .hana_reader import COMPANY_BRANCH_LABELS, HanaNonMovingRMReader
 
 logger = logging.getLogger(__name__)
+
+PROCEDURE_SOURCE_COMPANY_CODE = "JIVO_BEVERAGES"
+PROCEDURE_SOURCE_SCHEMA = "JIVO_BEVERAGES_HANADB"
 
 
 class NonMovingRMService:
@@ -28,7 +31,12 @@ class NonMovingRMService:
     def __init__(self, company_code: str):
         self.company_code = company_code
         self.context = CompanyContext(company_code)
-        self.reader = HanaNonMovingRMReader(self.context)
+        self.report_context = CompanyContext(PROCEDURE_SOURCE_COMPANY_CODE)
+        self.reader = HanaNonMovingRMReader(
+            self.report_context,
+            schema_override=PROCEDURE_SOURCE_SCHEMA,
+        )
+        self.company_reader = HanaNonMovingRMReader(self.context)
 
     # ------------------------------------------------------------------
     # Report — Non-Moving RM Data
@@ -38,10 +46,14 @@ class NonMovingRMService:
         """
         Returns non-moving raw material report with summary stats.
         """
+        rows = self.reader.get_non_moving_report(age, item_group)
         rows = [
-            row for row in self.reader.get_non_moving_report(age, item_group)
-            if self._meets_age_threshold(row, age)
+            row for row in rows
+            if self._matches_company_branch(row) and self._meets_age_threshold(row, age)
         ]
+        warehouse_distribution = self.company_reader.get_warehouse_distribution(
+            [row.get("item_code", "") for row in rows]
+        )
 
         total_items = len(rows)
         total_value = sum(r["value"] for r in rows)
@@ -75,6 +87,10 @@ class NonMovingRMService:
                 "total_quantity": round(total_quantity, 2),
                 "by_branch": list(branch_summary.values()),
             },
+            "warehouse_summary": self._build_warehouse_summary(
+                rows,
+                warehouse_distribution,
+            ),
             "meta": {
                 "age_days": age,
                 "item_group": item_group,
@@ -102,7 +118,99 @@ class NonMovingRMService:
 
     @staticmethod
     def _meets_age_threshold(row: Dict, age: int) -> bool:
+        if age <= 0:
+            return True
         days_since_last_movement = row.get("days_since_last_movement")
         if days_since_last_movement is None:
             return True
-        return int(days_since_last_movement) >= age
+        return int(days_since_last_movement) > age
+
+    def _matches_company_branch(self, row: Dict) -> bool:
+        branch = row.get("branch")
+        expected_branch = COMPANY_BRANCH_LABELS.get(self.company_code)
+        if not expected_branch:
+            return True
+        return branch == expected_branch
+
+    def _build_warehouse_summary(
+        self,
+        rows: List[Dict],
+        warehouse_distribution: List[Dict],
+    ) -> List[Dict]:
+        report_by_item: Dict[str, Dict[str, float]] = {}
+        for row in rows:
+            item_code = row.get("item_code") or ""
+            if not item_code:
+                continue
+            existing = report_by_item.setdefault(
+                item_code,
+                {"quantity": 0.0, "value": 0.0},
+            )
+            existing["quantity"] += row["quantity"]
+            existing["value"] += row["value"]
+
+        distribution_by_item: Dict[str, List[Dict]] = {}
+        for row in warehouse_distribution:
+            distribution_by_item.setdefault(row["item_code"], []).append(row)
+
+        buckets: Dict[str, Dict] = {}
+        for item_code, report_totals in report_by_item.items():
+            distributions = distribution_by_item.get(item_code, [])
+            distribution_total = sum(abs(row["quantity"]) for row in distributions)
+            if distribution_total <= 0:
+                self._add_warehouse_bucket(
+                    buckets,
+                    warehouse="Unassigned",
+                    warehouse_name="No current warehouse stock found",
+                    quantity=report_totals["quantity"],
+                    value=report_totals["value"],
+                    item_code=item_code,
+                )
+                continue
+
+            for distribution in distributions:
+                ratio = abs(distribution["quantity"]) / distribution_total
+                self._add_warehouse_bucket(
+                    buckets,
+                    warehouse=distribution["warehouse"],
+                    warehouse_name=distribution["warehouse_name"],
+                    quantity=report_totals["quantity"] * ratio,
+                    value=report_totals["value"] * ratio,
+                    item_code=item_code,
+                )
+
+        summary = []
+        for bucket in buckets.values():
+            summary.append({
+                "warehouse": bucket["warehouse"],
+                "warehouse_name": bucket["warehouse_name"],
+                "item_count": len(bucket["item_codes"]),
+                "total_quantity": round(bucket["total_quantity"], 3),
+                "total_value": round(bucket["total_value"], 2),
+            })
+
+        return sorted(summary, key=lambda row: row["total_value"], reverse=True)
+
+    @staticmethod
+    def _add_warehouse_bucket(
+        buckets: Dict[str, Dict],
+        *,
+        warehouse: str,
+        warehouse_name: str,
+        quantity: float,
+        value: float,
+        item_code: str,
+    ) -> None:
+        bucket = buckets.setdefault(
+            warehouse,
+            {
+                "warehouse": warehouse,
+                "warehouse_name": warehouse_name,
+                "item_codes": set(),
+                "total_quantity": 0.0,
+                "total_value": 0.0,
+            },
+        )
+        bucket["item_codes"].add(item_code)
+        bucket["total_quantity"] += quantity
+        bucket["total_value"] += value

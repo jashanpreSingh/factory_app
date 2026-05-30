@@ -19,6 +19,7 @@ from .serializers import (
     GRPOAttachmentSerializer,
     GRPOAttachmentUploadSerializer,
     AllGRPOEntrySerializer,
+    GRPODashboardSummarySerializer,
     ServiceGRPOPendingEntrySerializer,
     ServiceGRPOPreviewSerializer,
     ServiceGRPOPostRequestSerializer,
@@ -36,6 +37,20 @@ from .permissions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class GRPODashboardSummaryAPI(APIView):
+    """
+    Returns material GRPO dashboard insight totals.
+
+    GET /api/grpo/summary/
+    """
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewPendingGRPO]
+
+    def get(self, request):
+        service = GRPOService(company_code=request.company.company.code)
+        summary = service.get_grpo_dashboard_summary()
+        return Response(GRPODashboardSummarySerializer(summary).data)
 
 
 class AllGRPOEntriesListAPI(APIView):
@@ -294,6 +309,12 @@ class PostGRPOAPI(APIView):
             parsed_data = request.data
             attachments = []
 
+        if not attachments:
+            return Response(
+                {"detail": "At least one attachment is required for material GRPO."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer = GRPOPostRequestSerializer(data=parsed_data)
         if not serializer.is_valid():
             return Response(
@@ -313,6 +334,7 @@ class PostGRPOAPI(APIView):
                 warehouse_code=serializer.validated_data.get("warehouse_code"),
                 comments=serializer.validated_data.get("comments"),
                 vendor_ref=serializer.validated_data.get("vendor_ref"),
+                tare_weight=serializer.validated_data.get("tare_weight"),
                 extra_charges=serializer.validated_data.get("extra_charges"),
                 attachments=attachments,
                 doc_date=serializer.validated_data.get("doc_date"),

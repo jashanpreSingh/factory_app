@@ -1,13 +1,15 @@
 import json
+from copy import deepcopy
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from rest_framework.request import Request
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 
 from accounts.models import User
-from company.models import Company
+from company.models import Company, UserCompany, UserRole
 
 from .models import (
     BarcodeSequence,
@@ -20,6 +22,13 @@ from .models import (
     LooseStockStatus,
     PalletMovement,
     PalletStatus,
+    DispatchScanLog,
+    DispatchScanResult,
+    DispatchScannedUnit,
+    DispatchSapSyncLog,
+    DispatchSapUpdateStatus,
+    DispatchSessionStatus,
+    DispatchSettings,
     ScanLog,
     ScanResult,
 )
@@ -33,6 +42,12 @@ from .services.barcode_service import BarcodeService
 from .services.label_service import LabelService
 from .services.production_release_service import ProductionReleaseOilService
 from .services.scan_service import ScanService
+from .services.dispatch_service import (
+    BarcodeDispatchService,
+    DispatchValidationError,
+    SapDispatchAdapter,
+    SapUpdateResult,
+)
 from .views import _list_response
 
 
@@ -85,7 +100,10 @@ class BarcodeWorkflowTests(TestCase):
             BoxMovement.objects.filter(movement_type=BoxMovementType.CREATE).count(),
             3,
         )
-        self.assertTrue(all(box.barcode_data['type'] == 'BOX' for box in boxes))
+        self.assertEqual(
+            [box.barcode_data for box in boxes],
+            [{'barcode': box.box_barcode} for box in boxes],
+        )
 
         sequence = BarcodeSequence.objects.get(
             company=self.company,
@@ -162,7 +180,7 @@ class BarcodeWorkflowTests(TestCase):
             Box.objects.filter(pallet=pallet, current_warehouse='FG01').count(),
             3,
         )
-        self.assertEqual(pallet.barcode_data['type'], 'PALLET')
+        self.assertEqual(pallet.barcode_data, {'barcode': pallet.pallet_id})
 
     def test_add_boxes_to_pallet_rejects_mismatched_item_context(self):
         boxes = self._generate_boxes(count=1)
@@ -435,6 +453,61 @@ class BarcodeWorkflowTests(TestCase):
         other_box.refresh_from_db()
         self.assertIsNone(other_box.pallet)
 
+    def test_box_transfer_between_pallets_requires_available_target_space(self):
+        source_boxes = self._generate_boxes(count=2, qty='5.00', batch='BATCH-MERGE')
+        target_box = self._generate_boxes(count=1, qty='5.00', batch='BATCH-MERGE')[0]
+
+        source = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+            },
+            user=self.user,
+        )
+        source = self.service.add_boxes_to_pallet(
+            source.id,
+            [box.id for box in source_boxes],
+            user=self.user,
+        )
+        target = self.service.create_pallet(
+            {
+                'box_ids': [],
+                'warehouse': 'FG02',
+                'production_line': 'Line 1',
+                'mfg_date': date(2026, 5, 7),
+                'max_box_count': 2,
+            },
+            user=self.user,
+        )
+        target = self.service.add_boxes_to_pallet(target.id, [target_box.id], user=self.user)
+
+        transferred = self.service.transfer_boxes(
+            [source_boxes[0].id],
+            to_warehouse=target.current_warehouse,
+            to_pallet_id=target.id,
+            user=self.user,
+        )
+
+        self.assertEqual(transferred[0].pallet_id, target.id)
+        self.assertEqual(transferred[0].current_warehouse, 'FG02')
+        source.refresh_from_db()
+        target.refresh_from_db()
+        self.assertEqual(source.box_count, 1)
+        self.assertEqual(target.box_count, 2)
+
+        with self.assertRaisesMessage(ValueError, "Pallet capacity exceeded."):
+            self.service.transfer_boxes(
+                [source_boxes[1].id],
+                to_warehouse=target.current_warehouse,
+                to_pallet_id=target.id,
+                user=self.user,
+            )
+
+        source_boxes[1].refresh_from_db()
+        self.assertEqual(source_boxes[1].pallet_id, source.id)
+
     def test_pallet_sequence_uses_global_unique_namespace(self):
         first = self.service.create_pallet(
             {
@@ -679,3 +752,665 @@ class BarcodeWorkflowTests(TestCase):
         self.assertEqual(row['box_size'], '4')
         self.assertEqual(row['mfg_date'], '2026-02-20')
         self.assertEqual(row['exp_date'], '2027-02-20')
+
+
+class FakeDispatchSapAdapter:
+    def __init__(self, bill, update_status=DispatchSapUpdateStatus.NOT_CONFIGURED):
+        self.bill = bill
+        self.update_status = update_status
+        self.update_calls = 0
+
+    def lookup_bill(self, bill_number):
+        if bill_number != self.bill['bill_number']:
+            return None
+        return deepcopy(self.bill)
+
+    def update_dispatch_status(self, session):
+        self.update_calls += 1
+        return SapUpdateResult(
+            status=self.update_status,
+            message='SAP update failed in test adapter.' if self.update_status == DispatchSapUpdateStatus.FAILED else 'SAP update disabled in test adapter.',
+            request_payload={'bill_number': session.bill_number},
+            response_payload={},
+        )
+
+
+class BarcodeDispatchWorkflowTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(
+            name='Dispatch Barcode Company',
+            code='DISPATCHCO',
+        )
+        self.user = User.objects.create_user(
+            email='dispatch-barcode@example.com',
+            password='test-pass',
+            full_name='Dispatch Barcode Tester',
+            employee_code='EMP-BCD-001',
+        )
+        self.role = UserRole.objects.create(name='Dispatch Admin')
+        UserCompany.objects.create(
+            user=self.user,
+            company=self.company,
+            role=self.role,
+            is_default=True,
+            is_active=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.client.defaults['HTTP_COMPANY_CODE'] = self.company.code
+        self.barcode_service = BarcodeService(company_code=self.company.code)
+        self.adapter = FakeDispatchSapAdapter(self._bill())
+        self.dispatch_service = BarcodeDispatchService(
+            company_code=self.company.code,
+            sap_adapter=self.adapter,
+        )
+
+    def _bill(self, *, bill_number='900001', item1_qty='10.000', item2_qty='5.000'):
+        return {
+            'source_system': 'BUSINESS_ONE',
+            'sap_object_type': 'AR_INVOICE',
+            'bill_number': bill_number,
+            'bill_internal_id': '101',
+            'bill_date': '2026-05-23',
+            'already_dispatched': False,
+            'sap_dispatch_status': 'OPEN',
+            'reference_delivery_number': '800001',
+            'customer': {
+                'code': 'CUST001',
+                'name': 'ABC Traders',
+                'ship_to_code': 'SHIP001',
+                'ship_to_name': 'ABC Traders Warehouse',
+            },
+            'lines': [
+                {
+                    'sequence_no': 1,
+                    'sap_line_no': '10',
+                    'material_code': 'FG001',
+                    'material_description': 'First item',
+                    'quantity': item1_qty,
+                    'total_boxes': '2.000',
+                    'uom': 'PCS',
+                    'batch_number': 'BATCH-001',
+                    'warehouse_code': 'FG01',
+                    'serial_required': False,
+                },
+                {
+                    'sequence_no': 2,
+                    'sap_line_no': '20',
+                    'material_code': 'FG002',
+                    'material_description': 'Second item',
+                    'quantity': item2_qty,
+                    'total_boxes': '1.000',
+                    'uom': 'PCS',
+                    'batch_number': 'BATCH-002',
+                    'warehouse_code': 'FG01',
+                    'serial_required': False,
+                },
+            ],
+            'raw': {},
+        }
+
+    def _box(self, item_code='FG001', batch='BATCH-001', qty='10.00'):
+        return self._boxes(item_code=item_code, batch=batch, qty=qty, count=1)[0]
+
+    def _boxes(self, item_code='FG001', batch='BATCH-001', qty='10.00', count=1):
+        return self.barcode_service.generate_boxes(
+            {
+                'item_code': item_code,
+                'item_name': f'{item_code} item',
+                'batch_number': batch,
+                'qty': Decimal(qty),
+                'box_count': count,
+                'uom': 'PCS',
+                'mfg_date': date(2026, 5, 7),
+                'exp_date': date(2027, 5, 7),
+                'warehouse': 'FG01',
+                'production_line': 'Line 1',
+            },
+            user=self.user,
+        )
+
+    def _pallet_with_boxes(self, boxes):
+        pallet = self.barcode_service.create_pallet(
+            {'warehouse': 'FG01', 'production_line': 'Line 1'},
+            user=self.user,
+        )
+        self.barcode_service.add_boxes_to_pallet(pallet.id, [box.id for box in boxes], self.user)
+        pallet.refresh_from_db()
+        return pallet
+
+    def test_create_session_from_sap_bill_snapshot(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+
+        self.assertEqual(session.bill_number, '900001')
+        self.assertEqual(session.customer_code, 'CUST001')
+        self.assertEqual(session.reference_delivery_number, '800001')
+        self.assertEqual(session.status, DispatchSessionStatus.DRAFT)
+        self.assertEqual(session.delivery_number, '800001')
+        self.assertEqual(session.total_expected_qty, Decimal('15.000'))
+        self.assertEqual(session.lines.count(), 2)
+        self.assertEqual(
+            list(session.lines.values_list('sequence_no', 'material_code', 'bill_qty', 'bill_boxes')),
+            [
+                (1, 'FG001', Decimal('10.000'), Decimal('2.000')),
+                (2, 'FG002', Decimal('5.000'), Decimal('1.000')),
+            ],
+        )
+
+    def test_create_session_allows_bill_marked_dispatched_in_sap(self):
+        self.adapter.bill = {
+            **self._bill(),
+            'already_dispatched': True,
+            'sap_dispatch_status': 'DISPATCHED',
+            'raw': {'sap_dispatch_date': '2026-05-25'},
+        }
+
+        session = self.dispatch_service.create_session('900001', self.user)
+
+        self.assertEqual(session.bill_number, '900001')
+        self.assertEqual(session.sap_dispatch_status, 'DISPATCHED')
+        self.assertEqual(session.status, DispatchSessionStatus.DRAFT)
+
+    def test_scan_rejects_later_item_until_current_line_is_complete(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+
+        scan = self.dispatch_service.submit_scan(
+            session.id,
+            item2_box.box_barcode,
+            user=self.user,
+        )
+
+        self.assertEqual(scan.result, DispatchScanResult.REJECTED)
+        self.assertEqual(scan.reject_code, 'LINE_SEQUENCE_VIOLATION')
+        self.assertEqual(DispatchScanLog.objects.count(), 1)
+
+    def test_non_sequential_scan_uses_selected_line(self):
+        DispatchSettings.objects.update_or_create(
+            company=self.company,
+            defaults={'require_sequential_item_scanning': False},
+        )
+        self.dispatch_service._settings = None
+        session = self.dispatch_service.create_session('900001', self.user)
+        item2_line = session.lines.get(sequence_no=2)
+        item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+
+        scan = self.dispatch_service.submit_scan(
+            session.id,
+            item2_box.box_barcode,
+            user=self.user,
+            line_id=item2_line.id,
+        )
+
+        self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
+        session.refresh_from_db()
+        self.assertEqual(session.lines.get(sequence_no=1).scanned_qty, Decimal('0.000'))
+        self.assertEqual(session.lines.get(sequence_no=2).scanned_qty, Decimal('5.000'))
+        self.assertEqual(DispatchScannedUnit.objects.get().line_id, item2_line.id)
+
+    def test_non_sequential_selected_line_still_rejects_wrong_material(self):
+        DispatchSettings.objects.update_or_create(
+            company=self.company,
+            defaults={'require_sequential_item_scanning': False},
+        )
+        self.dispatch_service._settings = None
+        session = self.dispatch_service.create_session('900001', self.user)
+        item2_line = session.lines.get(sequence_no=2)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='5.00')
+
+        scan = self.dispatch_service.submit_scan(
+            session.id,
+            item1_box.box_barcode,
+            user=self.user,
+            line_id=item2_line.id,
+        )
+
+        self.assertEqual(scan.result, DispatchScanResult.REJECTED)
+        self.assertEqual(scan.reject_code, 'WRONG_MATERIAL')
+
+    def test_scan_rejects_wrong_material_and_auto_allocates_pending_quantity(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        wrong_box = self._box(item_code='FG009', batch='BATCH-009', qty='1.00')
+        over_box = self._box(item_code='FG001', batch='BATCH-001', qty='11.00')
+
+        wrong_scan = self.dispatch_service.submit_scan(
+            session.id,
+            wrong_box.box_barcode,
+            user=self.user,
+        )
+        over_scan = self.dispatch_service.submit_scan(
+            session.id,
+            over_box.box_barcode,
+            user=self.user,
+        )
+
+        self.assertEqual(wrong_scan.result, DispatchScanResult.REJECTED)
+        self.assertEqual(wrong_scan.reject_code, 'WRONG_MATERIAL')
+        self.assertEqual(over_scan.result, DispatchScanResult.ACCEPTED)
+        unit = DispatchScannedUnit.objects.get(box=over_box)
+        self.assertEqual(unit.total_box_qty, Decimal('11.000'))
+        self.assertEqual(unit.dispatch_qty, Decimal('10.000'))
+        self.assertEqual(unit.remaining_qty, Decimal('1.000'))
+        self.assertEqual(DispatchScanLog.objects.filter(result='REJECTED').count(), 1)
+
+    def test_scan_accepts_correct_sequence_and_blocks_duplicate_barcode(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+
+        accepted = self.dispatch_service.submit_scan(
+            session.id,
+            item1_box.box_barcode,
+            user=self.user,
+        )
+        duplicate = self.dispatch_service.submit_scan(
+            session.id,
+            item1_box.box_barcode,
+            user=self.user,
+        )
+
+        session.refresh_from_db()
+        line1 = session.lines.get(sequence_no=1)
+        self.assertEqual(accepted.result, DispatchScanResult.ACCEPTED)
+        self.assertEqual(line1.scanned_qty, Decimal('10.000'))
+        self.assertEqual(line1.status, 'COMPLETE')
+        self.assertEqual(duplicate.result, DispatchScanResult.REJECTED)
+        self.assertEqual(duplicate.reject_code, 'BOX_ALREADY_SCANNED')
+        self.assertEqual(DispatchScannedUnit.objects.count(), 1)
+        item1_box.refresh_from_db()
+        self.assertEqual(item1_box.status, BoxStatus.ACTIVE)
+        self.assertIsNone(item1_box.dispatch_session_id)
+
+    def test_scanned_box_quantity_can_be_reduced_and_remaining_is_calculated(self):
+        self.adapter = FakeDispatchSapAdapter(self._bill(item1_qty='20.000', item2_qty='5.000'))
+        self.dispatch_service = BarcodeDispatchService(
+            company_code=self.company.code,
+            sap_adapter=self.adapter,
+        )
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='20.00')
+
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        unit = DispatchScannedUnit.objects.get(box=item1_box)
+        self.assertEqual(unit.total_box_qty, Decimal('20.000'))
+        self.assertEqual(unit.dispatch_qty, Decimal('20.000'))
+
+        updated = self.dispatch_service.update_scanned_box_qty(session.id, unit.id, Decimal('12'), self.user)
+        unit.refresh_from_db()
+        line = updated.lines.get(sequence_no=1)
+        self.assertEqual(unit.dispatch_qty, Decimal('12.000'))
+        self.assertEqual(unit.remaining_qty, Decimal('8.000'))
+        self.assertEqual(line.scanned_qty, Decimal('12.000'))
+
+        dispatched = self.dispatch_service.mark_dispatched(session.id, self.user)
+        item1_box.refresh_from_db()
+        self.assertEqual(dispatched.total_scanned_qty, Decimal('12.000'))
+        self.assertEqual(item1_box.status, BoxStatus.PARTIAL)
+        self.assertEqual(item1_box.qty, Decimal('8.000'))
+
+    def test_box_scan_auto_dispatches_only_pending_quantity(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='20.00')
+
+        scan = self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+
+        self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
+        unit = DispatchScannedUnit.objects.get(box=item1_box)
+        self.assertEqual(unit.total_box_qty, Decimal('20.000'))
+        self.assertEqual(unit.dispatch_qty, Decimal('10.000'))
+        self.assertEqual(unit.remaining_qty, Decimal('10.000'))
+        self.assertEqual(session.lines.get(sequence_no=1).scanned_qty, Decimal('10.000'))
+
+        self.dispatch_service.mark_dispatched(session.id, self.user)
+        item1_box.refresh_from_db()
+        self.assertEqual(item1_box.status, BoxStatus.PARTIAL)
+        self.assertEqual(item1_box.qty, Decimal('10.000'))
+
+    def test_scanned_box_quantity_validation_rejects_zero_negative_and_over_box_qty(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        unit = DispatchScannedUnit.objects.get(box=item1_box)
+
+        with self.assertRaises(DispatchValidationError) as zero_ctx:
+            self.dispatch_service.update_scanned_box_qty(session.id, unit.id, Decimal('0'), self.user)
+        self.assertEqual(zero_ctx.exception.code, 'INVALID_DISPATCH_QTY')
+
+        with self.assertRaises(DispatchValidationError) as negative_ctx:
+            self.dispatch_service.update_scanned_box_qty(session.id, unit.id, Decimal('-1'), self.user)
+        self.assertEqual(negative_ctx.exception.code, 'INVALID_DISPATCH_QTY')
+
+        with self.assertRaises(DispatchValidationError) as over_ctx:
+            self.dispatch_service.update_scanned_box_qty(session.id, unit.id, Decimal('11'), self.user)
+        self.assertEqual(over_ctx.exception.code, 'DISPATCH_QTY_GT_BOX_QTY')
+
+    def test_remove_scanned_box_excludes_it_from_dispatch_totals(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        unit = DispatchScannedUnit.objects.get(box=item1_box)
+
+        updated = self.dispatch_service.remove_scanned_box(session.id, unit.id, self.user)
+        unit.refresh_from_db()
+        line = updated.lines.get(sequence_no=1)
+        self.assertEqual(unit.scan_status, 'REMOVED')
+        self.assertEqual(unit.dispatch_qty, Decimal('0.000'))
+        self.assertEqual(line.scanned_qty, Decimal('0.000'))
+        self.assertEqual(updated.total_scanned_qty, Decimal('0.000'))
+
+        item1_box.refresh_from_db()
+        self.assertEqual(item1_box.status, BoxStatus.ACTIVE)
+        self.assertIsNone(item1_box.dispatch_session_id)
+
+    def test_mark_dispatched_requires_all_lines_and_logs_sap_sync(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        self.dispatch_service.submit_scan(session.id, item2_box.box_barcode, user=self.user)
+
+        dispatched = self.dispatch_service.mark_dispatched(session.id, self.user)
+
+        self.assertEqual(dispatched.status, DispatchSessionStatus.COMPLETED)
+        self.assertEqual(dispatched.sap_update_status, DispatchSapUpdateStatus.NOT_CONFIGURED)
+        self.assertEqual(dispatched.dispatched_by, self.user)
+        self.assertEqual(DispatchSapSyncLog.objects.count(), 1)
+        self.assertEqual(self.adapter.update_calls, 1)
+
+    def test_active_completed_and_closed_session_lists(self):
+        active = self.dispatch_service.create_session('900001', self.user)
+        self.assertIn(active, list(self.dispatch_service.list_sessions(status_group='active')))
+
+        self.dispatch_service.cancel_session(active.id, 'Wrong bill selected', self.user)
+        self.assertIn(active.id, [session.id for session in self.dispatch_service.list_sessions(status_group='closed')])
+
+        self.adapter.bill = self._bill(bill_number='900002')
+        completed = self.dispatch_service.create_session('900002', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+        self.dispatch_service.submit_scan(completed.id, item1_box.box_barcode, user=self.user)
+        self.dispatch_service.submit_scan(completed.id, item2_box.box_barcode, user=self.user)
+        completed = self.dispatch_service.mark_dispatched(completed.id, self.user)
+
+        self.assertIn(completed.id, [session.id for session in self.dispatch_service.list_sessions(status_group='completed')])
+
+    def test_pallet_scan_marks_all_boxes_dispatched(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        boxes = self._boxes(item_code='FG001', batch='BATCH-001', qty='5.00', count=2)
+        pallet = self._pallet_with_boxes(boxes)
+
+        scan = self.dispatch_service.submit_scan(session.id, pallet.pallet_id, user=self.user)
+
+        self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
+        pallet.refresh_from_db()
+        self.assertEqual(pallet.status, PalletStatus.ACTIVE)
+        self.assertIsNone(pallet.dispatch_session_id)
+        self.assertEqual(DispatchScannedUnit.objects.filter(pallet=pallet, entity_type='BOX').count(), 2)
+
+        self.dispatch_service.mark_dispatched(session.id, self.user)
+        pallet.refresh_from_db()
+        self.assertEqual(pallet.status, PalletStatus.DISPATCHED)
+        self.assertEqual(pallet.dispatch_session_id, session.id)
+        self.assertEqual(pallet.dispatched_boxes, 2)
+        self.assertEqual(Box.objects.filter(id__in=[box.id for box in boxes], status=BoxStatus.DISPATCHED).count(), 2)
+
+    def test_box_scan_from_pallet_removes_box_and_keeps_pallet_partial(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        boxes = self._boxes(item_code='FG001', batch='BATCH-001', qty='5.00', count=2)
+        pallet = self._pallet_with_boxes(boxes)
+
+        scan = self.dispatch_service.submit_scan(session.id, boxes[0].box_barcode, user=self.user)
+
+        self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
+        boxes[0].refresh_from_db()
+        pallet.refresh_from_db()
+        self.assertEqual(boxes[0].pallet_id, pallet.id)
+        self.assertEqual(boxes[0].status, BoxStatus.ACTIVE)
+        self.assertIsNone(boxes[0].removed_from_pallet_at)
+
+        self.dispatch_service.mark_dispatched(session.id, self.user)
+        boxes[0].refresh_from_db()
+        pallet.refresh_from_db()
+        self.assertIsNone(boxes[0].pallet_id)
+        self.assertEqual(boxes[0].status, BoxStatus.DISPATCHED)
+        self.assertIsNotNone(boxes[0].removed_from_pallet_at)
+        self.assertEqual(pallet.status, PalletStatus.PARTIAL)
+        self.assertEqual(pallet.available_boxes, 1)
+        self.assertEqual(pallet.box_history.filter(action='BOX_DISPATCHED_SEPARATELY').count(), 1)
+
+    def test_remaining_pallet_dispatch_after_one_box_removed_obeys_partial_rule(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        boxes = self._boxes(item_code='FG001', batch='BATCH-001', qty='5.00', count=2)
+        pallet = self._pallet_with_boxes(boxes)
+        self.dispatch_service.submit_scan(session.id, boxes[0].box_barcode, user=self.user)
+
+        scan = self.dispatch_service.submit_scan(session.id, pallet.pallet_id, user=self.user)
+
+        self.assertEqual(scan.result, DispatchScanResult.ACCEPTED)
+        pallet.refresh_from_db()
+        self.assertIn('already dispatched or removed', scan.parsed_barcode.get('warning', ''))
+        self.assertEqual(session.lines.get(sequence_no=1).scanned_qty, Decimal('10.000'))
+
+        self.dispatch_service.mark_dispatched(session.id, self.user)
+        pallet.refresh_from_db()
+        self.assertEqual(pallet.status, PalletStatus.DISPATCHED)
+
+    def test_partial_pallet_dispatch_can_be_rejected_by_setting(self):
+        DispatchSettings.objects.update_or_create(
+            company=self.company,
+            defaults={'allow_partial_pallet_dispatch': False},
+        )
+        self.dispatch_service._settings = None
+        session = self.dispatch_service.create_session('900001', self.user)
+        boxes = self._boxes(item_code='FG001', batch='BATCH-001', qty='5.00', count=2)
+        pallet = self._pallet_with_boxes(boxes)
+        self.dispatch_service.submit_scan(session.id, boxes[0].box_barcode, user=self.user)
+
+        scan = self.dispatch_service.submit_scan(session.id, pallet.pallet_id, user=self.user)
+
+        self.assertEqual(scan.result, DispatchScanResult.REJECTED)
+        self.assertEqual(scan.reject_code, 'PALLET_HAS_DISPATCHED_BOXES')
+
+    def test_completed_and_closed_dispatches_do_not_allow_scanning(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        self.dispatch_service.submit_scan(session.id, item2_box.box_barcode, user=self.user)
+        completed = self.dispatch_service.mark_dispatched(session.id, self.user)
+
+        extra = self._box(item_code='FG001', batch='BATCH-001', qty='1.00')
+        rejected = self.dispatch_service.submit_scan(completed.id, extra.box_barcode, user=self.user)
+        self.assertEqual(rejected.result, DispatchScanResult.REJECTED)
+        self.assertEqual(rejected.reject_code, 'SESSION_CLOSED')
+
+        self.adapter.bill = self._bill(bill_number='900002')
+        closed = self.dispatch_service.create_session('900002', self.user)
+        self.dispatch_service.close_session(closed.id, 'Manual close test', self.user)
+        rejected_closed = self.dispatch_service.submit_scan(closed.id, extra.box_barcode, user=self.user)
+        self.assertEqual(rejected_closed.result, DispatchScanResult.REJECTED)
+        self.assertEqual(rejected_closed.reject_code, 'SESSION_CLOSED')
+
+    def test_sap_sync_failure_is_stored_as_failed_status(self):
+        self.adapter = FakeDispatchSapAdapter(
+            self._bill(),
+            update_status=DispatchSapUpdateStatus.FAILED,
+        )
+        self.dispatch_service = BarcodeDispatchService(
+            company_code=self.company.code,
+            sap_adapter=self.adapter,
+        )
+        session = self.dispatch_service.create_session('900001', self.user)
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        self.dispatch_service.submit_scan(session.id, item2_box.box_barcode, user=self.user)
+
+        failed = self.dispatch_service.mark_dispatched(session.id, self.user)
+
+        self.assertEqual(failed.status, DispatchSessionStatus.SAP_SYNC_FAILED)
+        self.assertEqual(failed.sap_update_status, DispatchSapUpdateStatus.FAILED)
+        self.assertTrue(failed.sap_update_error)
+
+    def test_report_queries_return_dispatch_pallet_box_and_rejections(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+        wrong_box = self._box(item_code='FG009', batch='BATCH-009', qty='1.00')
+        item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+        item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+        self.dispatch_service.submit_scan(session.id, wrong_box.box_barcode, user=self.user)
+        self.dispatch_service.submit_scan(session.id, item1_box.box_barcode, user=self.user)
+        self.dispatch_service.submit_scan(session.id, item2_box.box_barcode, user=self.user)
+        self.dispatch_service.mark_dispatched(session.id, self.user)
+
+        self.assertEqual(len(self.dispatch_service.dispatch_report({'bill_number': '900001'})), 1)
+        self.assertEqual(self.dispatch_service.dispatch_detail_report(session.id)['session']['bill_number'], '900001')
+        self.assertGreaterEqual(len(self.dispatch_service.box_report({'bill_number': '900001'})), 2)
+        self.assertEqual(len(self.dispatch_service.rejected_scan_report({'bill_number': '900001'})), 1)
+
+    def test_dispatch_api_create_list_scan_complete_close_and_reports(self):
+        with patch.object(SapDispatchAdapter, 'lookup_bill', autospec=True) as lookup_bill:
+            lookup_bill.side_effect = lambda _adapter, bill_number: deepcopy(
+                self._bill(bill_number=bill_number)
+            )
+            response = self.client.post(
+                '/api/v1/barcode/dispatch/sessions/from-bill/',
+                {'bill_number': '900001'},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 201)
+            session_id = response.data['id']
+            active_response = self.client.get('/api/v1/barcode/dispatch/sessions/active/')
+            self.assertEqual(active_response.status_code, 200)
+            self.assertEqual(active_response.data[0]['id'], session_id)
+
+            item1_box = self._box(item_code='FG001', batch='BATCH-001', qty='10.00')
+            scan_response = self.client.post(
+                f'/api/v1/barcode/dispatch/sessions/{session_id}/scan/',
+                {'barcode': item1_box.box_barcode},
+                format='json',
+            )
+            self.assertEqual(scan_response.status_code, 200)
+
+            item2_box = self._box(item_code='FG002', batch='BATCH-002', qty='5.00')
+            scan_response = self.client.post(
+                f'/api/v1/barcode/dispatch/sessions/{session_id}/scan/',
+                {'barcode': item2_box.box_barcode},
+                format='json',
+            )
+            self.assertEqual(scan_response.status_code, 200)
+
+            complete_response = self.client.post(f'/api/v1/barcode/dispatch/sessions/{session_id}/complete/')
+            self.assertEqual(complete_response.status_code, 200)
+            self.assertEqual(complete_response.data['status'], DispatchSessionStatus.COMPLETED)
+
+            report_response = self.client.get('/api/v1/barcode/dispatch/reports/', {'bill_number': '900001'})
+            self.assertEqual(report_response.status_code, 200)
+            self.assertEqual(report_response.data[0]['bill_number'], '900001')
+            box_report_response = self.client.get('/api/v1/barcode/dispatch/reports/boxes/')
+            self.assertEqual(box_report_response.status_code, 200)
+
+            close_response = self.client.post(
+                '/api/v1/barcode/dispatch/sessions/from-bill/',
+                {'bill_number': '900002'},
+                format='json',
+            )
+            close_session_id = close_response.data['id']
+            close_response = self.client.post(
+                f'/api/v1/barcode/dispatch/sessions/{close_session_id}/close/',
+                {'reason': 'API close test'},
+                format='json',
+            )
+            self.assertEqual(close_response.status_code, 200)
+            self.assertEqual(close_response.data['status'], DispatchSessionStatus.CLOSED)
+
+    def test_api_settings_history_rejected_report_and_csv_export(self):
+        with patch.object(SapDispatchAdapter, 'lookup_bill', autospec=True) as lookup_bill:
+            lookup_bill.side_effect = lambda _adapter, bill_number: deepcopy(
+                self._bill(bill_number=bill_number)
+            )
+
+            settings_response = self.client.get('/api/v1/barcode/dispatch/settings/')
+            self.assertEqual(settings_response.status_code, 200)
+            self.assertTrue(settings_response.data['allow_box_dispatch_from_pallet'])
+
+            settings_response = self.client.patch(
+                '/api/v1/barcode/dispatch/settings/',
+                {'allow_partial_pallet_dispatch': False},
+                format='json',
+            )
+            self.assertEqual(settings_response.status_code, 200)
+            self.assertFalse(settings_response.data['allow_partial_pallet_dispatch'])
+
+            session_response = self.client.post(
+                '/api/v1/barcode/dispatch/sessions/from-bill/',
+                {'bill_number': '900003'},
+                format='json',
+            )
+            self.assertEqual(session_response.status_code, 201)
+            session_id = session_response.data['id']
+
+            boxes = self._boxes(item_code='FG001', batch='BATCH-001', qty='5.00', count=2)
+            pallet = self._pallet_with_boxes(boxes)
+            wrong_box = self._box(item_code='FG009', batch='BATCH-009', qty='1.00')
+
+            rejected_response = self.client.post(
+                f'/api/v1/barcode/dispatch/sessions/{session_id}/scan/',
+                {'barcode': wrong_box.box_barcode},
+                format='json',
+            )
+            self.assertEqual(rejected_response.status_code, 400)
+            self.assertEqual(rejected_response.data['scan']['result'], DispatchScanResult.REJECTED)
+            self.assertEqual(rejected_response.data['scan']['reject_code'], 'WRONG_MATERIAL')
+
+            accepted_response = self.client.post(
+                f'/api/v1/barcode/dispatch/sessions/{session_id}/scan/',
+                {'barcode': boxes[0].box_barcode},
+                format='json',
+            )
+            self.assertEqual(accepted_response.status_code, 200)
+            boxes[0].refresh_from_db()
+            pallet.refresh_from_db()
+            self.assertIsNone(boxes[0].pallet_id)
+            self.assertEqual(pallet.status, PalletStatus.PARTIAL)
+
+            pallet_history_response = self.client.get(f'/api/v1/barcode/pallets/{pallet.id}/history/')
+            self.assertEqual(pallet_history_response.status_code, 200)
+            self.assertEqual(pallet_history_response.data[0]['action'], 'BOX_DISPATCHED_SEPARATELY')
+
+            box_history_response = self.client.get(f'/api/v1/barcode/boxes/{boxes[0].id}/history/')
+            self.assertEqual(box_history_response.status_code, 200)
+            self.assertEqual(box_history_response.data[0]['box'], boxes[0].id)
+
+            rejected_report_response = self.client.get(
+                '/api/v1/barcode/dispatch/reports/rejected-scans/',
+                {'bill_number': '900003'},
+            )
+            self.assertEqual(rejected_report_response.status_code, 200)
+            self.assertEqual(rejected_report_response.data[0]['rejection_code'], 'WRONG_MATERIAL')
+
+            pallet_report_response = self.client.get(
+                '/api/v1/barcode/dispatch/reports/pallets/',
+                {'pallet_barcode': pallet.pallet_id},
+            )
+            self.assertEqual(pallet_report_response.status_code, 200)
+            self.assertEqual(pallet_report_response.data[0]['pallet_barcode'], pallet.pallet_id)
+
+            csv_response = self.client.get(
+                '/api/v1/barcode/dispatch/reports/',
+                {'bill_number': '900003', 'export': 'csv'},
+            )
+            self.assertEqual(csv_response.status_code, 200)
+            self.assertIn('attachment;', csv_response['Content-Disposition'])
+            self.assertIn(b'bill_number', csv_response.content)
+
+    def test_unknown_barcode_scan_is_rejected_and_audited(self):
+        session = self.dispatch_service.create_session('900001', self.user)
+
+        scan = self.dispatch_service.submit_scan(session.id, 'UNKNOWN-BARCODE', user=self.user)
+
+        self.assertEqual(scan.result, DispatchScanResult.REJECTED)
+        self.assertEqual(scan.reject_code, 'BARCODE_NOT_FOUND')
+        self.assertEqual(
+            DispatchScanLog.objects.filter(result=DispatchScanResult.REJECTED).count(),
+            1,
+        )

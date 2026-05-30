@@ -78,6 +78,50 @@ class StockDashboardService:
             },
         }
 
+    def get_as_of_stock_levels(self, filters: Dict[str, Any]) -> Dict:
+        """
+        Returns SAP movement reconstructed Stock Benchmark rows for a prior date.
+
+        This proof endpoint keeps benchmark and item master values current, while
+        reconstructing on-hand and movement age from SAP OINM posting history.
+        """
+        page = int(filters.get("page", 1))
+        page_size = int(filters.get("page_size", 50))
+        as_of_date = filters["as_of_date"]
+
+        warehouses = self.reader.get_warehouses()
+        filtered_stats = self.reader.get_as_of_stock_stats(filters, as_of_date)
+        filtered_total = filtered_stats["total_items"]
+        total_pages = max(1, (filtered_total + page_size - 1) // page_size)
+
+        rows = self.reader.get_as_of_stock_levels(
+            filters,
+            as_of_date=as_of_date,
+            page=page,
+            page_size=page_size,
+        )
+        self._enrich_rows(rows)
+
+        return {
+            "data": rows,
+            "meta": {
+                "total_items": filtered_total,
+                "healthy_count": filtered_stats["healthy_count"],
+                "low_stock_count": filtered_stats["low_count"],
+                "critical_stock_count": filtered_stats["critical_count"],
+                "warehouses": warehouses,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "as_of_date": as_of_date.isoformat(),
+                "reconstruction_note": (
+                    "On-hand and movement age are reconstructed from SAP OINM. "
+                    "Benchmark and item master fields are current SAP values."
+                ),
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+            },
+        }
+
     def get_item_detail(self, item_code: str, warehouses: List[str]) -> Dict:
         """Returns per-warehouse breakdown for a single item (expand detail)."""
         rows = self.reader.get_item_warehouses(item_code, warehouses)
@@ -95,8 +139,6 @@ class StockDashboardService:
             row["stock_status"] = self._stock_status(
                 row["on_hand"],
                 row["min_stock"],
-                planned_qty=row.get("planned_qty", 0),
-                has_open_plan=row.get("has_open_plan", False),
                 movement_status=row["movement_status"],
             )
             row["health_ratio"] = self._health_ratio(row)
@@ -108,9 +150,6 @@ class StockDashboardService:
             row["stock_status"] = self._stock_status(
                 row["on_hand"],
                 row["min_stock"],
-                planned_qty=row.get("planned_qty", 0),
-                has_open_plan=row.get("has_open_plan", False),
-                planned_without_benchmark=row.get("planned_without_benchmark", 0) > 0,
                 movement_status=row["movement_status"],
             )
             row["health_ratio"] = self._health_ratio(row)
@@ -132,14 +171,11 @@ class StockDashboardService:
     def _stock_status(
         on_hand: float,
         min_stock: float,
-        planned_qty: float = 0,
-        has_open_plan: bool = False,
-        planned_without_benchmark: bool = False,
         movement_status: str | None = None,
     ) -> str:
         if movement_status == "slow":
             return "none"
-        required_qty = min_stock + planned_qty
+        required_qty = min_stock
         if required_qty <= 0:
             return "unset"
         if on_hand >= required_qty:
@@ -150,14 +186,11 @@ class StockDashboardService:
 
     @staticmethod
     def _health_ratio(row: Dict) -> float:
-        required_qty = row["min_stock"] + row.get("planned_qty", 0)
+        required_qty = row["min_stock"]
         return round(row["on_hand"] / required_qty, 2) if required_qty > 0 else 0.0
 
     @staticmethod
     def _movement_status(row: Dict) -> str:
-        if row.get("has_open_plan"):
-            return "planned"
-
         days_since_consumption = row.get("days_since_last_consumption")
         if (
             days_since_consumption is not None

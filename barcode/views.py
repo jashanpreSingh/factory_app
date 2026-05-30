@@ -1,5 +1,7 @@
 import logging
+import csv
 from django.db import IntegrityError
+from django.http import HttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -9,6 +11,7 @@ from company.permissions import HasCompanyContext
 from .services.barcode_service import BarcodeService
 from .services.label_service import LabelService
 from .services.scan_service import ScanService
+from .services.dispatch_service import BarcodeDispatchService, DispatchValidationError
 from .services.production_integration_service import ProductionBarcodeIntegration
 from .services.production_release_service import (
     ProductionReleaseOilService,
@@ -24,6 +27,11 @@ from .serializers import (
     DismantlePalletSerializer, DismantleBoxSerializer, RepackSerializer,
     LooseStockListSerializer, LooseStockDetailSerializer,
     ScanRequestSerializer, ScanLogSerializer,
+    DispatchBillLookupSerializer, DispatchSessionCreateSerializer,
+    DispatchScanSubmitSerializer, DispatchScannedBoxQtySerializer, DispatchCancelSerializer,
+    DispatchSessionSerializer, DispatchScanLogSerializer,
+    DispatchSapSyncLogSerializer, DispatchSettingsSerializer,
+    PalletBoxHistorySerializer,
     ProductionLabelsSerializer, ProductionPalletSerializer,
 )
 
@@ -46,6 +54,11 @@ def _get_scan_service(request) -> ScanService:
 def _get_label_service(request) -> LabelService:
     company_code = request.company.company.code
     return LabelService(company_code=company_code)
+
+
+def _get_dispatch_service(request) -> BarcodeDispatchService:
+    company_code = request.company.company.code
+    return BarcodeDispatchService(company_code=company_code)
 
 
 def _parse_positive_int(value, default):
@@ -92,6 +105,30 @@ def _is_unique_integrity_error(exc: IntegrityError, field_name: str) -> bool:
     return field_name.lower() in message and (
         'duplicate' in message or 'unique' in message
     )
+
+
+def _dispatch_error_response(exc: DispatchValidationError):
+    return Response(
+        {'code': exc.code, 'error': exc.message},
+        status=getattr(exc, 'status_code', status.HTTP_400_BAD_REQUEST),
+    )
+
+
+def _report_response(request, rows, filename):
+    export_format = (request.query_params.get('export') or '').lower()
+    if export_format not in {'csv', 'excel'}:
+        return Response(rows)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
+    writer = csv.writer(response)
+    if not rows:
+        return response
+    headers = list(rows[0].keys())
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow([row.get(header, '') for header in headers])
+    return response
 
 
 # ===========================================================================
@@ -237,7 +274,7 @@ class PalletListAPI(APIView):
 
 
 class PalletDetailAPI(APIView):
-    """Get pallet detail with boxes and movement history."""
+    """Get or delete a pallet. Delete is allowed only for empty pallets."""
     permission_classes = [IsAuthenticated, HasCompanyContext]
 
     def get(self, request, pallet_id):
@@ -247,6 +284,17 @@ class PalletDetailAPI(APIView):
             return Response(PalletDetailSerializer(pallet).data)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pallet_id):
+        try:
+            svc = _get_service(request)
+            pallet_code = svc.delete_empty_pallet(pallet_id)
+            return Response(
+                {'message': f'Empty pallet {pallet_code} deleted.'},
+                status=status.HTTP_200_OK,
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ===========================================================================
@@ -680,6 +728,362 @@ class ScanHistoryAPI(APIView):
             entity_type=request.query_params.get('entity_type'),
         )
         return _list_response(request, qs, ScanLogSerializer)
+
+
+# ===========================================================================
+# Barcode Dispatch
+# ===========================================================================
+
+class DispatchBillLookupAPI(APIView):
+    """Lookup an SAP bill/invoice and normalize it for dispatch scanning."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request):
+        serializer = DispatchBillLookupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            svc = _get_dispatch_service(request)
+            bill = svc.lookup_bill(serializer.validated_data['bill_number'])
+            return Response(bill)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionListCreateAPI(APIView):
+    """List dispatch sessions or create/resume one from an SAP bill."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        qs = svc.list_sessions(
+            status_value=request.query_params.get('status', ''),
+            status_group=request.query_params.get('status_group', ''),
+            bill_number=request.query_params.get('bill_number', ''),
+            customer=request.query_params.get('customer', ''),
+            created_by=request.query_params.get('created_by', ''),
+            date_from=request.query_params.get('from_date', ''),
+            date_to=request.query_params.get('to_date', ''),
+            sap_sync_status=request.query_params.get('sap_sync_status', ''),
+        )
+        return _list_response(request, qs, DispatchSessionSerializer)
+
+    def post(self, request):
+        serializer = DispatchSessionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.create_session(
+                serializer.validated_data['bill_number'],
+                user=request.user,
+            )
+            return Response(
+                DispatchSessionSerializer(session).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionFromBillAPI(DispatchSessionListCreateAPI):
+    """Create or resume a dispatch session from an SAP bill number."""
+
+
+class DispatchSessionActiveAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        qs = svc.list_sessions(status_group='active')
+        return _list_response(request, qs, DispatchSessionSerializer)
+
+
+class DispatchSessionCompletedAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        qs = svc.list_sessions(status_group='completed')
+        return _list_response(request, qs, DispatchSessionSerializer)
+
+
+class DispatchSessionClosedAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        qs = svc.list_sessions(status_group='closed')
+        return _list_response(request, qs, DispatchSessionSerializer)
+
+
+class DispatchSessionDetailAPI(APIView):
+    """Get dispatch session progress and lines."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, session_id):
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.get_session(session_id)
+            return Response(DispatchSessionSerializer(session).data)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionScanAPI(APIView):
+    """Submit one barcode scan against the current required dispatch line."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, session_id):
+        serializer = DispatchScanSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            svc = _get_dispatch_service(request)
+            scan_log = svc.submit_scan(
+                session_id=session_id,
+                raw_barcode=serializer.validated_data['barcode'],
+                user=request.user,
+                device_id=serializer.validated_data.get('device_id', ''),
+                request_id=serializer.validated_data.get('request_id'),
+                ip_address=request.META.get('REMOTE_ADDR'),
+                line_id=serializer.validated_data.get('line_id'),
+            )
+            session = svc.get_session(session_id)
+            return Response(
+                {
+                    'scan': DispatchScanLogSerializer(scan_log).data,
+                    'session': DispatchSessionSerializer(session).data,
+                },
+                status=(
+                    status.HTTP_200_OK
+                    if scan_log.result == 'ACCEPTED'
+                    else status.HTTP_400_BAD_REQUEST
+                ),
+            )
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchScannedBoxQtyAPI(APIView):
+    """Update the staged dispatch quantity for one scanned box."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def patch(self, request, session_id, unit_id):
+        serializer = DispatchScannedBoxQtySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.update_scanned_box_qty(
+                session_id=session_id,
+                unit_id=unit_id,
+                dispatch_qty=serializer.validated_data['dispatch_qty'],
+                user=request.user,
+            )
+            return Response(DispatchSessionSerializer(session).data)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchScannedBoxRemoveAPI(APIView):
+    """Remove one scanned box from the current dispatch list."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, session_id, unit_id):
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.remove_scanned_box(session_id=session_id, unit_id=unit_id, user=request.user)
+            return Response(DispatchSessionSerializer(session).data)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionDispatchAPI(APIView):
+    """Mark a fully scanned bill as dispatched and attempt SAP update."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, session_id):
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.mark_dispatched(session_id, user=request.user)
+            return Response(DispatchSessionSerializer(session).data)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionCompleteAPI(DispatchSessionDispatchAPI):
+    """Alias for final dispatch completion."""
+
+
+class DispatchSessionCloseAPI(APIView):
+    """Close a dispatch session with an audit reason."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, session_id):
+        serializer = DispatchCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.close_session(
+                session_id,
+                reason=serializer.validated_data['reason'],
+                user=request.user,
+            )
+            return Response(DispatchSessionSerializer(session).data)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionCancelAPI(APIView):
+    """Cancel a dispatch session before final dispatch."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, session_id):
+        serializer = DispatchCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.cancel_session(
+                session_id,
+                reason=serializer.validated_data['reason'],
+                user=request.user,
+            )
+            return Response(DispatchSessionSerializer(session).data)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionRetrySapSyncAPI(APIView):
+    """Retry SAP status update after local dispatch completed."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, session_id):
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.retry_sap_sync(session_id, user=request.user)
+            return Response(DispatchSessionSerializer(session).data)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionScanLogsAPI(APIView):
+    """Accepted and rejected scan audit for a session."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, session_id):
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.get_session(session_id)
+            qs = session.scan_logs.select_related('line', 'scanned_by')
+            return _list_response(request, qs, DispatchScanLogSerializer)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSessionSapSyncLogsAPI(APIView):
+    """SAP sync attempt audit for a session."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, session_id):
+        try:
+            svc = _get_dispatch_service(request)
+            session = svc.get_session(session_id)
+            qs = session.sap_sync_logs.all()
+            return _list_response(request, qs, DispatchSapSyncLogSerializer)
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchSettingsAPI(APIView):
+    """Company-level dispatch configuration."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        return Response(DispatchSettingsSerializer(svc.get_settings()).data)
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request)
+
+    def _update(self, request):
+        serializer = DispatchSettingsSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        svc = _get_dispatch_service(request)
+        settings_obj = svc.update_settings(serializer.validated_data, user=request.user)
+        return Response(DispatchSettingsSerializer(settings_obj).data)
+
+
+class PalletHistoryAPI(APIView):
+    """Pallet box assignment/removal/dispatch history."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, pallet_id):
+        qs = (
+            PalletBoxHistorySerializer.Meta.model.objects
+            .filter(company=request.company.company, pallet_id=pallet_id)
+            .select_related('pallet', 'box', 'dispatch_session', 'created_by')
+        )
+        return _list_response(request, qs, PalletBoxHistorySerializer)
+
+
+class BoxHistoryAPI(APIView):
+    """Box pallet and dispatch history."""
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, box_id):
+        qs = (
+            PalletBoxHistorySerializer.Meta.model.objects
+            .filter(company=request.company.company, box_id=box_id)
+            .select_related('pallet', 'box', 'dispatch_session', 'created_by')
+        )
+        return _list_response(request, qs, PalletBoxHistorySerializer)
+
+
+class DispatchReportAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        rows = svc.dispatch_report(request.query_params)
+        return _report_response(request, rows, 'dispatch-summary-report')
+
+
+class DispatchReportDetailAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, session_id):
+        try:
+            svc = _get_dispatch_service(request)
+            return Response(svc.dispatch_detail_report(session_id))
+        except DispatchValidationError as e:
+            return _dispatch_error_response(e)
+
+
+class DispatchPalletReportAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        rows = svc.pallet_report(request.query_params)
+        return _report_response(request, rows, 'dispatch-pallet-report')
+
+
+class DispatchBoxReportAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        rows = svc.box_report(request.query_params)
+        return _report_response(request, rows, 'dispatch-box-report')
+
+
+class DispatchRejectedScanReportAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = _get_dispatch_service(request)
+        rows = svc.rejected_scan_report(request.query_params)
+        return _report_response(request, rows, 'dispatch-rejected-scan-report')
 
 
 # ===========================================================================

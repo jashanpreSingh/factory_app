@@ -250,6 +250,12 @@ class ProductionQCSessionDetailAPI(APIView):
         return Response(serializer.data)
 
     def delete(self, request, session_id):
+        if not request.user.has_perm("quality_control.can_create_production_qc"):
+            return Response(
+                {"detail": "You do not have permission to delete QC sessions."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         company = _get_company(request)
         session = get_object_or_404(
             ProductionQCSession,

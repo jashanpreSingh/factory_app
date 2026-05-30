@@ -1,6 +1,6 @@
 import os
 import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from datetime import date
 from django.test import TestCase
 from django.contrib.auth import get_user_model
@@ -221,6 +221,7 @@ class AttachmentWriterTests(TestCase):
             "username": "test_user",
             "password": "test_pass",
         }
+        self.mock_context.company_code = "JIVO_OIL"
         self.writer = AttachmentWriter(self.mock_context)
 
     def _temp_file(self, suffix=".pdf"):
@@ -232,7 +233,7 @@ class AttachmentWriterTests(TestCase):
 
     @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
     @patch("sap_client.service_layer.attachment_writer.requests.post")
-    def test_upload_raises_when_sap_cannot_copy_binary_file(
+    def test_upload_raises_when_sap_attachment_folder_is_not_accessible(
         self, mock_post, mock_session_class
     ):
         mock_session = MagicMock()
@@ -247,13 +248,190 @@ class AttachmentWriterTests(TestCase):
                 "message": "Fail to get the LINUX mount point for AttachmentsFolderPath",
             }
         }
+        mock_response.text = '{"error":{"code":"-43"}}'
         mock_post.return_value = mock_response
 
-        with self.assertRaises(SAPValidationError) as context:
-            self.writer.upload(self._temp_file(".jpeg"), "proof.jpeg")
+        with patch.object(
+            self.writer,
+            "_get_attachment_source_path",
+            return_value=r"C:\missing\sap\attachments",
+        ):
+            with self.assertRaises(SAPValidationError) as context:
+                self.writer.upload(self._temp_file(".jpeg"), "proof.jpeg")
 
-        self.assertIn("LINUX mount point", str(context.exception))
+        self.assertIn("not accessible from the backend host", str(context.exception))
         mock_post.assert_called_once()
+
+    def test_upload_uses_file_uploader_and_validates_sap_metadata(self):
+        self.mock_context.company_code = "JIVO_OIL"
+        with (
+            patch("sap_client.service_layer.attachment_writer.ServiceLayerSession") as mock_session_class,
+            patch("sap_client.service_layer.attachment_writer.FileUploaderClient") as mock_uploader_class,
+            patch("sap_client.service_layer.attachment_writer.requests.post") as mock_post,
+            patch("sap_client.service_layer.attachment_writer.requests.get") as mock_get,
+            patch.object(
+                self.writer,
+                "_get_attachment_source_path",
+                return_value=r"C:\SAP Attachments\Jivo Oil\Attachments\\",
+            ),
+        ):
+            mock_session = MagicMock()
+            mock_session.login.return_value = {"B1SESSION": "abc123"}
+            mock_session_class.return_value = mock_session
+
+            mock_uploader_class.is_enabled.return_value = True
+            mock_uploader = mock_uploader_class.return_value
+            mock_uploader.upload.return_value = {
+                "id": 321,
+                "original_name": "proof.jpeg",
+                "stored_name": "proof_v2.jpeg",
+            }
+
+            post_response = MagicMock()
+            post_response.status_code = 201
+            post_response.json.return_value = {"AbsoluteEntry": 987}
+            mock_post.return_value = post_response
+
+            get_response = MagicMock()
+            get_response.status_code = 200
+            get_response.json.return_value = {
+                "Attachments2_Lines": [
+                    {
+                        "SourcePath": r"C:\SAP Attachments\Jivo Oil\Attachments",
+                        "FileName": "proof_v2",
+                        "FileExtension": "jpeg",
+                    }
+                ]
+            }
+            mock_get.return_value = get_response
+
+            result = self.writer.upload(self._temp_file(".jpeg"), "proof.jpeg")
+
+        self.assertEqual(result["AbsoluteEntry"], 987)
+        self.assertEqual(result["UploaderFileId"], 321)
+        self.assertEqual(result["StoredFileName"], "proof_v2.jpeg")
+        payload = mock_post.call_args.kwargs["json"]
+        line = payload["Attachments2_Lines"][0]
+        self.assertEqual(line["SourcePath"], r"C:\SAP Attachments\Jivo Oil\Attachments")
+        self.assertEqual(line["FileName"], "proof_v2")
+        self.assertEqual(line["FileExtension"], "jpeg")
+        self.assertEqual(line["CopyToTargetDoc"], "tYES")
+        self.assertEqual(line["U_CHK"], "1")
+        self.assertEqual(line["U_CHK2"], "OK")
+        mock_get.assert_called_once()
+
+    @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
+    @patch("sap_client.service_layer.attachment_writer.requests.post")
+    def test_upload_can_create_metadata_entry_when_direct_copy_is_not_accessible(
+        self, mock_post, mock_session_class
+    ):
+        mock_session = MagicMock()
+        mock_session.login.return_value = {"B1SESSION": "abc123"}
+        mock_session_class.return_value = mock_session
+
+        failed_response = MagicMock()
+        failed_response.status_code = 400
+        failed_response.text = '{"error":{"code":"-43"}}'
+        failed_response.json.return_value = {
+            "error": {"code": "-43", "message": "Internal error (-43) occurred"}
+        }
+
+        metadata_response = MagicMock()
+        metadata_response.status_code = 201
+        metadata_response.json.return_value = {"AbsoluteEntry": 456}
+        mock_post.side_effect = [failed_response, metadata_response]
+
+        with patch.object(
+            self.writer,
+            "_get_attachment_source_path",
+            return_value=r"C:\missing\sap\attachments",
+        ):
+            result = self.writer.upload(
+                self._temp_file(".jpeg"),
+                "proof.jpeg",
+                allow_metadata_fallback=True,
+            )
+
+        self.assertEqual(result["AbsoluteEntry"], 456)
+        self.assertEqual(mock_post.call_count, 2)
+        metadata_payload = mock_post.call_args.kwargs["json"]
+        line = metadata_payload["Attachments2_Lines"][0]
+        self.assertEqual(line["SourcePath"], r"C:\missing\sap\attachments")
+        self.assertEqual(line["FileName"], "proof")
+        self.assertEqual(line["FileExtension"], "jpeg")
+        self.assertEqual(line["U_CHK2"], "OK")
+        self.assertEqual(line["U_CHK"], "1")
+
+    @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
+    @patch("sap_client.service_layer.attachment_writer.requests.post")
+    def test_upload_falls_back_to_accessible_source_path_on_sap_folder_error(
+        self, mock_post, mock_session_class
+    ):
+        mock_session = MagicMock()
+        mock_session.login.return_value = {"B1SESSION": "abc123"}
+        mock_session_class.return_value = mock_session
+
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+
+        failed_response = MagicMock()
+        failed_response.status_code = 400
+        failed_response.text = '{"error":{"code":"-43"}}'
+        failed_response.json.return_value = {
+            "error": {"code": "-43", "message": "Internal error (-43) occurred"}
+        }
+
+        success_response = MagicMock()
+        success_response.status_code = 201
+        success_response.json.return_value = {"AbsoluteEntry": 789}
+        mock_post.side_effect = [failed_response, success_response]
+
+        with patch.object(
+            self.writer,
+            "_get_attachment_source_path",
+            return_value=folder.name,
+        ):
+            result = self.writer.upload(self._temp_file(".jpeg"), "proof.jpeg")
+
+        self.assertEqual(result["AbsoluteEntry"], 789)
+        self.assertEqual(mock_post.call_count, 2)
+        fallback_payload = mock_post.call_args.kwargs["json"]
+        line = fallback_payload["Attachments2_Lines"][0]
+        self.assertEqual(line["SourcePath"], os.path.normpath(folder.name))
+        self.assertEqual(line["FileExtension"], "jpeg")
+        self.assertTrue(os.listdir(folder.name))
+
+    @patch("sap_client.service_layer.attachment_writer.subprocess.run")
+    @patch("sap_client.service_layer.attachment_writer.os.path.isdir")
+    def test_direct_copy_path_uses_windows_share_credentials(
+        self, mock_isdir, mock_run
+    ):
+        self.mock_context.company_code = "JIVO_OIL"
+        mock_isdir.side_effect = [False, True]
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        with self.settings(
+            SAP_ATTACHMENT_DIRECT_COPY_CREDENTIALS={
+                "JIVO_OIL": {"username": r"SERVER\user", "password": "secret"}
+            }
+        ):
+            self.writer._ensure_direct_copy_path_access(
+                r"\\103.89.45.247\SAPAttachments\Jivo Oil\Attachments"
+            )
+
+        mock_run.assert_called_once()
+        args = mock_run.call_args.args[0]
+        self.assertEqual(args[:5], [
+            "net",
+            "use",
+            r"\\103.89.45.247\SAPAttachments",
+            "secret",
+            r"/user:SERVER\user",
+        ])
+        mock_isdir.assert_has_calls([
+            call(r"\\103.89.45.247\SAPAttachments\Jivo Oil\Attachments"),
+            call(r"\\103.89.45.247\SAPAttachments\Jivo Oil\Attachments"),
+        ])
 
     @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
     @patch("sap_client.service_layer.attachment_writer.requests.patch")
@@ -276,6 +454,168 @@ class AttachmentWriterTests(TestCase):
         kwargs = mock_patch.call_args.kwargs
         self.assertIn("files", kwargs)
         self.assertNotIn("json", kwargs)
+
+    def test_add_line_uses_file_uploader_and_validates_sap_metadata(self):
+        self.mock_context.company_code = "JIVO_OIL"
+        with (
+            patch("sap_client.service_layer.attachment_writer.ServiceLayerSession") as mock_session_class,
+            patch("sap_client.service_layer.attachment_writer.FileUploaderClient") as mock_uploader_class,
+            patch("sap_client.service_layer.attachment_writer.requests.get") as mock_get,
+            patch("sap_client.service_layer.attachment_writer.requests.patch") as mock_patch,
+        ):
+            mock_session = MagicMock()
+            mock_session.login.return_value = {"B1SESSION": "abc123"}
+            mock_session_class.return_value = mock_session
+
+            mock_uploader_class.is_enabled.return_value = True
+            mock_uploader = mock_uploader_class.return_value
+            mock_uploader.upload.return_value = {
+                "id": 654,
+                "original_name": "extra.pdf",
+                "stored_name": "extra_v2.pdf",
+            }
+
+            existing_response = MagicMock()
+            existing_response.status_code = 200
+            existing_response.json.return_value = {
+                "Attachments2_Lines": [
+                    {
+                        "SourcePath": r"C:\SAP Attachments\Jivo Oil\Attachments",
+                        "FileName": "existing",
+                        "FileExtension": "pdf",
+                    }
+                ]
+            }
+            verify_response = MagicMock()
+            verify_response.status_code = 200
+            verify_response.json.return_value = {
+                "Attachments2_Lines": [
+                    {
+                        "SourcePath": r"C:\SAP Attachments\Jivo Oil\Attachments",
+                        "FileName": "existing",
+                        "FileExtension": "pdf",
+                    },
+                    {
+                        "SourcePath": r"C:\SAP Attachments\Jivo Oil\Attachments",
+                        "FileName": "extra_v2",
+                        "FileExtension": "pdf",
+                    },
+                ]
+            }
+            mock_get.side_effect = [existing_response, verify_response]
+
+            patch_response = MagicMock()
+            patch_response.status_code = 204
+            mock_patch.return_value = patch_response
+
+            result = self.writer.add_line_to_existing_attachment(
+                absolute_entry=123,
+                file_path=self._temp_file(".pdf"),
+                filename="extra.pdf",
+            )
+
+        self.assertEqual(result["AbsoluteEntry"], 123)
+        self.assertEqual(result["UploaderFileId"], 654)
+        payload = mock_patch.call_args.kwargs["json"]
+        self.assertEqual(len(payload["Attachments2_Lines"]), 2)
+        self.assertEqual(payload["Attachments2_Lines"][1]["FileName"], "extra_v2")
+        self.assertEqual(payload["Attachments2_Lines"][1]["U_CHK"], "1")
+        self.assertEqual(payload["Attachments2_Lines"][1]["U_CHK2"], "OK")
+        self.assertEqual(mock_get.call_count, 2)
+
+    @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
+    @patch("sap_client.service_layer.attachment_writer.requests.get")
+    @patch("sap_client.service_layer.attachment_writer.requests.patch")
+    def test_add_line_falls_back_to_accessible_source_path_on_sap_folder_error(
+        self, mock_patch, mock_get, mock_session_class
+    ):
+        mock_session = MagicMock()
+        mock_session.login.return_value = {"B1SESSION": "abc123"}
+        mock_session_class.return_value = mock_session
+
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+
+        failed_response = MagicMock()
+        failed_response.status_code = 400
+        failed_response.text = '{"error":{"code":"-43"}}'
+        failed_response.json.return_value = {
+            "error": {"code": "-43", "message": "Internal error (-43) occurred"}
+        }
+        success_response = MagicMock()
+        success_response.status_code = 204
+        mock_patch.side_effect = [failed_response, success_response]
+
+        get_response = MagicMock()
+        get_response.status_code = 200
+        get_response.json.return_value = {
+            "Attachments2_Lines": [
+                {
+                    "SourcePath": folder.name,
+                    "FileName": "existing",
+                    "FileExtension": "pdf",
+                }
+            ]
+        }
+        mock_get.return_value = get_response
+
+        result = self.writer.add_line_to_existing_attachment(
+            absolute_entry=123,
+            file_path=self._temp_file(".pdf"),
+            filename="proof.pdf",
+        )
+
+        self.assertEqual(result["AbsoluteEntry"], 123)
+        self.assertEqual(mock_patch.call_count, 2)
+        fallback_payload = mock_patch.call_args.kwargs["json"]
+        self.assertEqual(len(fallback_payload["Attachments2_Lines"]), 2)
+        self.assertTrue(os.listdir(folder.name))
+
+    @patch("sap_client.service_layer.attachment_writer.ServiceLayerSession")
+    @patch("sap_client.service_layer.attachment_writer.requests.get")
+    @patch("sap_client.service_layer.attachment_writer.requests.patch")
+    def test_add_line_can_create_metadata_line_when_direct_copy_is_not_accessible(
+        self, mock_patch, mock_get, mock_session_class
+    ):
+        mock_session = MagicMock()
+        mock_session.login.return_value = {"B1SESSION": "abc123"}
+        mock_session_class.return_value = mock_session
+
+        failed_response = MagicMock()
+        failed_response.status_code = 400
+        failed_response.text = '{"error":{"code":"-43"}}'
+        failed_response.json.return_value = {
+            "error": {"code": "-43", "message": "Internal error (-43) occurred"}
+        }
+        success_response = MagicMock()
+        success_response.status_code = 204
+        mock_patch.side_effect = [failed_response, success_response]
+
+        get_response = MagicMock()
+        get_response.status_code = 200
+        get_response.json.return_value = {
+            "Attachments2_Lines": [
+                {
+                    "SourcePath": r"C:\missing\sap\attachments",
+                    "FileName": "existing",
+                    "FileExtension": "pdf",
+                }
+            ]
+        }
+        mock_get.return_value = get_response
+
+        result = self.writer.add_line_to_existing_attachment(
+            absolute_entry=123,
+            file_path=self._temp_file(".pdf"),
+            filename="proof.pdf",
+            allow_metadata_fallback=True,
+        )
+
+        self.assertEqual(result["AbsoluteEntry"], 123)
+        self.assertEqual(mock_patch.call_count, 2)
+        metadata_payload = mock_patch.call_args.kwargs["json"]
+        self.assertEqual(len(metadata_payload["Attachments2_Lines"]), 2)
+        self.assertEqual(metadata_payload["Attachments2_Lines"][1]["FileName"], "proof")
 
 
 class GRPOAPITests(APITestCase):

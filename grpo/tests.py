@@ -18,6 +18,7 @@ from raw_material_gatein.models import POReceipt, POItemReceipt
 from grpo.models import GRPOPosting, GRPOLinePosting, GRPOStatus, GRPOAttachment, SAPAttachmentStatus
 from grpo.serializers import ServiceGRPOPostRequestSerializer, ServiceGRPOPreviewSerializer
 from grpo.services import GRPOService
+from weighment.models import Weighment
 
 User = get_user_model()
 
@@ -184,6 +185,13 @@ class GRPOServiceTests(TestCase):
             entry_type="RAW_MATERIAL",
             status=GateEntryStatus.COMPLETED
         )
+        cls.weighment = Weighment.objects.create(
+            vehicle_entry=cls.vehicle_entry,
+            gross_weight=Decimal("10000.000"),
+            tare_weight=Decimal("3000.000"),
+            created_by=cls.user,
+            updated_by=cls.user,
+        )
 
         cls.po_receipt = POReceipt.objects.create(
             vehicle_entry=cls.vehicle_entry,
@@ -301,6 +309,26 @@ class GRPOServiceTests(TestCase):
             "WATER",
         )
 
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    def test_service_grpo_product_dimension_uses_invoice_item_summary(
+        self, mock_dimension_codes
+    ):
+        """Specific invoice items should map to SAP variety codes, not generic Oil."""
+        mock_dimension_codes.return_value = {
+            "SUNFLOWR": "SUNFLOWER",
+            "CANOLA": "CANOLA",
+        }
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_product_dimension_code(
+                "FG0000053 - COLD PRESS SUNFLOWER 5 LTR",
+                "Oil",
+                "Oil",
+            ),
+            "SUNFLOWR",
+        )
+
     def test_get_grpo_preview_data(self):
         """Test getting GRPO preview data returns all PO details for pre-fill"""
         service = GRPOService(company_code="TC001")
@@ -381,6 +409,134 @@ class GRPOServiceTests(TestCase):
         self.assertEqual(line.quantity_posted, Decimal("95.000"))
         self.assertEqual(line.base_entry, 12345)
         self.assertEqual(line.base_line, 0)
+
+    @patch('grpo.services.SAPClient')
+    def test_post_grpo_uses_material_attachment_metadata_fallback(self, mock_sap_client):
+        """Material GRPO keeps posting when SAP needs metadata-only attachment fallback."""
+        mock_instance = MagicMock()
+        mock_instance.upload_attachment.return_value = {"AbsoluteEntry": 789}
+        mock_instance.create_grpo.return_value = {
+            "DocEntry": 123,
+            "DocNum": 456,
+            "DocTotal": 4750.00
+        }
+        mock_sap_client.return_value = mock_instance
+
+        service = GRPOService(company_code="TC001")
+        test_file = SimpleUploadedFile(
+            "invoice.pdf",
+            b"pdf_content",
+            content_type="application/pdf",
+        )
+        grpo = service.post_grpo(
+            vehicle_entry_id=self.vehicle_entry.id,
+            po_receipt_ids=[self.po_receipt.id],
+            user=self.user,
+            items=[{
+                "po_item_receipt_id": self.po_item.id,
+                "accepted_qty": Decimal("95.000"),
+            }],
+            branch_id=1,
+            attachments=[test_file],
+        )
+
+        self.assertEqual(grpo.status, GRPOStatus.POSTED)
+        self.assertTrue(
+            mock_instance.upload_attachment.call_args.kwargs["allow_metadata_fallback"]
+        )
+        payload = mock_instance.create_grpo.call_args.args[0]
+        self.assertEqual(payload["AttachmentEntry"], 789)
+        attachment = grpo.attachments.get()
+        self.assertEqual(attachment.sap_attachment_status, SAPAttachmentStatus.LINKED)
+        self.assertEqual(attachment.sap_absolute_entry, 789)
+        attachment.file.delete(save=False)
+
+    @patch('grpo.services.SAPClient')
+    def test_post_grpo_does_not_require_weighment(self, mock_sap_client):
+        """Material GRPO can be posted without a gate weighment row."""
+        mock_instance = MagicMock()
+        mock_instance.create_grpo.return_value = {
+            "DocEntry": 125,
+            "DocNum": 458,
+            "DocTotal": 2500.00
+        }
+        mock_sap_client.return_value = mock_instance
+
+        entry = VehicleEntry.objects.create(
+            entry_no="VE-2024-NOWEIGH",
+            company=self.company,
+            vehicle=self.vehicle,
+            driver=self.driver,
+            entry_type="RAW_MATERIAL",
+            status=GateEntryStatus.COMPLETED,
+        )
+        po_receipt = POReceipt.objects.create(
+            vehicle_entry=entry,
+            po_number="PO-NOWEIGH-001",
+            supplier_code="SUP001",
+            supplier_name="Test Supplier",
+            sap_doc_entry=22345,
+            branch_id=1,
+        )
+        po_item = POItemReceipt.objects.create(
+            po_receipt=po_receipt,
+            po_item_code="ITEM-NW",
+            item_name="No Weighment Item",
+            ordered_qty=Decimal("50.000"),
+            received_qty=Decimal("50.000"),
+            accepted_qty=Decimal("50.000"),
+            rejected_qty=Decimal("0.000"),
+            sap_line_num=0,
+            unit_price=Decimal("50.000000"),
+            uom="KG",
+        )
+
+        service = GRPOService(company_code="TC001")
+        grpo = service.post_grpo(
+            vehicle_entry_id=entry.id,
+            po_receipt_ids=[po_receipt.id],
+            user=self.user,
+            items=[{
+                "po_item_receipt_id": po_item.id,
+                "accepted_qty": Decimal("50.000"),
+            }],
+            branch_id=1,
+        )
+
+        self.assertEqual(grpo.status, GRPOStatus.POSTED)
+        self.assertFalse(Weighment.objects.filter(vehicle_entry=entry).exists())
+
+    @patch('grpo.services.SAPClient')
+    def test_post_grpo_updates_tare_weight_on_weighment(self, mock_sap_client):
+        """GRPO tare input should update the same weighment row and recalculate net."""
+        mock_instance = MagicMock()
+        mock_instance.create_grpo.return_value = {
+            "DocEntry": 124,
+            "DocNum": 457,
+            "DocTotal": 4750.00
+        }
+        mock_sap_client.return_value = mock_instance
+
+        weighment = Weighment.objects.get(vehicle_entry=self.vehicle_entry)
+        weighment.tare_weight = None
+        weighment.save()
+
+        service = GRPOService(company_code="TC001")
+        service.post_grpo(
+            vehicle_entry_id=self.vehicle_entry.id,
+            po_receipt_ids=[self.po_receipt.id],
+            user=self.user,
+            items=[{
+                "po_item_receipt_id": self.po_item.id,
+                "accepted_qty": Decimal("95.000"),
+            }],
+            branch_id=1,
+            tare_weight=Decimal("2500.000"),
+        )
+
+        weighment.refresh_from_db()
+        self.assertEqual(weighment.tare_weight, Decimal("2500.000"))
+        self.assertEqual(weighment.net_weight, Decimal("7500.000"))
 
     @patch('grpo.services.SAPClient')
     def test_post_grpo_with_line_level_fields(self, mock_sap_client):
@@ -708,6 +864,7 @@ class GRPOSerializerTests(TestCase):
             "warehouse_code": "WH01",
             "comments": "Test comment",
             "vendor_ref": "INV-2024-001",
+            "tare_weight": "2500.000",
             "extra_charges": [
                 {
                     "expense_code": 1,
@@ -724,10 +881,98 @@ class GRPOSerializerTests(TestCase):
         # Verify parsed values
         vd = serializer.validated_data
         self.assertEqual(vd["vendor_ref"], "INV-2024-001")
+        self.assertEqual(vd["tare_weight"], Decimal("2500.000"))
         self.assertEqual(len(vd["extra_charges"]), 1)
         self.assertEqual(vd["extra_charges"][0]["expense_code"], 1)
         self.assertEqual(vd["items"][0]["unit_price"], Decimal("50.00"))
         self.assertEqual(vd["items"][0]["variety"], "Grade-A")
+
+    def test_extra_charge_rejects_zero_expense_code(self):
+        """Extra charges must use a real SAP Additional Expense code."""
+        from grpo.serializers import ServiceGRPOPostRequestSerializer
+
+        data = {
+            "dispatch_plan_id": 8,
+            "vendor_code": "VENDA001571",
+            "branch_id": 2,
+            "service_description": "Oil",
+            "amount": "8480.00",
+            "extra_charges": [
+                {
+                    "expense_code": 0,
+                    "amount": "2130.00",
+                    "remarks": "unloading",
+                }
+            ],
+        }
+
+        serializer = ServiceGRPOPostRequestSerializer(data=data)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("extra_charges", serializer.errors)
+        self.assertEqual(
+            serializer.errors["extra_charges"][0]["expense_code"][0].code,
+            "min_value",
+        )
+
+    def test_extra_charge_rejects_zero_amount(self):
+        """Empty extra-charge rows should be rejected before SAP posting."""
+        from grpo.serializers import GRPOPostRequestSerializer
+
+        data = {
+            "vehicle_entry_id": 1,
+            "po_receipt_id": 2,
+            "items": [{"po_item_receipt_id": 10, "accepted_qty": "95.000"}],
+            "branch_id": 1,
+            "tare_weight": "2500.000",
+            "extra_charges": [
+                {
+                    "expense_code": 3,
+                    "amount": "0.00",
+                    "remarks": "Freight",
+                }
+            ],
+        }
+
+        serializer = GRPOPostRequestSerializer(data=data)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("extra_charges", serializer.errors)
+        self.assertEqual(
+            serializer.errors["extra_charges"][0]["amount"][0].code,
+            "min_value",
+        )
+
+    def test_service_grpo_options_serializer_includes_expense_codes(self):
+        """Service GRPO options should expose SAP additional expense codes."""
+        from grpo.serializers import ServiceGRPOOptionsSerializer
+
+        data = {
+            "branches": [],
+            "tax_codes": [],
+            "gl_accounts": [],
+            "sac_codes": [],
+            "locations": [],
+            "projects": [],
+            "sub_accounts": [],
+            "expense_codes": [
+                {
+                    "expense_code": 3,
+                    "expense_name": "FREIGHT OUTWARD",
+                    "expense_account": "5670001",
+                    "revenue_account": "4200009",
+                    "sac_code": "00996791",
+                }
+            ],
+        }
+
+        serializer = ServiceGRPOOptionsSerializer(data)
+
+        self.assertEqual(serializer.data["expense_codes"][0]["expense_code"], 3)
+        self.assertEqual(
+            serializer.data["expense_codes"][0]["expense_name"],
+            "FREIGHT OUTWARD",
+        )
 
     def test_grpo_post_request_serializer_minimal(self):
         """Test minimal GRPO post request (only required fields)"""
@@ -744,6 +989,23 @@ class GRPOSerializerTests(TestCase):
 
         serializer = GRPOPostRequestSerializer(data=data)
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_grpo_post_request_serializer_allows_missing_tare_weight(self):
+        """GRPO post payload does not require tare weight."""
+        from grpo.serializers import GRPOPostRequestSerializer
+
+        data = {
+            "vehicle_entry_id": 1,
+            "po_receipt_id": 2,
+            "items": [
+                {"po_item_receipt_id": 10, "accepted_qty": "95.000", "variety": "TMT-500D"}
+            ],
+            "branch_id": 1,
+        }
+
+        serializer = GRPOPostRequestSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("tare_weight", serializer.validated_data)
 
     def test_grpo_post_request_serializer_invalid(self):
         """Test invalid GRPO post request"""
@@ -1238,6 +1500,13 @@ class MergedGRPOServiceTests(TestCase):
             vehicle=cls.vehicle, driver=cls.driver,
             entry_type="RAW_MATERIAL", status=GateEntryStatus.COMPLETED
         )
+        cls.weighment = Weighment.objects.create(
+            vehicle_entry=cls.vehicle_entry,
+            gross_weight=Decimal("20000.000"),
+            tare_weight=Decimal("5000.000"),
+            created_by=cls.user,
+            updated_by=cls.user,
+        )
 
         # PO 1 — supplier Zomato
         cls.po1 = POReceipt.objects.create(
@@ -1483,6 +1752,7 @@ class MergedGRPOSerializerTests(TestCase):
                 {"po_item_receipt_id": 2, "accepted_qty": "50.000", "variety": "Grade-A"},
             ],
             "branch_id": 1,
+            "tare_weight": "5000.000",
         }
 
         serializer = GRPOPostRequestSerializer(data=data)
@@ -1500,6 +1770,7 @@ class MergedGRPOSerializerTests(TestCase):
                 {"po_item_receipt_id": 1, "accepted_qty": "100.000", "variety": "TMT-500D"},
             ],
             "branch_id": 1,
+            "tare_weight": "5000.000",
         }
 
         serializer = GRPOPostRequestSerializer(data=data)

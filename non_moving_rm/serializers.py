@@ -17,8 +17,8 @@ class NonMovingRMFilterSerializer(serializers.Serializer):
 
     age = serializers.IntegerField(
         required=True,
-        min_value=1,
-        help_text="Number of days since last movement (e.g. 45, 90, 180)",
+        min_value=0,
+        help_text="Number of days since last movement; use 0 to include all stock",
     )
     item_group = serializers.IntegerField(
         required=False,
@@ -67,6 +67,16 @@ class ReportSummarySerializer(serializers.Serializer):
     by_branch = BranchSummarySerializer(many=True)
 
 
+class WarehouseSummarySerializer(serializers.Serializer):
+    """Summary per warehouse."""
+
+    warehouse = serializers.CharField()
+    warehouse_name = serializers.CharField()
+    item_count = serializers.IntegerField()
+    total_value = serializers.FloatField()
+    total_quantity = serializers.FloatField()
+
+
 class ReportMetaSerializer(serializers.Serializer):
     age_days = serializers.IntegerField()
     item_group = serializers.IntegerField()
@@ -76,6 +86,7 @@ class ReportMetaSerializer(serializers.Serializer):
 class NonMovingRMReportResponseSerializer(serializers.Serializer):
     data = NonMovingRMItemSerializer(many=True)
     summary = ReportSummarySerializer()
+    warehouse_summary = WarehouseSummarySerializer(many=True)
     meta = ReportMetaSerializer()
 
 

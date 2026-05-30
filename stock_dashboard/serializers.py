@@ -5,6 +5,7 @@ DRF serializers for validating query parameters and shaping API responses.
 All data is read-only (no database writes), so only plain Serializer classes are used.
 """
 
+from django.utils import timezone
 from rest_framework import serializers
 
 
@@ -63,13 +64,13 @@ class StockDashboardFilterSerializer(serializers.Serializer):
     movement_status = serializers.CharField(
         required=False,
         default="",
-        help_text="Comma-separated movement statuses to filter by (planned,recent,slow)",
+        help_text="Comma-separated movement statuses to filter by (recent,slow)",
     )
 
     def validate_movement_status(self, value):
         if not value:
             return []
-        allowed = {"planned", "recent", "slow"}
+        allowed = {"recent", "slow"}
         statuses = [s.strip() for s in value.split(",") if s.strip()]
         invalid = set(statuses) - allowed
         if invalid:
@@ -85,7 +86,6 @@ class StockDashboardFilterSerializer(serializers.Serializer):
             "warehouse",
             "on_hand",
             "min_stock",
-            "planned_qty",
             "health_ratio",
         ],
         default="health_ratio",
@@ -98,6 +98,20 @@ class StockDashboardFilterSerializer(serializers.Serializer):
     )
     page = serializers.IntegerField(required=False, default=1, min_value=1)
     page_size = serializers.IntegerField(required=False, default=50, min_value=1, max_value=200)
+
+
+class StockDashboardAsOfFilterSerializer(StockDashboardFilterSerializer):
+    """Validates query parameters for historical SAP movement reconstruction."""
+
+    as_of_date = serializers.DateField(
+        required=True,
+        help_text="Reconstruct stock as of this SAP posting date (YYYY-MM-DD).",
+    )
+
+    def validate_as_of_date(self, value):
+        if value > timezone.localdate():
+            raise serializers.ValidationError("as_of_date cannot be in the future.")
+        return value
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +127,6 @@ class StockItemSerializer(serializers.Serializer):
     warehouse = serializers.CharField(default="")
     on_hand = serializers.FloatField()
     min_stock = serializers.FloatField()
-    planned_qty = serializers.FloatField(default=0)
     uom = serializers.CharField()
     stock_status = serializers.CharField()
     health_ratio = serializers.FloatField()
@@ -129,7 +142,6 @@ class StockItemSerializer(serializers.Serializer):
         allow_null=True,
         default=None,
     )
-    has_open_plan = serializers.BooleanField(default=False)
     # Grouped-only fields
     warehouse_count = serializers.IntegerField(default=1)
     has_warning = serializers.BooleanField(default=False)
@@ -145,6 +157,9 @@ class StockDashboardMetaSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     page_size = serializers.IntegerField()
     total_pages = serializers.IntegerField()
+    # Present only on the experimental SAP reconstruction endpoint.
+    as_of_date = serializers.CharField(required=False)
+    reconstruction_note = serializers.CharField(required=False)
 
 
 class StockDashboardResponseSerializer(serializers.Serializer):

@@ -99,10 +99,20 @@ class SAPClient:
         writer = APInvoiceWriter(self.context)
         return writer.create(payload)
 
-    def upload_attachment(self, file_path: str, filename: str) -> dict:
+    def upload_attachment(
+        self,
+        file_path: str,
+        filename: str,
+        *,
+        allow_metadata_fallback: bool = False,
+    ) -> dict:
         """Upload a file to SAP Attachments2"""
         writer = AttachmentWriter(self.context)
-        return writer.upload(file_path, filename)
+        return writer.upload(
+            file_path,
+            filename,
+            allow_metadata_fallback=allow_metadata_fallback,
+        )
 
     def get_grpo_attachment_entry(self, doc_entry: int) -> Optional[int]:
         """Get the existing AttachmentEntry from a GRPO document"""
@@ -110,12 +120,20 @@ class SAPClient:
         return writer.get_document_attachment_entry(doc_entry)
 
     def add_line_to_existing_attachment(
-        self, absolute_entry: int, file_path: str, filename: str
+        self,
+        absolute_entry: int,
+        file_path: str,
+        filename: str,
+        *,
+        allow_metadata_fallback: bool = False,
     ) -> dict:
         """Add a new file line to an existing Attachments2 entry"""
         writer = AttachmentWriter(self.context)
         return writer.add_line_to_existing_attachment(
-            absolute_entry, file_path, filename
+            absolute_entry,
+            file_path,
+            filename,
+            allow_metadata_fallback=allow_metadata_fallback,
         )
 
     def link_attachment_to_grpo(self, doc_entry: int, absolute_entry: int) -> dict:

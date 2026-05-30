@@ -39,6 +39,7 @@ class HanaServiceGRPOOptionsReader:
                 "locations": self._get_locations(cursor, schema),
                 "projects": self._get_budget_delivery_points(cursor, schema),
                 "sub_accounts": self._get_sub_accounts(cursor, schema),
+                "expense_codes": self._get_expense_codes(cursor, schema),
             }
 
         except dbapi.ProgrammingError as e:
@@ -217,4 +218,30 @@ class HanaServiceGRPOOptionsReader:
             {"sub_account_code": "SALES", "sub_account_name": "SALES"},
             {"sub_account_code": "SALES RETURN", "sub_account_name": "SALES RETURN"},
             {"sub_account_code": "BST", "sub_account_name": "BST"},
+        ]
+
+    @staticmethod
+    def _get_expense_codes(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "ExpnsCode" AS expense_code,
+                    IFNULL("ExpnsName", '') AS expense_name,
+                    IFNULL("ExpnsAcct", '') AS expense_account,
+                    IFNULL("RevAcct", '') AS revenue_account,
+                    IFNULL("SacCode", '') AS sac_code
+                FROM "{schema}"."OEXD"
+                WHERE IFNULL("IsActive", 'Y') = 'Y'
+                ORDER BY "ExpnsName", "ExpnsCode"
+            """
+        )
+        return [
+            {
+                "expense_code": int(row[0]),
+                "expense_name": row[1] or str(row[0]),
+                "expense_account": row[2] or "",
+                "revenue_account": row[3] or "",
+                "sac_code": row[4] or "",
+            }
+            for row in cursor.fetchall()
         ]

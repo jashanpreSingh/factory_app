@@ -1,0 +1,285 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  #content {
+    max-width: none;
+  }
+
+  .admin-shell {
+    --bg: #f5f7fb;
+    --panel: #ffffff;
+    --ink: #142033;
+    --muted: #667085;
+    --line: #d8e0eb;
+    --blue: #245bdb;
+    --green: #158456;
+    --amber: #b76100;
+    background: var(--bg);
+    border-radius: 8px;
+    display: grid;
+    gap: 16px;
+    margin: -10px -10px 0;
+    padding: 18px;
+  }
+
+  .barcode-admin-hero {
+    background:
+      linear-gradient(118deg, rgba(20,32,51,0.98), rgba(36,91,219,0.86)),
+      repeating-linear-gradient(90deg, transparent 0 13px, rgba(255,255,255,0.12) 13px 15px);
+    border-radius: 8px;
+    color: #fff;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+    padding: 24px;
+  }
+
+  .barcode-admin-hero h1 {
+    color: #fff;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.15;
+    margin: 0 0 8px;
+  }
+
+  .barcode-admin-hero p {
+    color: rgba(255,255,255,0.78);
+    font-size: 14px;
+    margin: 0;
+    max-width: 760px;
+  }
+
+  .barcode-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .barcode-quick-actions a {
+    background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 6px;
+    color: #fff;
+    font-weight: 700;
+    padding: 8px 11px;
+    text-decoration: none;
+  }
+
+  .barcode-quick-actions a:hover {
+    background: #fff;
+    color: var(--blue);
+  }
+
+  .hero-side {
+    background: rgba(255,255,255,0.11);
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 8px;
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .hero-side a {
+    background: #fff;
+    border-radius: 6px;
+    color: var(--blue);
+    font-weight: 800;
+    padding: 10px 12px;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .hero-side span {
+    color: rgba(255,255,255,0.8);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .module-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+  }
+
+  .admin-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(16, 24, 40, 0.07);
+    overflow: hidden;
+  }
+
+  .admin-panel h2 {
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0;
+    margin: 0;
+    padding: 14px 16px;
+  }
+
+  .workflow-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    padding: 16px;
+  }
+
+  .workflow-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: grid;
+    gap: 6px;
+    padding: 13px;
+    text-decoration: none;
+  }
+
+  .workflow-card strong {
+    color: var(--ink);
+    font-size: 14px;
+  }
+
+  .workflow-card span {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .workflow-card:hover {
+    border-color: var(--blue);
+    box-shadow: inset 4px 0 0 var(--blue);
+  }
+
+  .app-list {
+    padding: 8px 16px 16px;
+  }
+
+  .app-section {
+    border-bottom: 1px solid var(--line);
+    padding: 10px 0;
+  }
+
+  .app-section:last-child {
+    border-bottom: 0;
+  }
+
+  .app-section h3 {
+    color: var(--ink);
+    font-size: 13px;
+    letter-spacing: 0;
+    margin: 0 0 8px;
+  }
+
+  .model-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .model-links a {
+    background: #f8fafc;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink);
+    padding: 6px 9px;
+    text-decoration: none;
+  }
+
+  .model-links a:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  @media (max-width: 980px) {
+    .barcode-admin-hero,
+    .module-grid {
+      grid-template-columns: 1fr;
+    }
+    .workflow-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-shell">
+  <section class="barcode-admin-hero">
+    <div>
+      <h1>JI Barcode Admin</h1>
+      <p>Manage barcode generation, master data, scan logs, dispatch sessions, failed scans, SAP sync checks, and item/warehouse traceability from one focused console.</p>
+      <div class="barcode-quick-actions">
+        <a href="{% url 'admin:barcode_barcodemaster_dashboard' %}">Dashboard</a>
+        <a href="{% url 'admin:barcode_box_changelist' %}">Boxes</a>
+        <a href="{% url 'admin:barcode_pallet_changelist' %}">Pallets</a>
+        <a href="{% url 'admin:barcode_dispatchscanlog_changelist' %}">Conflicts</a>
+        <a href="{% url 'admin:barcode_dispatchsession_changelist' %}">Dispatch</a>
+      </div>
+    </div>
+    <aside class="hero-side">
+      <a href="{% url 'admin:barcode_barcodemaster_dashboard' %}">Open Barcode Dashboard</a>
+      <span>Use this as the main screen for barcode operations. The standard admin modules remain available below for deeper maintenance.</span>
+    </aside>
+  </section>
+
+  <section class="module-grid">
+    <article class="admin-panel">
+      <h2>Barcode Workflows</h2>
+      <div class="workflow-grid">
+        <a class="workflow-card" href="{% url 'admin:barcode_barcodemaster_changelist' %}">
+          <strong>Barcode Master</strong>
+          <span>Search, validate, activate, deactivate, and export barcode master records.</span>
+        </a>
+        <a class="workflow-card" href="{% url 'admin:barcode_box_changelist' %}">
+          <strong>Box Labels</strong>
+          <span>Track item, batch, warehouse, pallet link, print history, and full movement trail.</span>
+        </a>
+        <a class="workflow-card" href="{% url 'admin:barcode_pallet_changelist' %}">
+          <strong>Pallet Labels</strong>
+          <span>Review pallet capacity, box count, dispatch state, and pallet traceability.</span>
+        </a>
+        <a class="workflow-card" href="{% url 'admin:barcode_dispatchscanlog_changelist' %}?result=REJECTED">
+          <strong>Conflict Queue</strong>
+          <span>Review duplicate, wrong item, wrong warehouse, invalid, and master-data failures.</span>
+        </a>
+        <a class="workflow-card" href="{% url 'admin:barcode_scanlog_changelist' %}">
+          <strong>Scan Logs</strong>
+          <span>Audit scanner activity by result, user, device, entity, and date.</span>
+        </a>
+        <a class="workflow-card" href="{% url 'admin:barcode_dispatchsettings_changelist' %}">
+          <strong>Settings</strong>
+          <span>Manage dispatch scan rules, partial dispatch, SAP sync, and admin overrides.</span>
+        </a>
+      </div>
+    </article>
+
+    <article class="admin-panel">
+      <h2>All Admin Modules</h2>
+      <div class="app-list">
+        {% for app in app_list %}
+          <div class="app-section">
+            <h3>{{ app.name }}</h3>
+            <div class="model-links">
+              {% for model in app.models %}
+                {% if model.admin_url %}
+                  <a href="{{ model.admin_url }}">{{ model.name }}</a>
+                {% else %}
+                  <span>{{ model.name }}</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        {% empty %}
+          <p>{% translate "You do not have permission to view or edit anything." %}</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+</div>
+{% endblock %}

@@ -9,7 +9,7 @@ from datetime import date
 from django.core.files import File
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 
 from gate_core.enums import GateEntryStatus
 from dispatch_plans.hana_reader import HanaDispatchBillReader
@@ -21,6 +21,7 @@ from sap_client.client import SAPClient
 from sap_client.context import CompanyContext
 from sap_client.exceptions import SAPConnectionError, SAPDataError, SAPValidationError
 from sap_client.hana.connection import HanaConnection
+from weighment.models import Weighment
 
 from .models import (
     GRPOPosting,
@@ -497,6 +498,66 @@ class GRPOService:
                     return matched_code
         return ""
 
+    @staticmethod
+    def _normalize_dimension_search_text(value: Any) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+    def _product_dimension_candidates_from_summary(
+        self,
+        item_summary: str,
+    ) -> List[str]:
+        normalized_summary = self._normalize_dimension_search_text(item_summary)
+        if not normalized_summary:
+            return []
+
+        candidates = []
+        active_codes = self._get_active_dimension_codes(self.company_code, 1) or {}
+
+        # Prefer exact SAP master-data matches from invoice text. This catches
+        # cases like "COLD PRESS SUNFLOWER" -> OcrCode "SUNFLOWR".
+        for code, name in active_codes.items():
+            for value in (name, code):
+                token = self._normalize_dimension_search_text(value)
+                if len(token) >= 4 and token in normalized_summary:
+                    candidates.append(code)
+                    break
+
+        synonym_candidates = [
+            (("sunflower",), ["SUNFLOWER", "SUNFLOWR"]),
+            (("groundnut", "peanut"), ["GROUNDNUT", "GROUNDNT"]),
+            (("mustard",), ["MUSTARD"]),
+            (("canola",), ["CANOLA"]),
+            (("coconut",), ["COCONUT"]),
+            (("olive",), ["OLIVE"]),
+            (("palm",), ["PALM OIL"]),
+            (("rice bran", "ricebran"), ["RICE BRAN", "RICEBRAN"]),
+            (("soyabean", "soybean", "soya"), ["SOYABEAN"]),
+            (("sesame",), ["SESAME"]),
+            (("cotton seed", "cottonseed"), ["COTTON SEED", "COTTONSD"]),
+            (("ghee",), ["GHEE"]),
+            (("water", "mineral"), ["WATER", "WATRCMPR"]),
+            (("juice",), ["JUICE"]),
+            (("drink", "beverage"), ["BEVERAGE"]),
+        ]
+        for tokens, values in synonym_candidates:
+            if any(token in normalized_summary for token in tokens):
+                candidates.extend(values)
+
+        return candidates
+
+    def _resolve_product_dimension_code(
+        self,
+        item_summary: str,
+        product_variety: str,
+        service_description: str,
+    ) -> str:
+        candidates = [
+            *self._product_dimension_candidates_from_summary(item_summary),
+            product_variety,
+            service_description,
+        ]
+        return self._resolve_active_dimension_code(1, *candidates)
+
     def _infer_budget_delivery_point(self, dispatch_plan: DispatchPlan) -> str:
         active_budget_codes = self._get_active_budget_codes(self.company_code) or {}
         saved_budget = (dispatch_plan.budget_delivery_point or "").strip()
@@ -670,6 +731,64 @@ class GRPOService:
             "grpo_postings"
         ).order_by("-entry_time")
 
+    def get_grpo_dashboard_summary(self) -> Dict[str, Any]:
+        """
+        Build the material GRPO dashboard summary from the correct sources.
+
+        Pending metrics come from GRPO-ready gate entries and unposted POs.
+        QC accepted/rejected metrics come from PO item receipt quantities.
+        Posting metrics come from GRPOPosting history statuses.
+        """
+        pending_entry_count = 0
+        pending_po_count = 0
+
+        for entry in self.get_pending_grpo_entries():
+            po_receipts = list(entry.po_receipts.all())
+            posted_po_ids = set()
+
+            for grpo in entry.grpo_postings.filter(status=GRPOStatus.POSTED):
+                posted_po_ids.update(grpo.po_receipts.values_list("id", flat=True))
+                if grpo.po_receipt_id:
+                    posted_po_ids.add(grpo.po_receipt_id)
+
+            entry_pending_po_count = sum(
+                1 for po_receipt in po_receipts if po_receipt.id not in posted_po_ids
+            )
+            if entry_pending_po_count:
+                pending_entry_count += 1
+                pending_po_count += entry_pending_po_count
+
+        item_totals = POItemReceipt.objects.filter(
+            is_active=True,
+            po_receipt__is_active=True,
+            po_receipt__vehicle_entry__company__code=self.company_code,
+            po_receipt__vehicle_entry__entry_type="RAW_MATERIAL",
+        ).exclude(
+            po_receipt__vehicle_entry__status=GateEntryStatus.CANCELLED,
+        ).aggregate(
+            accepted_qty=Sum("accepted_qty"),
+            rejected_qty=Sum("rejected_qty"),
+        )
+
+        posting_counts = {
+            status_key: GRPOPosting.objects.filter(
+                vehicle_entry__company__code=self.company_code,
+                status=status_key,
+            ).count()
+            for status_key in GRPOStatus.values
+        }
+
+        return {
+            "pending_entry_count": pending_entry_count,
+            "pending_po_count": pending_po_count,
+            "qc_accepted_qty": item_totals["accepted_qty"] or Decimal("0"),
+            "qc_rejected_qty": item_totals["rejected_qty"] or Decimal("0"),
+            "posting_pending_count": posting_counts[GRPOStatus.PENDING],
+            "posted_count": posting_counts[GRPOStatus.POSTED],
+            "failed_count": posting_counts[GRPOStatus.FAILED],
+            "partially_posted_count": posting_counts[GRPOStatus.PARTIALLY_POSTED],
+        }
+
     def get_all_grpo_visible_entries(self) -> List[VehicleEntry]:
         """
         Get all RAW_MATERIAL gate entries the GRPO operator may want to see —
@@ -828,6 +947,7 @@ class GRPOService:
         warehouse_code: Optional[str] = None,
         comments: Optional[str] = None,
         vendor_ref: Optional[str] = None,
+        tare_weight: Optional[Decimal] = None,
         extra_charges: Optional[List[Dict[str, Any]]] = None,
         attachments: Optional[list] = None,
         doc_date: Optional[str] = None,
@@ -848,6 +968,7 @@ class GRPOService:
             warehouse_code: Optional warehouse code for SAP
             comments: Optional user comments for SAP document
             vendor_ref: Optional vendor reference number (NumAtCard)
+            tare_weight: Optional tare weight captured at GRPO; updates the gate weighment row
             extra_charges: Optional list of additional expense dicts
             attachments: Optional list of Django UploadedFile objects to attach
             doc_date: Optional posting date (DocDate), ISO format YYYY-MM-DD
@@ -899,6 +1020,40 @@ class GRPOService:
             raise ValueError(
                 f"Gate entry is not completed. Current status: {vehicle_entry.status}"
             )
+
+        weighment = (
+            Weighment.objects.select_for_update()
+            .filter(vehicle_entry=vehicle_entry)
+            .first()
+        )
+        if tare_weight is not None:
+            if tare_weight <= 0:
+                raise ValueError("Tare weight must be greater than zero")
+            if (
+                weighment
+                and weighment.gross_weight is not None
+                and weighment.gross_weight > 0
+                and tare_weight > weighment.gross_weight
+            ):
+                raise ValueError("Tare weight cannot be greater than gross weight")
+
+            if weighment is None:
+                weighment = Weighment(vehicle_entry=vehicle_entry, created_by=user)
+
+            weighment.tare_weight = tare_weight
+            if weighment.second_weighment_time is None:
+                weighment.second_weighment_time = timezone.now()
+            weighment.updated_by = user
+            if weighment.pk:
+                weighment.save(update_fields=[
+                    "tare_weight",
+                    "net_weight",
+                    "second_weighment_time",
+                    "updated_by",
+                    "updated_at",
+                ])
+            else:
+                weighment.save()
 
         # Check if any PO already has a POSTED GRPO
         for po_receipt in po_receipts:
@@ -1074,7 +1229,8 @@ class GRPOService:
                 try:
                     sap_result = sap_client.upload_attachment(
                         file_path=tmp_path,
-                        filename=uploaded_file.name
+                        filename=uploaded_file.name,
+                        allow_metadata_fallback=True,
                     )
                     abs_entry = sap_result.get("AbsoluteEntry")
                     if abs_entry:
@@ -1745,8 +1901,8 @@ class GRPOService:
                 supply_state=line_data["source_state"],
             )
             line_data["tax_code"] = line_tax_code
-            product_dimension = self._resolve_active_dimension_code(
-                1,
+            product_dimension = self._resolve_product_dimension_code(
+                line_snapshot.get("item_summary", ""),
                 line_data["product_variety"],
                 line_data["service_description"],
             )
@@ -1992,7 +2148,9 @@ class GRPOService:
         queryset = ServiceGRPOPosting.objects.select_related(
             "dispatch_plan",
             "posted_by",
-        ).prefetch_related("lines", "attachments")
+        ).prefetch_related("lines", "attachments").filter(
+            dispatch_plan__company__code=self.company_code,
+        )
 
         if dispatch_plan_id:
             queryset = queryset.filter(dispatch_plan_id=dispatch_plan_id)
@@ -2074,6 +2232,7 @@ class GRPOService:
                     absolute_entry=existing_abs_entry,
                     file_path=attachment.file.path,
                     filename=attachment.original_filename,
+                    allow_metadata_fallback=True,
                 )
                 attachment.sap_absolute_entry = existing_abs_entry
                 attachment.sap_attachment_status = SAPAttachmentStatus.LINKED
@@ -2084,7 +2243,8 @@ class GRPOService:
                 # No existing attachment — upload and include in GRPO
                 sap_result = sap_client.upload_attachment(
                     file_path=attachment.file.path,
-                    filename=attachment.original_filename
+                    filename=attachment.original_filename,
+                    allow_metadata_fallback=True,
                 )
                 absolute_entry = sap_result.get("AbsoluteEntry")
                 if not absolute_entry:
@@ -2165,6 +2325,7 @@ class GRPOService:
                     absolute_entry=existing_abs_entry,
                     file_path=attachment.file.path,
                     filename=attachment.original_filename,
+                    allow_metadata_fallback=True,
                 )
                 attachment.sap_absolute_entry = existing_abs_entry
                 attachment.sap_attachment_status = SAPAttachmentStatus.LINKED
@@ -2180,7 +2341,8 @@ class GRPOService:
                 else:
                     sap_result = sap_client.upload_attachment(
                         file_path=attachment.file.path,
-                        filename=attachment.original_filename
+                        filename=attachment.original_filename,
+                        allow_metadata_fallback=True,
                     )
                     absolute_entry = sap_result.get("AbsoluteEntry")
                     if not absolute_entry:

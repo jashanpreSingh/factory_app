@@ -131,39 +131,12 @@ class BarcodeService:
         return 1
 
     def _build_box_barcode_data(self, box):
-        """Build the JSON payload that gets encoded in the QR code."""
-        box_number = self._get_box_number(box) if box.pallet_id else None
-        return {
-            "type": "BOX",
-            "box_barcode": box.box_barcode,
-            "pallet_id": box.pallet.pallet_id if box.pallet_id else "",
-            "box_number": box_number,
-            "box_count": box.pallet.box_count if box.pallet_id else None,
-            "item_code": box.item_code,
-            "batch": box.batch_number,
-            "qty": str(box.qty),
-            "uom": box.uom,
-            "mfg_date": str(box.mfg_date),
-            "exp_date": str(box.exp_date),
-            "line": box.production_line,
-            "warehouse": box.current_warehouse,
-        }
+        """Store only the unique box reference used by printed/scanned barcodes."""
+        return {"barcode": box.box_barcode}
 
     def _build_pallet_barcode_data(self, pallet):
-        return {
-            "type": "PALLET",
-            "pallet_id": pallet.pallet_id,
-            "item_code": pallet.item_code,
-            "batch": pallet.batch_number,
-            "box_count": pallet.box_count,
-            "max_box_count": pallet.max_box_count,
-            "total_qty": str(pallet.total_qty),
-            "uom": pallet.uom,
-            "mfg_date": str(pallet.mfg_date),
-            "exp_date": str(pallet.exp_date),
-            "line": pallet.production_line,
-            "warehouse": pallet.current_warehouse,
-        }
+        """Store only the unique pallet reference used by printed/scanned barcodes."""
+        return {"barcode": pallet.pallet_id}
 
     # ==================================================================
     # BOX — Generate
@@ -535,6 +508,22 @@ class BarcodeService:
             raise ValueError(f"Pallet {pallet_id} not found.")
 
     @transaction.atomic
+    def delete_empty_pallet(self, pallet_id: int) -> str:
+        pallet = self.get_pallet(pallet_id)
+        pallet_code = pallet.pallet_id
+
+        if pallet.boxes.exists():
+            raise ValueError("Only empty pallets can be deleted. This pallet has boxes attached.")
+        if pallet.dispatch_session_id or pallet.dispatched_at:
+            raise ValueError("This pallet cannot be deleted because it is linked with dispatch.")
+        if pallet.dispatch_scanned_units.exists():
+            raise ValueError("This pallet cannot be deleted because it has dispatch scan history.")
+
+        pallet.delete()
+        logger.info(f"Empty pallet {pallet_code} deleted")
+        return pallet_code
+
+    @transaction.atomic
     def void_pallet(self, pallet_id: int, reason: str, user) -> Pallet:
         pallet = self.get_pallet(pallet_id)
         if pallet.status == PalletStatus.VOID:
@@ -799,7 +788,7 @@ class BarcodeService:
     @transaction.atomic
     def remove_boxes_from_pallet(self, pallet_id: int, box_ids: list[int], user) -> Pallet:
         pallet = self.get_pallet(pallet_id)
-        if pallet.status != PalletStatus.ACTIVE:
+        if pallet.status not in (PalletStatus.ACTIVE, PalletStatus.PARTIAL):
             raise ValueError(f"Cannot remove from pallet with status {pallet.status}.")
 
         boxes = list(pallet.boxes.filter(
@@ -1235,13 +1224,28 @@ class BarcodeService:
             ])
 
     def _recalculate_pallet(self, pallet: Pallet):
-        """Recalculate pallet box_count and total_qty from active/partial boxes."""
+        """Recalculate pallet counts and quantity from current box state."""
         active_boxes = pallet.boxes.filter(status__in=[BoxStatus.ACTIVE, BoxStatus.PARTIAL])
+        dispatched_boxes = pallet.boxes.filter(status=BoxStatus.DISPATCHED)
+        total_boxes = pallet.boxes.exclude(status=BoxStatus.VOID).count()
         pallet.box_count = active_boxes.count()
+        pallet.total_boxes = total_boxes
+        pallet.available_boxes = pallet.box_count
+        pallet.dispatched_boxes = dispatched_boxes.count()
         agg = active_boxes.aggregate(total=Sum('qty'))
         pallet.total_qty = agg['total'] or D('0')
+        if pallet.status != PalletStatus.DISPATCHED:
+            if pallet.available_boxes and pallet.dispatched_boxes:
+                pallet.status = PalletStatus.PARTIAL
+            elif not pallet.available_boxes and total_boxes:
+                pallet.status = PalletStatus.EMPTY
+            elif pallet.available_boxes:
+                pallet.status = PalletStatus.ACTIVE
         pallet.barcode_data = self._build_pallet_barcode_data(pallet)
-        pallet.save(update_fields=['box_count', 'total_qty', 'barcode_data', 'updated_at'])
+        pallet.save(update_fields=[
+            'status', 'box_count', 'total_boxes', 'available_boxes',
+            'dispatched_boxes', 'total_qty', 'barcode_data', 'updated_at',
+        ])
 
     @staticmethod
     def _get_box_number(box: Box) -> int | None:

@@ -19,6 +19,15 @@ def cast_debug(value):
     raise ValueError(f"Invalid DEBUG value: {value}")
 
 
+def cast_optional_int(value):
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    return int(normalized)
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -126,6 +135,16 @@ DATABASES = {
         'PORT': config('DB_PORT', default='5432'),
     }
 }
+AI_DB_NAME = config('AI_DB_NAME', default='')
+if AI_DB_NAME:
+    DATABASES['ai_readonly'] = {
+        'ENGINE': config('AI_DB_ENGINE', default=config('DB_ENGINE', default='django.db.backends.postgresql')),
+        'NAME': AI_DB_NAME,
+        'USER': config('AI_DB_USER'),
+        'PASSWORD': config('AI_DB_PASSWORD'),
+        'HOST': config('AI_DB_HOST', default=config('DB_HOST')),
+        'PORT': config('AI_DB_PORT', default=config('DB_PORT', default='5432')),
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -148,6 +167,7 @@ ADMIN_INDEX_TITLE = "JI Factory Jivo Wellness Admin"
 
 # Static files
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Media files
 MEDIA_URL = '/media/'
@@ -188,6 +208,12 @@ SIMPLE_JWT = {
 LOCAL_DEV_CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174',
+    'http://localhost:5175',
+    'http://127.0.0.1:5175',
+    'http://localhost:5176',
+    'http://127.0.0.1:5176',
 ]
 CORS_ALLOWED_ORIGINS = list(dict.fromkeys([
     *config('CORS_ALLOWED_ORIGINS', default='', cast=Csv()),
@@ -212,6 +238,101 @@ COMPANY_DB = {
     "JIVO_BEVERAGES": config('COMPANY_DB_JIVO_BEVERAGES'),
 }
 
+SAP_ATTACHMENT_DIRECT_COPY_PATHS = {
+    "JIVO_OIL": config("SAP_ATTACHMENT_DIRECT_COPY_PATH_JIVO_OIL", default=""),
+    "JIVO_MART": config("SAP_ATTACHMENT_DIRECT_COPY_PATH_JIVO_MART", default=""),
+    "JIVO_BEVERAGES": config(
+        "SAP_ATTACHMENT_DIRECT_COPY_PATH_JIVO_BEVERAGES",
+        default="",
+    ),
+}
+SAP_ATTACHMENT_DIRECT_COPY_USERNAME = config(
+    "SAP_ATTACHMENT_DIRECT_COPY_USERNAME",
+    default="",
+)
+SAP_ATTACHMENT_DIRECT_COPY_PASSWORD = config(
+    "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD",
+    default="",
+)
+SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL = config(
+    "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL",
+    default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME,
+)
+SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL = config(
+    "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL",
+    default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD,
+)
+SAP_ATTACHMENT_DIRECT_COPY_CREDENTIALS = {
+    "JIVO_OIL": {
+        "username": SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL,
+        "password": SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL,
+    },
+    "JIVO_MART": {
+        "username": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_MART",
+            default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME,
+        ),
+        "password": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_MART",
+            default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD,
+        ),
+    },
+    "JIVO_BEVERAGES": {
+        "username": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_BEVERAGES",
+            default=SAP_ATTACHMENT_DIRECT_COPY_USERNAME_JIVO_OIL,
+        ),
+        "password": config(
+            "SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_BEVERAGES",
+            default=SAP_ATTACHMENT_DIRECT_COPY_PASSWORD_JIVO_OIL,
+        ),
+    },
+}
+
+SAP_FILE_UPLOADER_ENABLED = config(
+    "SAP_FILE_UPLOADER_ENABLED",
+    default=False,
+    cast=cast_debug,
+)
+SAP_FILE_UPLOADER_BASE_URL = config(
+    "SAP_FILE_UPLOADER_BASE_URL",
+    default="",
+)
+SAP_FILE_UPLOADER_API_KEY = config(
+    "SAP_FILE_UPLOADER_API_KEY",
+    default="",
+)
+SAP_FILE_UPLOADER_TIMEOUT_SECONDS = config(
+    "SAP_FILE_UPLOADER_TIMEOUT_SECONDS",
+    default=120,
+    cast=int,
+)
+SAP_FILE_UPLOADER_FOLDER_IDS = {
+    "JIVO_OIL": config(
+        "SAP_FILE_UPLOADER_FOLDER_ID_JIVO_OIL",
+        default="",
+        cast=cast_optional_int,
+    ),
+    "JIVO_MART": config(
+        "SAP_FILE_UPLOADER_FOLDER_ID_JIVO_MART",
+        default="",
+        cast=cast_optional_int,
+    ),
+    "JIVO_BEVERAGES": config(
+        "SAP_FILE_UPLOADER_FOLDER_ID_JIVO_BEVERAGES",
+        default="",
+        cast=cast_optional_int,
+    ),
+}
+SAP_FILE_UPLOADER_SOURCE_PATHS = {
+    "JIVO_OIL": config("SAP_FILE_UPLOADER_SOURCE_PATH_JIVO_OIL", default=""),
+    "JIVO_MART": config("SAP_FILE_UPLOADER_SOURCE_PATH_JIVO_MART", default=""),
+    "JIVO_BEVERAGES": config(
+        "SAP_FILE_UPLOADER_SOURCE_PATH_JIVO_BEVERAGES",
+        default="",
+    ),
+}
+
 # Firebase Cloud Messaging
 FCM_CREDENTIALS_PATH = config('FCM_CREDENTIALS_PATH', default='firebase-service-account.json')
 
@@ -233,3 +354,7 @@ GEMINI_FALLBACK_MODELS = config(
 )
 AI_ASSISTANT_TIMEOUT_SECONDS = config('AI_ASSISTANT_TIMEOUT_SECONDS', default=45, cast=int)
 AI_ASSISTANT_MAX_CONTEXT_ROWS = config('AI_ASSISTANT_MAX_CONTEXT_ROWS', default=5, cast=int)
+AI_ASSISTANT_SQL_DATABASE_ALIAS = config(
+    'AI_ASSISTANT_SQL_DATABASE_ALIAS',
+    default='ai_readonly' if AI_DB_NAME else 'default',
+)
