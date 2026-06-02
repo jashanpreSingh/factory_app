@@ -21,6 +21,9 @@ from .views import (
     DispatchReportAPI, DispatchReportDetailAPI,
     DispatchPalletReportAPI, DispatchBoxReportAPI,
     DispatchRejectedScanReportAPI,
+    BarcodeTraceabilityAPI, IntercompanyTransferDashboardAPI,
+    IntercompanyTransferDetailAPI, IntercompanyTransferListCreateAPI,
+    IntercompanyTransferReverseAPI, IntercompanyTransferScanAPI,
     ProductionRunLabelsAPI, ProductionRunPalletAPI, ProductionReleaseOilListAPI,
     OitmItemListAPI,
 )
@@ -53,6 +56,12 @@ urlpatterns = [
     # Box Transfer
     # ------------------------------------------------------------------
     path('transfers/box/', BoxTransferAPI.as_view(), name='bc-transfer-box'),
+    path('intercompany/dashboard/', IntercompanyTransferDashboardAPI.as_view(), name='bc-intercompany-dashboard'),
+    path('intercompany/transfers/', IntercompanyTransferListCreateAPI.as_view(), name='bc-intercompany-transfer-list-create'),
+    path('intercompany/transfers/<int:transfer_id>/', IntercompanyTransferDetailAPI.as_view(), name='bc-intercompany-transfer-detail'),
+    path('intercompany/transfers/<int:transfer_id>/reverse/', IntercompanyTransferReverseAPI.as_view(), name='bc-intercompany-transfer-reverse'),
+    path('intercompany/scan/', IntercompanyTransferScanAPI.as_view(), name='bc-intercompany-scan'),
+    path('intercompany/trace/', BarcodeTraceabilityAPI.as_view(), name='bc-intercompany-trace'),
 
     # ------------------------------------------------------------------
     # Print / Label

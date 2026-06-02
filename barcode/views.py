@@ -1,6 +1,7 @@
 import logging
 import csv
 from django.db import IntegrityError
+from django.db.models import Q
 from django.http import HttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -12,6 +13,10 @@ from .services.barcode_service import BarcodeService
 from .services.label_service import LabelService
 from .services.scan_service import ScanService
 from .services.dispatch_service import BarcodeDispatchService, DispatchValidationError
+from .services.intercompany_transfer_service import (
+    IntercompanyTransferError,
+    IntercompanyTransferService,
+)
 from .services.production_integration_service import ProductionBarcodeIntegration
 from .services.production_release_service import (
     ProductionReleaseOilService,
@@ -33,8 +38,12 @@ from .serializers import (
     DispatchSessionSerializer, DispatchScanLogSerializer,
     DispatchSapSyncLogSerializer, DispatchSettingsSerializer,
     PalletBoxHistorySerializer,
+    BarcodeAuditLogSerializer, IntercompanyBarcodeScanSerializer,
+    IntercompanyTransferCreateSerializer, IntercompanyTransferReverseSerializer,
+    IntercompanyTransferSerializer,
     ProductionLabelsSerializer, ProductionPalletSerializer,
 )
+from .models import BarcodeAuditLog, IntercompanyTransfer
 
 logger = logging.getLogger(__name__)
 
@@ -454,6 +463,147 @@ class BoxTransferAPI(APIView):
             return Response(BoxListSerializer(boxes, many=True).data)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ===========================================================================
+# Intercompany Barcode Transfer
+# ===========================================================================
+
+class IntercompanyTransferDashboardAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        svc = IntercompanyTransferService(request.user)
+        data = svc.dashboard(request.company.company)
+        recent = (
+            IntercompanyTransfer.objects
+            .filter(Q(source_company=request.company.company) | Q(destination_company=request.company.company))
+            .select_related('source_company', 'destination_company', 'created_by', 'reversed_by')
+            .prefetch_related('lines')[:10]
+        )
+        data['recent_transfers'] = IntercompanyTransferSerializer(recent, many=True).data
+        return Response(data)
+
+
+class IntercompanyTransferListCreateAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        search = request.query_params.get('search', '').strip()
+        qs = (
+            IntercompanyTransfer.objects
+            .filter(Q(source_company=request.company.company) | Q(destination_company=request.company.company))
+            .select_related('source_company', 'destination_company', 'created_by', 'reversed_by')
+            .prefetch_related('lines')
+        )
+        if search:
+            qs = qs.filter(
+                Q(transfer_number__icontains=search)
+                | Q(lines__barcode__icontains=search)
+                | Q(lines__item_code__icontains=search)
+                | Q(lines__batch_number__icontains=search)
+            ).distinct()
+        return _list_response(request, qs, IntercompanyTransferSerializer)
+
+    def post(self, request):
+        serializer = IntercompanyTransferCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            transfer = IntercompanyTransferService(request.user).create_transfer(
+                **serializer.validated_data
+            )
+            return Response(
+                IntercompanyTransferSerializer(transfer).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except IntercompanyTransferError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class IntercompanyTransferDetailAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request, transfer_id):
+        try:
+            transfer = (
+                IntercompanyTransfer.objects
+                .filter(Q(source_company=request.company.company) | Q(destination_company=request.company.company))
+                .select_related('source_company', 'destination_company', 'created_by', 'reversed_by')
+                .prefetch_related('lines')
+                .get(id=transfer_id)
+            )
+        except IntercompanyTransfer.DoesNotExist:
+            return Response({'error': 'Transfer not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(IntercompanyTransferSerializer(transfer).data)
+
+
+class IntercompanyTransferScanAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request):
+        serializer = IntercompanyBarcodeScanSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = IntercompanyTransferService(request.user).scan_barcode(
+                **serializer.validated_data
+            )
+            return Response(result)
+        except IntercompanyTransferError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class IntercompanyTransferReverseAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def post(self, request, transfer_id):
+        serializer = IntercompanyTransferReverseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            transfer = IntercompanyTransferService(request.user).reverse_transfer(
+                transfer_id,
+                **serializer.validated_data,
+            )
+            return Response(IntercompanyTransferSerializer(transfer).data)
+        except IntercompanyTransfer.DoesNotExist:
+            return Response({'error': 'Transfer not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except IntercompanyTransferError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BarcodeTraceabilityAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext]
+
+    def get(self, request):
+        search = request.query_params.get('search', '').strip()
+        if not search:
+            return Response({'error': 'Search value is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        logs = list(
+            BarcodeAuditLog.objects
+            .filter(
+                Q(barcode__icontains=search)
+                | Q(box__box_barcode__icontains=search)
+                | Q(box__batch_number__icontains=search)
+                | Q(box__item_code__icontains=search)
+                | Q(transfer__transfer_number__icontains=search)
+            )
+            .select_related('box', 'from_company', 'to_company', 'user', 'transfer')[:100]
+        )
+        box = logs[0].box if logs and logs[0].box else None
+        first_manufacturing_log = logs[-1] if logs else None
+        return Response({
+            'barcode': box.box_barcode if box else search,
+            'current_company': box.company.code if box else '',
+            'current_company_name': box.company.name if box else '',
+            'manufacturing_company': (
+                first_manufacturing_log.to_company.code
+                if first_manufacturing_log and first_manufacturing_log.to_company
+                else ''
+            ),
+            'dispatch_status': 'DISPATCHED' if box and box.dispatched_at else 'NOT_DISPATCHED',
+            'current_location': box.current_warehouse if box else '',
+            'history': BarcodeAuditLogSerializer(logs, many=True).data,
+        })
 
 
 # ===========================================================================

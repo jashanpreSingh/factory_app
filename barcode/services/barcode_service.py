@@ -6,6 +6,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from ..models import (
+    BarcodeAuditLog, BarcodeAuditTransactionType,
     BarcodeSequence, Pallet, Box, PalletMovement, BoxMovement, LooseStock,
     PalletStatus, BoxStatus, LooseStockStatus,
     PalletMovementType, BoxMovementType, DismantleReason,
@@ -223,6 +224,17 @@ class BarcodeService:
 
         Box.objects.bulk_update(created_boxes, ['barcode_data'])
         BoxMovement.objects.bulk_create(movements)
+        BarcodeAuditLog.objects.bulk_create([
+            BarcodeAuditLog(
+                box=box,
+                barcode=box.box_barcode,
+                transaction_type=BarcodeAuditTransactionType.MANUFACTURED,
+                to_company=self.company,
+                user=user,
+                notes=f"Manufactured in {self.company.code}",
+            )
+            for box in created_boxes
+        ])
 
         logger.info(
             f"Generated {len(created_boxes)} boxes for {item_code} "

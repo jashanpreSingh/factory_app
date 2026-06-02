@@ -26,6 +26,9 @@ from .models import (
     DispatchSessionLine,
     DispatchSessionStatus,
     DispatchSettings,
+    BarcodeAuditLog,
+    IntercompanyTransfer,
+    IntercompanyTransferLine,
     LabelPrintLog,
     LooseStock,
     Pallet,
@@ -215,6 +218,60 @@ class DispatchScannedUnitInline(admin.TabularInline):
     readonly_fields = fields
     can_delete = False
     show_change_link = True
+
+
+class IntercompanyTransferLineInline(admin.TabularInline):
+    model = IntercompanyTransferLine
+    extra = 0
+    fields = ["barcode", "item_code", "batch_number", "qty", "uom", "from_company", "to_company"]
+    readonly_fields = fields
+    can_delete = False
+    show_change_link = True
+
+
+@admin.register(IntercompanyTransfer)
+class IntercompanyTransferAdmin(admin.ModelAdmin):
+    list_display = [
+        "transfer_number",
+        "entity_type",
+        "source_company",
+        "destination_company",
+        "status",
+        "total_barcodes",
+        "total_qty",
+        "sap_status",
+        "created_by",
+        "created_at",
+    ]
+    list_filter = ["entity_type", "status", "source_company", "destination_company", "sap_enabled", "created_at"]
+    search_fields = [
+        "transfer_number",
+        "lines__barcode",
+        "lines__item_code",
+        "lines__batch_number",
+        "source_company__code",
+        "destination_company__code",
+    ]
+    readonly_fields = ["created_at", "updated_at", "reversed_at"]
+    inlines = [IntercompanyTransferLineInline]
+    actions = [export_as_csv]
+
+
+@admin.register(BarcodeAuditLog)
+class BarcodeAuditLogAdmin(admin.ModelAdmin):
+    list_display = [
+        "barcode",
+        "transaction_type",
+        "from_company",
+        "to_company",
+        "transfer",
+        "user",
+        "created_at",
+    ]
+    list_filter = ["transaction_type", "from_company", "to_company", "created_at"]
+    search_fields = ["barcode", "transfer__transfer_number", "box__box_barcode", "user__email"]
+    readonly_fields = ["created_at"]
+    actions = [export_as_csv]
 
 
 @admin.register(BarcodeMaster)

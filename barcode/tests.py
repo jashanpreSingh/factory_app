@@ -13,6 +13,8 @@ from company.models import Company, UserCompany, UserRole
 
 from .models import (
     BarcodeSequence,
+    BarcodeAuditLog,
+    BarcodeAuditTransactionType,
     Box,
     BoxMovement,
     BoxMovementType,
@@ -29,6 +31,7 @@ from .models import (
     DispatchSapUpdateStatus,
     DispatchSessionStatus,
     DispatchSettings,
+    IntercompanyTransferStatus,
     ScanLog,
     ScanResult,
 )
@@ -47,6 +50,10 @@ from .services.dispatch_service import (
     DispatchValidationError,
     SapDispatchAdapter,
     SapUpdateResult,
+)
+from .services.intercompany_transfer_service import (
+    IntercompanyTransferError,
+    IntercompanyTransferService,
 )
 from .views import _list_response
 
@@ -507,6 +514,223 @@ class BarcodeWorkflowTests(TestCase):
 
         source_boxes[1].refresh_from_db()
         self.assertEqual(source_boxes[1].pallet_id, source.id)
+
+    def test_intercompany_transfer_changes_box_ownership_and_records_history(self):
+        destination = Company.objects.create(name='JIVO MART', code='JMART')
+        role = UserRole.objects.create(name='Supervisor')
+        UserCompany.objects.create(user=self.user, company=self.company, role=role, is_active=True)
+        UserCompany.objects.create(user=self.user, company=destination, role=role, is_active=True)
+        boxes = self._generate_boxes(count=2, qty='5.00', batch='BATCH-IC')
+
+        service = IntercompanyTransferService(self.user)
+        scan = service.scan_barcode(
+            barcode=boxes[0].box_barcode,
+            source_company_code=self.company.code,
+            destination_company_code=destination.code,
+            device_id='scanner-1',
+        )
+        self.assertEqual(scan['current_company'], self.company.code)
+
+        transfer = service.create_transfer(
+            source_company_code=self.company.code,
+            destination_company_code=destination.code,
+            barcodes=[box.box_barcode for box in boxes],
+            notes='Move to trading company',
+            device_id='scanner-1',
+        )
+
+        self.assertEqual(transfer.status, IntercompanyTransferStatus.COMPLETED)
+        self.assertEqual(transfer.total_barcodes, 2)
+        self.assertEqual(transfer.lines.count(), 2)
+        for box in boxes:
+            box.refresh_from_db()
+            self.assertEqual(box.company_id, destination.id)
+
+        history = BarcodeAuditLog.objects.filter(
+            barcode=boxes[0].box_barcode,
+            transaction_type=BarcodeAuditTransactionType.TRANSFER_COMPLETED,
+        )
+        self.assertEqual(history.count(), 1)
+
+        reversed_transfer = service.reverse_transfer(transfer.id, reason='Wrong company')
+        self.assertEqual(reversed_transfer.status, IntercompanyTransferStatus.REVERSED)
+        boxes[0].refresh_from_db()
+        self.assertEqual(boxes[0].company_id, self.company.id)
+
+    def test_intercompany_scan_accepts_legacy_qr_payload_and_one_dimensional_value(self):
+        destination = Company.objects.create(name='JIVO MART', code='JMART')
+        role = UserRole.objects.create(name='Supervisor')
+        UserCompany.objects.create(user=self.user, company=self.company, role=role, is_active=True)
+        UserCompany.objects.create(user=self.user, company=destination, role=role, is_active=True)
+        box = self._generate_boxes(count=1, batch='BATCH-QR')[0]
+        service = IntercompanyTransferService(self.user)
+
+        legacy_payload = json.dumps({'type': 'BOX', 'box_barcode': box.box_barcode})
+        legacy_scan = service.scan_barcode(
+            barcode=legacy_payload,
+            source_company_code=self.company.code,
+            destination_company_code=destination.code,
+        )
+        self.assertEqual(legacy_scan['barcode'], box.box_barcode)
+
+        one_dimensional_value = f"B{box.box_barcode.replace('-', '')}"
+        one_dimensional_scan = service.scan_barcode(
+            barcode=one_dimensional_value,
+            source_company_code=self.company.code,
+            destination_company_code=destination.code,
+        )
+        self.assertEqual(one_dimensional_scan['barcode'], box.box_barcode)
+
+    def test_intercompany_pallet_transfer_moves_pallet_and_boxes(self):
+        destination = Company.objects.create(name='JIVO MART', code='JMART')
+        role = UserRole.objects.create(name='Supervisor')
+        UserCompany.objects.create(user=self.user, company=self.company, role=role, is_active=True)
+        UserCompany.objects.create(user=self.user, company=destination, role=role, is_active=True)
+        boxes = self._generate_boxes(count=2, qty='6.00', batch='BATCH-PLT')
+        pallet = self.service.create_pallet(
+            {'warehouse': 'FG01', 'production_line': 'Line 1'},
+            user=self.user,
+        )
+        self.service.add_boxes_to_pallet(pallet.id, [box.id for box in boxes], user=self.user)
+        pallet.refresh_from_db()
+        service = IntercompanyTransferService(self.user)
+
+        scan = service.scan_barcode(
+            barcode=json.dumps({'type': 'PALLET', 'pallet_id': pallet.pallet_id}),
+            source_company_code=self.company.code,
+            destination_company_code=destination.code,
+            transfer_type='PALLET',
+        )
+
+        self.assertEqual(scan['entity_type'], EntityType.PALLET)
+        self.assertEqual(scan['barcode'], pallet.pallet_id)
+        self.assertEqual(scan['box_count'], 2)
+
+        transfer = service.create_transfer(
+            source_company_code=self.company.code,
+            destination_company_code=destination.code,
+            transfer_type='PALLET',
+            barcodes=[f"P{pallet.pallet_id.replace('-', '')}"],
+            notes='Move full pallet',
+        )
+
+        self.assertEqual(transfer.entity_type, EntityType.PALLET)
+        self.assertEqual(transfer.total_barcodes, 2)
+        self.assertEqual(transfer.total_qty, Decimal('12.00'))
+        self.assertEqual(transfer.lines.count(), 2)
+        pallet.refresh_from_db()
+        self.assertEqual(pallet.company_id, destination.id)
+        for box in boxes:
+            box.refresh_from_db()
+            self.assertEqual(box.company_id, destination.id)
+
+        reversed_transfer = service.reverse_transfer(transfer.id, reason='Wrong pallet')
+        self.assertEqual(reversed_transfer.status, IntercompanyTransferStatus.REVERSED)
+        pallet.refresh_from_db()
+        self.assertEqual(pallet.company_id, self.company.id)
+        for box in boxes:
+            box.refresh_from_db()
+            self.assertEqual(box.company_id, self.company.id)
+
+    def test_intercompany_scan_rejects_wrong_selected_type(self):
+        destination = Company.objects.create(name='JIVO MART', code='JMART')
+        role = UserRole.objects.create(name='Supervisor')
+        UserCompany.objects.create(user=self.user, company=self.company, role=role, is_active=True)
+        UserCompany.objects.create(user=self.user, company=destination, role=role, is_active=True)
+        box = self._generate_boxes(count=1, batch='BATCH-TYPE')[0]
+        service = IntercompanyTransferService(self.user)
+
+        with self.assertRaisesMessage(IntercompanyTransferError, 'Select Box transfer type'):
+            service.scan_barcode(
+                barcode=box.box_barcode,
+                source_company_code=self.company.code,
+                destination_company_code=destination.code,
+                transfer_type='PALLET',
+            )
+
+    def test_intercompany_transfer_api_end_to_end(self):
+        destination = Company.objects.create(name='JIVO MART', code='JMART')
+        role = UserRole.objects.create(name='Supervisor')
+        UserCompany.objects.create(user=self.user, company=self.company, role=role, is_active=True)
+        UserCompany.objects.create(user=self.user, company=destination, role=role, is_active=True)
+        box = self._generate_boxes(count=1, qty='7.00', batch='BATCH-API')[0]
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        headers = {'HTTP_COMPANY_CODE': self.company.code}
+
+        scan_response = client.post(
+            '/api/v1/barcode/intercompany/scan/',
+            {
+                'barcode': json.dumps({'type': 'BOX', 'box_barcode': box.box_barcode}),
+                'source_company_code': self.company.code,
+                'destination_company_code': destination.code,
+            },
+            format='json',
+            **headers,
+        )
+        self.assertEqual(scan_response.status_code, 200)
+        self.assertEqual(scan_response.data['barcode'], box.box_barcode)
+
+        create_response = client.post(
+            '/api/v1/barcode/intercompany/transfers/',
+            {
+                'source_company_code': self.company.code,
+                'destination_company_code': destination.code,
+                'barcodes': [box.box_barcode],
+                'notes': 'API test',
+            },
+            format='json',
+            **headers,
+        )
+        self.assertEqual(create_response.status_code, 201)
+        transfer_id = create_response.data['id']
+        self.assertEqual(create_response.data['total_barcodes'], 1)
+
+        dashboard_response = client.get('/api/v1/barcode/intercompany/dashboard/', **headers)
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertGreaterEqual(dashboard_response.data['today']['barcode_count'], 1)
+
+        detail_response = client.get(
+            f'/api/v1/barcode/intercompany/transfers/{transfer_id}/',
+            **headers,
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data['lines'][0]['barcode'], box.box_barcode)
+
+        trace_response = client.get(
+            '/api/v1/barcode/intercompany/trace/',
+            {'search': box.box_barcode},
+            **headers,
+        )
+        self.assertEqual(trace_response.status_code, 200)
+        self.assertTrue(trace_response.data['history'])
+
+        reverse_response = client.post(
+            f'/api/v1/barcode/intercompany/transfers/{transfer_id}/reverse/',
+            {'reason': 'API test reverse'},
+            format='json',
+            **headers,
+        )
+        self.assertEqual(reverse_response.status_code, 200)
+        self.assertEqual(reverse_response.data['status'], IntercompanyTransferStatus.REVERSED)
+
+    def test_intercompany_transfer_rejects_wrong_source_company(self):
+        destination = Company.objects.create(name='JIVO MART', code='JMART')
+        other = Company.objects.create(name='JIVO EXPORT', code='JEXP')
+        role = UserRole.objects.create(name='Supervisor')
+        for company in (self.company, destination, other):
+            UserCompany.objects.create(user=self.user, company=company, role=role, is_active=True)
+        box = self._generate_boxes(count=1)[0]
+
+        with self.assertRaisesMessage(
+            IntercompanyTransferError,
+            'does not belong',
+        ):
+            IntercompanyTransferService(self.user).create_transfer(
+                source_company_code=other.code,
+                destination_company_code=destination.code,
+                barcodes=[box.box_barcode],
+            )
 
     def test_pallet_sequence_uses_global_unique_namespace(self):
         first = self.service.create_pallet(

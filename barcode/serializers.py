@@ -3,6 +3,7 @@ from .models import (
     Box, Pallet, BoxMovement, PalletMovement, LabelPrintLog, ScanLog, LooseStock,
     DispatchSession, DispatchSessionLine, DispatchScanLog, DispatchScannedUnit,
     DispatchSapSyncLog, DispatchSettings, PalletBoxHistory,
+    BarcodeAuditLog, IntercompanyTransfer, IntercompanyTransferLine,
 )
 
 
@@ -324,6 +325,84 @@ class BoxTransferSerializer(serializers.Serializer):
     box_ids = serializers.ListField(child=serializers.IntegerField(), min_length=1)
     to_warehouse = serializers.CharField(max_length=20)
     to_pallet_id = serializers.IntegerField(required=False, default=None)
+
+
+class IntercompanyBarcodeScanSerializer(serializers.Serializer):
+    barcode = serializers.CharField(max_length=200)
+    source_company_code = serializers.CharField(max_length=50)
+    destination_company_code = serializers.CharField(max_length=50)
+    transfer_type = serializers.ChoiceField(choices=['BOX', 'PALLET'], default='BOX')
+    device_id = serializers.CharField(max_length=120, required=False, allow_blank=True, default='')
+
+
+class IntercompanyTransferCreateSerializer(serializers.Serializer):
+    source_company_code = serializers.CharField(max_length=50)
+    destination_company_code = serializers.CharField(max_length=50)
+    transfer_type = serializers.ChoiceField(choices=['BOX', 'PALLET'], default='BOX')
+    barcodes = serializers.ListField(child=serializers.CharField(max_length=200), min_length=1)
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
+    device_id = serializers.CharField(max_length=120, required=False, allow_blank=True, default='')
+    sap_enabled = serializers.BooleanField(required=False, default=False)
+
+
+class IntercompanyTransferReverseSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=False, allow_blank=True, default='')
+    device_id = serializers.CharField(max_length=120, required=False, allow_blank=True, default='')
+
+
+class IntercompanyTransferLineSerializer(serializers.ModelSerializer):
+    from_company_code = serializers.CharField(source='from_company.code', read_only=True)
+    from_company_name = serializers.CharField(source='from_company.name', read_only=True)
+    to_company_code = serializers.CharField(source='to_company.code', read_only=True)
+    to_company_name = serializers.CharField(source='to_company.name', read_only=True)
+
+    class Meta:
+        model = IntercompanyTransferLine
+        fields = [
+            'id', 'box', 'barcode', 'item_code', 'item_name',
+            'batch_number', 'qty', 'uom',
+            'from_company_code', 'from_company_name',
+            'to_company_code', 'to_company_name', 'created_at',
+        ]
+
+
+class IntercompanyTransferSerializer(serializers.ModelSerializer):
+    source_company_code = serializers.CharField(source='source_company.code', read_only=True)
+    source_company_name = serializers.CharField(source='source_company.name', read_only=True)
+    destination_company_code = serializers.CharField(source='destination_company.code', read_only=True)
+    destination_company_name = serializers.CharField(source='destination_company.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True, default='')
+    reversed_by_name = serializers.CharField(source='reversed_by.full_name', read_only=True, default='')
+    lines = IntercompanyTransferLineSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = IntercompanyTransfer
+        fields = [
+            'id', 'transfer_number', 'source_company_code', 'source_company_name',
+            'destination_company_code', 'destination_company_name',
+            'entity_type', 'status', 'total_barcodes', 'total_qty', 'uom',
+            'sap_enabled', 'sap_doc_entry', 'sap_doc_num', 'sap_status', 'sap_error',
+            'notes', 'device_id', 'reversed_at', 'reversed_by_name',
+            'created_by_name', 'created_at', 'updated_at', 'lines',
+        ]
+
+
+class BarcodeAuditLogSerializer(serializers.ModelSerializer):
+    from_company_code = serializers.CharField(source='from_company.code', read_only=True, default='')
+    from_company_name = serializers.CharField(source='from_company.name', read_only=True, default='')
+    to_company_code = serializers.CharField(source='to_company.code', read_only=True, default='')
+    to_company_name = serializers.CharField(source='to_company.name', read_only=True, default='')
+    user_name = serializers.CharField(source='user.full_name', read_only=True, default='')
+    transfer_number = serializers.CharField(source='transfer.transfer_number', read_only=True, default='')
+
+    class Meta:
+        model = BarcodeAuditLog
+        fields = [
+            'id', 'barcode', 'transaction_type', 'transfer', 'transfer_number',
+            'from_company_code', 'from_company_name',
+            'to_company_code', 'to_company_name',
+            'user_name', 'device_id', 'notes', 'created_at',
+        ]
 
 
 # ---------------------------------------------------------------------------

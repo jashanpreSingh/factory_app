@@ -61,6 +61,22 @@ class BoxMovementType(models.TextChoices):
     VOID = "VOID", "Void"
 
 
+class IntercompanyTransferStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Draft"
+    COMPLETED = "COMPLETED", "Completed"
+    REVERSED = "REVERSED", "Reversed"
+    SAP_SYNC_FAILED = "SAP_SYNC_FAILED", "SAP Sync Failed"
+
+
+class BarcodeAuditTransactionType(models.TextChoices):
+    MANUFACTURED = "MANUFACTURED", "Manufactured"
+    SCANNED = "SCANNED", "Scanned"
+    TRANSFER_CREATED = "TRANSFER_CREATED", "Transfer Created"
+    TRANSFER_COMPLETED = "TRANSFER_COMPLETED", "Transfer Completed"
+    TRANSFER_REVERSED = "TRANSFER_REVERSED", "Transfer Reversed"
+    DISPATCH_COMPLETED = "DISPATCH_COMPLETED", "Dispatch Completed"
+
+
 class DismantleReason(models.TextChoices):
     REPACK = "REPACK", "Repack"
     SAMPLE = "SAMPLE", "Sample"
@@ -374,6 +390,194 @@ class BarcodeMaster(models.Model):
 
     def __str__(self):
         return f"{self.barcode_type} {self.barcode}"
+
+
+# ---------------------------------------------------------------------------
+# Intercompany Barcode Transfer
+# ---------------------------------------------------------------------------
+
+class IntercompanyTransfer(models.Model):
+    transfer_number = models.CharField(max_length=60, unique=True)
+    entity_type = models.CharField(
+        max_length=20,
+        choices=[
+            (EntityType.BOX, "Box"),
+            (EntityType.PALLET, "Pallet"),
+        ],
+        default=EntityType.BOX,
+    )
+    source_company = models.ForeignKey(
+        'company.Company',
+        on_delete=models.PROTECT,
+        related_name='intercompany_transfers_out',
+    )
+    destination_company = models.ForeignKey(
+        'company.Company',
+        on_delete=models.PROTECT,
+        related_name='intercompany_transfers_in',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=IntercompanyTransferStatus.choices,
+        default=IntercompanyTransferStatus.COMPLETED,
+    )
+    total_barcodes = models.PositiveIntegerField(default=0)
+    total_qty = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    uom = models.CharField(max_length=30, blank=True, default='')
+    sap_enabled = models.BooleanField(default=False)
+    sap_doc_entry = models.IntegerField(null=True, blank=True)
+    sap_doc_num = models.CharField(max_length=80, blank=True, default='')
+    sap_status = models.CharField(max_length=40, blank=True, default='')
+    sap_error = models.TextField(blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    device_id = models.CharField(max_length=120, blank=True, default='')
+    reversed_of = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reverse_transfers',
+    )
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='intercompany_transfers_reversed',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='intercompany_transfers_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['source_company', 'destination_company', 'created_at']),
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['transfer_number']),
+            models.Index(fields=['sap_doc_entry']),
+        ]
+        permissions = [
+            ("can_view_intercompany_transfer", "Can view intercompany barcode transfers"),
+            ("can_create_intercompany_transfer", "Can create intercompany barcode transfers"),
+            ("can_scan_intercompany_transfer", "Can scan intercompany transfer barcodes"),
+            ("can_reverse_intercompany_transfer", "Can reverse intercompany barcode transfers"),
+            ("can_manage_intercompany_transfer_settings", "Can manage intercompany transfer settings"),
+        ]
+
+    def __str__(self):
+        return f"{self.transfer_number}: {self.source_company.code} -> {self.destination_company.code}"
+
+
+class IntercompanyTransferLine(models.Model):
+    transfer = models.ForeignKey(
+        IntercompanyTransfer,
+        on_delete=models.CASCADE,
+        related_name='lines',
+    )
+    box = models.ForeignKey(
+        Box,
+        on_delete=models.PROTECT,
+        related_name='intercompany_transfer_lines',
+    )
+    barcode = models.CharField(max_length=200)
+    item_code = models.CharField(max_length=80)
+    item_name = models.CharField(max_length=255, blank=True, default='')
+    batch_number = models.CharField(max_length=120, blank=True, default='')
+    qty = models.DecimalField(max_digits=18, decimal_places=3)
+    uom = models.CharField(max_length=30, blank=True, default='')
+    from_company = models.ForeignKey(
+        'company.Company',
+        on_delete=models.PROTECT,
+        related_name='intercompany_transfer_lines_out',
+    )
+    to_company = models.ForeignKey(
+        'company.Company',
+        on_delete=models.PROTECT,
+        related_name='intercompany_transfer_lines_in',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['transfer', 'box'],
+                name='unique_box_per_intercompany_transfer',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['barcode']),
+            models.Index(fields=['item_code', 'batch_number']),
+            models.Index(fields=['from_company', 'to_company']),
+        ]
+
+    def __str__(self):
+        return f"{self.transfer.transfer_number} {self.barcode}"
+
+
+class BarcodeAuditLog(models.Model):
+    box = models.ForeignKey(
+        Box,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    barcode = models.CharField(max_length=200)
+    transaction_type = models.CharField(
+        max_length=40,
+        choices=BarcodeAuditTransactionType.choices,
+    )
+    transfer = models.ForeignKey(
+        IntercompanyTransfer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    from_company = models.ForeignKey(
+        'company.Company',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_audit_from',
+    )
+    to_company = models.ForeignKey(
+        'company.Company',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_audit_to',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='barcode_audit_logs',
+    )
+    device_id = models.CharField(max_length=120, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['barcode', 'created_at']),
+            models.Index(fields=['transaction_type', 'created_at']),
+            models.Index(fields=['from_company', 'to_company']),
+        ]
+
+    def __str__(self):
+        return f"{self.barcode} {self.transaction_type}"
 
 
 # ---------------------------------------------------------------------------
