@@ -415,6 +415,157 @@ class MaintenanceAssetAPITests(APITestCase):
         self.assertEqual(filtered.data["pm"]["overdue"], 0)
         self.assertEqual(filtered.data["production_downtime"]["total_minutes"], 45)
 
+    def test_phase9_reports_module_returns_report_rows_and_exports(self):
+        asset_response = self.create_asset()
+        asset = Asset.objects.get(pk=asset_response.data["id"])
+        today = timezone.localdate()
+        start_time = timezone.now() - timedelta(hours=2)
+        end_time = timezone.now() - timedelta(minutes=30)
+
+        breakdown = MaintenanceWorkOrder.objects.create(
+            company=self.company,
+            work_order_no="MWO-RPT-001",
+            work_type="BREAKDOWN",
+            status="CLOSED",
+            priority="CRITICAL",
+            asset=asset,
+            department=asset.department,
+            line=asset.line,
+            title="Filler belt snapped",
+            problem_statement="Line stopped due to snapped belt.",
+            impact="STOPPAGE",
+            downtime_reason="Belt failure",
+            root_cause="Belt worn out",
+            corrective_action="Replaced belt",
+            target_date=today,
+            start_time=start_time,
+            end_time=end_time,
+            completed_at=end_time,
+            closed_at=end_time,
+            reported_by=self.user,
+            assigned_to=self.technician,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        MaintenanceWorkOrder.objects.create(
+            company=self.company,
+            work_order_no="MWO-RPT-002",
+            work_type="PREVENTIVE",
+            status="CLOSED",
+            priority="NORMAL",
+            asset=asset,
+            department=asset.department,
+            line=asset.line,
+            title="Daily PM checklist",
+            problem_statement="Scheduled PM.",
+            impact="NO_IMPACT",
+            target_date=today,
+            completed_at=end_time,
+            closed_at=end_time,
+            reported_by=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        spare_response = self.create_spare(asset.id, current_stock="1.000", unit_cost="125.00")
+        spare = MaintenanceSpare.objects.get(pk=spare_response.data["id"])
+        spare_request = SpareRequest.objects.create(
+            company=self.company,
+            work_order=breakdown,
+            spare=spare,
+            status="CLOSED",
+            requested_qty=Decimal("1.000"),
+            issued_qty=Decimal("1.000"),
+            consumed_qty=Decimal("1.000"),
+            requested_by=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        SpareMovement.objects.create(
+            company=self.company,
+            spare_request=spare_request,
+            work_order=breakdown,
+            spare=spare,
+            movement_type="CONSUME",
+            quantity=Decimal("1.000"),
+            unit_cost=Decimal("125.00"),
+            remarks="Consumed for belt replacement",
+            performed_by=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        MaintenanceVendorVisit.objects.create(
+            company=self.company,
+            work_order=breakdown,
+            asset=asset,
+            vendor_code="VEND-MECH",
+            vendor_name="Mechanical Services",
+            status="COMPLETED",
+            planned_start=start_time,
+            actual_start=start_time,
+            actual_end=end_time,
+            invoice_number="INV-SVC-001",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        response = self.client.get(
+            "/api/v1/maintenance/reports/",
+            {
+                "report_type": "breakdown",
+                "date_from": today.isoformat(),
+                "date_to": today.isoformat(),
+                "priority": "CRITICAL",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["report_type"], "breakdown")
+        self.assertEqual(response.data["summary"]["total_work_orders"], 1)
+        self.assertEqual(response.data["summary"]["breakdowns"], 1)
+        self.assertEqual(response.data["summary"]["spare_consumed_cost"], "125.00")
+        self.assertEqual(response.data["rows"][0]["work_order_no"], "MWO-RPT-001")
+        self.assertEqual(response.data["rows"][0]["spare_consumed_cost"], "125.00")
+
+        spare_report = self.client.get(
+            "/api/v1/maintenance/reports/",
+            {
+                "report_type": "spare_consumption",
+                "date_from": today.isoformat(),
+                "date_to": today.isoformat(),
+            },
+        )
+        self.assertEqual(spare_report.status_code, status.HTTP_200_OK, spare_report.data)
+        self.assertEqual(spare_report.data["rows"][0]["spare_part_number"], "SEN-001")
+        self.assertEqual(spare_report.data["rows"][0]["line_total"], "125.00")
+
+        excel_export = self.client.get(
+            "/api/v1/maintenance/reports/",
+            {
+                "report_type": "vendor_visit",
+                "date_from": today.isoformat(),
+                "date_to": today.isoformat(),
+                "export": "excel",
+            },
+        )
+        self.assertEqual(excel_export.status_code, status.HTTP_200_OK)
+        self.assertIn("attachment;", excel_export["Content-Disposition"])
+        self.assertIn(b"Mechanical Services", excel_export.content)
+
+        pdf_export = self.client.get(
+            "/api/v1/maintenance/reports/",
+            {
+                "report_type": "critical_spare",
+                "date_from": today.isoformat(),
+                "date_to": today.isoformat(),
+                "export": "pdf",
+            },
+        )
+        self.assertEqual(pdf_export.status_code, status.HTTP_200_OK)
+        self.assertEqual(pdf_export["Content-Type"], "application/pdf")
+        self.assertTrue(pdf_export.content.startswith(b"%PDF-1.4"))
+
+        invalid = self.client.get("/api/v1/maintenance/reports/", {"report_type": "unknown"})
+        self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_asset_code_is_unique_per_company(self):
         first = self.create_asset()
         duplicate = self.client.post(

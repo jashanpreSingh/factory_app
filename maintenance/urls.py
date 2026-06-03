@@ -11,6 +11,7 @@ from .views import (
     MaintenanceDashboardAPI,
     MaintenanceGateLinkViewSet,
     MaintenanceOptionsAPI,
+    MaintenanceReportsAPI,
     MaintenanceSpareViewSet,
     MaintenanceSpareReceiptViewSet,
     MaintenanceVendorVisitViewSet,
@@ -44,6 +45,7 @@ router.register(
 
 urlpatterns = [
     path("dashboard/", MaintenanceDashboardAPI.as_view(), name="maintenance-dashboard"),
+    path("reports/", MaintenanceReportsAPI.as_view(), name="maintenance-reports"),
     path("options/", MaintenanceOptionsAPI.as_view(), name="maintenance-options"),
     path("", include(router.urls)),
 ]

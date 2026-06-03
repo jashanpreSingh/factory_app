@@ -26,6 +26,10 @@ class CanViewMaintenanceDashboard(DjangoPermission):
     permission = "maintenance.can_view_maintenance_dashboard"
 
 
+class CanViewMaintenanceReports(DjangoPermission):
+    permission = "maintenance.can_view_maintenance_reports"
+
+
 class CanManageMaintenanceSettings(DjangoPermission):
     permission = "maintenance.can_manage_maintenance_settings"
 

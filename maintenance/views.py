@@ -1,9 +1,11 @@
+import csv
 from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
@@ -17,6 +19,7 @@ from company.permissions import HasCompanyContext
 from production_execution.models import Machine
 
 from .constants import (
+    AssetHierarchyLevel,
     AssetStatus,
     MaintenancePriority,
     SpareMovementType,
@@ -63,6 +66,7 @@ from .permissions import (
     CanStartWorkOrder,
     CanViewAsset,
     CanViewMaintenanceDashboard,
+    CanViewMaintenanceReports,
     CanViewSpare,
     CanViewVendor,
     CanViewWorkOrder,
@@ -136,6 +140,21 @@ COMPLETED_WORK_STATUSES = [
 
 DASHBOARD_PRIORITY_VALUES = {choice[0] for choice in MaintenancePriority.choices}
 
+REPORT_TYPES = {
+    "daily": "Daily maintenance report",
+    "monthly": "Monthly maintenance report",
+    "pm_compliance": "PM compliance report",
+    "breakdown": "Breakdown report",
+    "downtime_pareto": "Downtime Pareto report",
+    "mttr": "MTTR report",
+    "mtbf": "MTBF report",
+    "asset_history": "Asset history report",
+    "spare_consumption": "Spare consumption report",
+    "critical_spare": "Critical spare report",
+    "vendor_visit": "Vendor visit report",
+    "utility_downtime": "Utility downtime report",
+}
+
 
 def _company_users(company):
     user_ids = UserCompany.objects.filter(
@@ -158,6 +177,177 @@ def _append_note(existing, note):
     if not existing:
         return note
     return f"{existing}\n{note}"
+
+
+def _report_date(value):
+    if not value:
+        return ""
+    if hasattr(value, "date"):
+        return value.date().isoformat()
+    return value.isoformat()
+
+
+def _report_datetime(value):
+    if not value:
+        return ""
+    return timezone.localtime(value).strftime("%Y-%m-%d %H:%M")
+
+
+def _decimal_string(value, places="0.01"):
+    if value is None:
+        value = Decimal("0")
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    return str(value.quantize(Decimal(places)))
+
+
+def _minutes_average(values):
+    values = [value for value in values if value is not None]
+    if not values:
+        return None
+    return round(sum(values) / len(values), 1)
+
+
+def _spare_totals_for_work_order(work_order):
+    qty = Decimal("0.000")
+    cost = Decimal("0.00")
+    for spare_request in work_order.spare_requests.all():
+        qty += spare_request.consumed_qty
+        cost += spare_request.total_cost
+    return qty, cost
+
+
+def _work_order_report_row(work_order):
+    spare_qty, spare_cost = _spare_totals_for_work_order(work_order)
+    production_downtime = (
+        work_order.production_breakdown.breakdown_minutes
+        if work_order.production_breakdown_id and work_order.production_breakdown
+        else 0
+    )
+    return {
+        "work_order_no": work_order.work_order_no,
+        "date": _report_date(work_order.target_date) or _report_date(work_order.created_at),
+        "asset_code": work_order.asset.asset_code,
+        "asset_name": work_order.asset.name,
+        "department": work_order.department.name,
+        "line": work_order.line,
+        "work_type": work_order.work_type,
+        "status": work_order.status,
+        "priority": work_order.priority,
+        "impact": work_order.impact,
+        "title": work_order.title,
+        "assigned_to": getattr(work_order.assigned_to, "full_name", "") or "",
+        "target_date": _report_date(work_order.target_date),
+        "start_time": _report_datetime(work_order.start_time),
+        "end_time": _report_datetime(work_order.end_time),
+        "repair_time_minutes": work_order.repair_time_minutes,
+        "downtime_minutes": work_order.downtime_minutes,
+        "production_downtime_minutes": production_downtime,
+        "root_cause": work_order.root_cause,
+        "corrective_action": work_order.corrective_action,
+        "spare_consumed_qty": _decimal_string(spare_qty, "0.001"),
+        "spare_consumed_cost": _decimal_string(spare_cost),
+    }
+
+
+def _flatten_group_rows(groups, key_name):
+    return [
+        {
+            key_name: key,
+            "work_orders": values["work_orders"],
+            "breakdowns": values["breakdowns"],
+            "downtime_minutes": values["downtime_minutes"],
+            "spare_consumed_cost": _decimal_string(values["spare_consumed_cost"]),
+        }
+        for key, values in sorted(
+            groups.items(),
+            key=lambda item: (-item[1]["downtime_minutes"], item[0]),
+        )
+    ]
+
+
+def _pdf_escape(value):
+    text = str(value).encode("latin-1", "replace").decode("latin-1")
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _simple_pdf(title, lines):
+    content_lines = [
+        "BT",
+        "/F1 12 Tf",
+        "40 800 Td",
+        f"({_pdf_escape(title)}) Tj",
+        "/F1 9 Tf",
+        "0 -20 Td",
+    ]
+    for line in lines[:48]:
+        content_lines.append(f"({_pdf_escape(line[:150])}) Tj")
+        content_lines.append("0 -14 Td")
+    content_lines.append("ET")
+    stream = "\n".join(content_lines).encode("latin-1", "replace")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+    payload = b"%PDF-1.4\n"
+    offsets = []
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(payload))
+        payload += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_at = len(payload)
+    payload += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    for offset in offsets:
+        payload += f"{offset:010d} 00000 n \n".encode()
+    payload += (
+        b"trailer\n"
+        + f"<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF".encode()
+    )
+    return payload
+
+
+def _report_response(request, payload):
+    export_format = (request.query_params.get("export") or "").lower()
+    if export_format not in {"csv", "excel", "pdf"}:
+        return Response(payload)
+
+    filename = f"maintenance_{payload['report_type']}_{timezone.localdate().isoformat()}"
+    if export_format == "pdf":
+        lines = [
+            f"Generated at: {payload['generated_at']}",
+            f"Date range: {payload['filters']['date_from']} to {payload['filters']['date_to']}",
+        ]
+        lines.extend(f"{key}: {value}" for key, value in payload["summary"].items())
+        lines.append("")
+        for row in payload["rows"][:40]:
+            lines.append(" | ".join(f"{key}: {value}" for key, value in row.items()))
+        response = HttpResponse(_simple_pdf(payload["title"], lines), content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
+        return response
+
+    content_type = "application/vnd.ms-excel" if export_format == "excel" else "text/csv"
+    extension = "xls" if export_format == "excel" else "csv"
+    response = HttpResponse(content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}.{extension}"'
+    writer = csv.writer(response)
+    writer.writerow(["Report", payload["title"]])
+    writer.writerow(["Generated At", payload["generated_at"]])
+    writer.writerow(["Date From", payload["filters"]["date_from"]])
+    writer.writerow(["Date To", payload["filters"]["date_to"]])
+    writer.writerow([])
+    writer.writerow(["Summary"])
+    for key, value in payload["summary"].items():
+        writer.writerow([key, value])
+    writer.writerow([])
+    if payload["rows"]:
+        headers = list(payload["rows"][0].keys())
+        writer.writerow(headers)
+        for row in payload["rows"]:
+            writer.writerow([row.get(header, "") for header in headers])
+    return response
 
 
 class MaintenanceDashboardAPI(APIView):
@@ -469,6 +659,397 @@ class MaintenanceDashboardAPI(APIView):
                 ).data,
             }
         )
+
+
+class MaintenanceReportsAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewMaintenanceReports]
+
+    def _parse_date_range(self, request, report_type):
+        today = timezone.localdate()
+        date_to = parse_date(str(request.query_params.get("date_to") or "")) or today
+        date_from = parse_date(str(request.query_params.get("date_from") or ""))
+        if not date_from:
+            if report_type == "monthly":
+                date_from = date_to.replace(day=1)
+            elif report_type == "daily":
+                date_from = date_to
+            else:
+                date_from = date_to - timedelta(days=30)
+        if date_from > date_to:
+            date_from, date_to = date_to, date_from
+        return date_from, date_to
+
+    def _common_filters(self, request):
+        department = request.query_params.get("department")
+        asset = request.query_params.get("asset")
+        line = (request.query_params.get("line") or "").strip()
+        priority = request.query_params.get("priority")
+        return {
+            "department": int(department) if department and str(department).isdigit() else None,
+            "asset": int(asset) if asset and str(asset).isdigit() else None,
+            "line": line,
+            "priority": priority if priority in DASHBOARD_PRIORITY_VALUES else None,
+        }
+
+    def _filter_work_orders(self, company, request, date_from, date_to):
+        filters = self._common_filters(request)
+        qs = (
+            MaintenanceWorkOrder.objects.filter(company=company)
+            .select_related(
+                "asset",
+                "department",
+                "assigned_to",
+                "production_breakdown",
+            )
+            .prefetch_related("spare_requests", "spare_requests__spare")
+        )
+        qs = qs.filter(
+            Q(target_date__gte=date_from, target_date__lte=date_to)
+            | Q(target_date__isnull=True, created_at__date__gte=date_from, created_at__date__lte=date_to)
+        )
+        if filters["department"]:
+            qs = qs.filter(department_id=filters["department"])
+        if filters["asset"]:
+            qs = qs.filter(asset_id=filters["asset"])
+        if filters["line"]:
+            qs = qs.filter(line=filters["line"])
+        if filters["priority"]:
+            qs = qs.filter(priority=filters["priority"])
+        return qs.order_by("target_date", "-created_at")
+
+    def _filter_spare_movements(self, company, request, date_from, date_to):
+        filters = self._common_filters(request)
+        qs = SpareMovement.objects.filter(
+            company=company,
+            created_at__date__gte=date_from,
+            created_at__date__lte=date_to,
+        ).select_related("spare", "work_order", "work_order__asset", "work_order__department", "performed_by")
+        if filters["asset"]:
+            qs = qs.filter(work_order__asset_id=filters["asset"])
+        if filters["department"]:
+            qs = qs.filter(work_order__department_id=filters["department"])
+        if filters["line"]:
+            qs = qs.filter(work_order__line=filters["line"])
+        return qs.order_by("-created_at")
+
+    def _filter_vendor_visits(self, company, request, date_from, date_to):
+        filters = self._common_filters(request)
+        qs = MaintenanceVendorVisit.objects.filter(company=company).select_related(
+            "asset",
+            "work_order",
+        )
+        qs = qs.filter(
+            Q(planned_start__date__gte=date_from, planned_start__date__lte=date_to)
+            | Q(planned_start__isnull=True, created_at__date__gte=date_from, created_at__date__lte=date_to)
+        )
+        if filters["asset"]:
+            qs = qs.filter(asset_id=filters["asset"])
+        if filters["department"]:
+            qs = qs.filter(asset__department_id=filters["department"])
+        if filters["line"]:
+            qs = qs.filter(asset__line=filters["line"])
+        return qs.order_by("planned_start", "-created_at")
+
+    def _base_summary(self, work_orders):
+        total = work_orders.count()
+        completed = work_orders.filter(status__in=COMPLETED_WORK_STATUSES).count()
+        breakdowns = work_orders.filter(work_type=WorkType.BREAKDOWN).count()
+        downtime = work_orders.aggregate(total=Sum("production_breakdown__breakdown_minutes"))["total"] or 0
+        repair_average = _minutes_average(
+            [work_order.repair_time_minutes for work_order in work_orders if work_order.repair_time_minutes]
+        )
+        spare_cost = Decimal("0.00")
+        for work_order in work_orders:
+            spare_cost += _spare_totals_for_work_order(work_order)[1]
+        return {
+            "total_work_orders": total,
+            "completed_work_orders": completed,
+            "open_work_orders": work_orders.filter(status__in=ACTIONABLE_WORK_STATUSES).count(),
+            "breakdowns": breakdowns,
+            "completion_percent": round((completed / total) * 100, 1) if total else 0,
+            "production_downtime_minutes": downtime,
+            "average_repair_minutes": repair_average,
+            "spare_consumed_cost": _decimal_string(spare_cost),
+        }
+
+    def _daily_rows(self, work_orders):
+        return [_work_order_report_row(work_order) for work_order in work_orders[:500]]
+
+    def _monthly_rows(self, work_orders):
+        groups = {}
+        for work_order in work_orders:
+            key = _report_date(work_order.target_date) or _report_date(work_order.created_at)
+            groups.setdefault(
+                key,
+                {
+                    "work_orders": 0,
+                    "breakdowns": 0,
+                    "downtime_minutes": 0,
+                    "spare_consumed_cost": Decimal("0.00"),
+                },
+            )
+            groups[key]["work_orders"] += 1
+            groups[key]["breakdowns"] += int(work_order.work_type == WorkType.BREAKDOWN)
+            if work_order.production_breakdown_id and work_order.production_breakdown:
+                groups[key]["downtime_minutes"] += work_order.production_breakdown.breakdown_minutes or 0
+            groups[key]["spare_consumed_cost"] += _spare_totals_for_work_order(work_order)[1]
+        return _flatten_group_rows(groups, "date")
+
+    def _pm_rows(self, work_orders, today):
+        rows = []
+        for work_order in work_orders.filter(work_type__in=PM_WORK_TYPES)[:500]:
+            completed = work_order.status in COMPLETED_WORK_STATUSES
+            days_overdue = 0
+            if work_order.target_date and not completed and work_order.target_date < today:
+                days_overdue = (today - work_order.target_date).days
+            rows.append(
+                {
+                    "work_order_no": work_order.work_order_no,
+                    "asset_code": work_order.asset.asset_code,
+                    "asset_name": work_order.asset.name,
+                    "department": work_order.department.name,
+                    "line": work_order.line,
+                    "work_type": work_order.work_type,
+                    "target_date": _report_date(work_order.target_date),
+                    "status": work_order.status,
+                    "completed": completed,
+                    "days_overdue": days_overdue,
+                }
+            )
+        return rows
+
+    def _downtime_pareto_rows(self, work_orders):
+        groups = {}
+        breakdowns = work_orders.filter(work_type=WorkType.BREAKDOWN)
+        for work_order in breakdowns:
+            reason = (
+                work_order.downtime_reason
+                or work_order.root_cause
+                or getattr(work_order.production_breakdown, "reason", "")
+                or "Not classified"
+            )
+            groups.setdefault(reason, {"count": 0, "downtime_minutes": 0})
+            groups[reason]["count"] += 1
+            groups[reason]["downtime_minutes"] += (
+                work_order.production_breakdown.breakdown_minutes
+                if work_order.production_breakdown_id and work_order.production_breakdown
+                else work_order.downtime_minutes or 0
+            )
+        return [
+            {
+                "reason": reason,
+                "breakdowns": values["count"],
+                "downtime_minutes": values["downtime_minutes"],
+            }
+            for reason, values in sorted(
+                groups.items(),
+                key=lambda item: (-item[1]["downtime_minutes"], item[0]),
+            )
+        ]
+
+    def _mttr_rows(self, work_orders):
+        groups = {}
+        for work_order in work_orders.filter(work_type=WorkType.BREAKDOWN):
+            if work_order.repair_time_minutes is None:
+                continue
+            key = work_order.asset_id
+            groups.setdefault(
+                key,
+                {
+                    "asset_code": work_order.asset.asset_code,
+                    "asset_name": work_order.asset.name,
+                    "repair_times": [],
+                },
+            )
+            groups[key]["repair_times"].append(work_order.repair_time_minutes)
+        return [
+            {
+                "asset_code": values["asset_code"],
+                "asset_name": values["asset_name"],
+                "breakdowns": len(values["repair_times"]),
+                "average_repair_minutes": _minutes_average(values["repair_times"]),
+            }
+            for values in sorted(groups.values(), key=lambda item: item["asset_code"])
+        ]
+
+    def _mtbf_rows(self, work_orders, date_from, date_to):
+        period_days = max((date_to - date_from).days + 1, 1)
+        groups = {}
+        for work_order in work_orders.filter(work_type=WorkType.BREAKDOWN):
+            key = work_order.asset_id
+            groups.setdefault(
+                key,
+                {
+                    "asset_code": work_order.asset.asset_code,
+                    "asset_name": work_order.asset.name,
+                    "breakdowns": 0,
+                    "downtime_minutes": 0,
+                },
+            )
+            groups[key]["breakdowns"] += 1
+            if work_order.production_breakdown_id and work_order.production_breakdown:
+                groups[key]["downtime_minutes"] += work_order.production_breakdown.breakdown_minutes or 0
+        return [
+            {
+                "asset_code": values["asset_code"],
+                "asset_name": values["asset_name"],
+                "breakdowns": values["breakdowns"],
+                "period_days": period_days,
+                "mtbf_days": round(period_days / values["breakdowns"], 1) if values["breakdowns"] else None,
+                "downtime_minutes": values["downtime_minutes"],
+            }
+            for values in sorted(groups.values(), key=lambda item: item["asset_code"])
+        ]
+
+    def _spare_consumption_rows(self, spare_movements):
+        rows = []
+        for movement in spare_movements.filter(movement_type=SpareMovementType.CONSUME)[:500]:
+            rows.append(
+                {
+                    "date": _report_date(movement.created_at),
+                    "spare_part_number": movement.spare.part_number,
+                    "spare_name": movement.spare.name,
+                    "work_order_no": getattr(movement.work_order, "work_order_no", "") or "",
+                    "asset_code": getattr(getattr(movement.work_order, "asset", None), "asset_code", "") or "",
+                    "quantity": _decimal_string(movement.quantity, "0.001"),
+                    "unit_cost": _decimal_string(movement.unit_cost),
+                    "line_total": _decimal_string(movement.line_total),
+                    "performed_by": getattr(movement.performed_by, "full_name", "") or "",
+                    "remarks": movement.remarks,
+                }
+            )
+        return rows
+
+    def _critical_spare_rows(self, company, request):
+        filters = self._common_filters(request)
+        qs = MaintenanceSpare.objects.filter(company=company, is_active=True).select_related("category")
+        if filters["asset"]:
+            qs = qs.filter(compatible_assets__id=filters["asset"])
+        qs = qs.filter(Q(is_critical=True) | Q(current_stock__lte=F("reorder_level"))).distinct()
+        return [
+            {
+                "part_number": spare.part_number,
+                "name": spare.name,
+                "category": spare.category.name,
+                "is_critical": spare.is_critical,
+                "current_stock": _decimal_string(spare.current_stock, "0.001"),
+                "minimum_stock": _decimal_string(spare.minimum_stock, "0.001"),
+                "reorder_level": _decimal_string(spare.reorder_level, "0.001"),
+                "shortage_qty": _decimal_string(spare.reorder_shortage_qty, "0.001"),
+                "storage_location": spare.storage_location,
+            }
+            for spare in qs.order_by("-is_critical", "current_stock", "part_number")[:500]
+        ]
+
+    def _vendor_visit_rows(self, vendor_visits):
+        return [
+            {
+                "vendor_name": visit.vendor_name,
+                "vendor_code": visit.vendor_code,
+                "work_order_no": visit.work_order.work_order_no,
+                "asset_code": visit.asset.asset_code,
+                "asset_name": visit.asset.name,
+                "status": visit.status,
+                "planned_start": _report_datetime(visit.planned_start),
+                "actual_start": _report_datetime(visit.actual_start),
+                "actual_end": _report_datetime(visit.actual_end),
+                "invoice_number": visit.invoice_number,
+                "remarks": visit.remarks,
+            }
+            for visit in vendor_visits[:500]
+        ]
+
+    def _utility_rows(self, work_orders):
+        utility_orders = work_orders.filter(asset__hierarchy_level=AssetHierarchyLevel.UTILITY)
+        return [_work_order_report_row(work_order) for work_order in utility_orders[:500]]
+
+    def get(self, request):
+        company = _company(request)
+        report_type = (request.query_params.get("report_type") or "daily").strip().lower()
+        if report_type not in REPORT_TYPES:
+            return Response(
+                {
+                    "detail": "Invalid report_type.",
+                    "available_report_types": sorted(REPORT_TYPES.keys()),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        date_from, date_to = self._parse_date_range(request, report_type)
+        filters = self._common_filters(request)
+        work_orders = self._filter_work_orders(company, request, date_from, date_to)
+        spare_movements = self._filter_spare_movements(company, request, date_from, date_to)
+        vendor_visits = self._filter_vendor_visits(company, request, date_from, date_to)
+        today = timezone.localdate()
+
+        if report_type == "monthly":
+            rows = self._monthly_rows(work_orders)
+        elif report_type == "pm_compliance":
+            rows = self._pm_rows(work_orders, today)
+        elif report_type == "breakdown":
+            rows = [_work_order_report_row(work_order) for work_order in work_orders.filter(work_type=WorkType.BREAKDOWN)[:500]]
+        elif report_type == "downtime_pareto":
+            rows = self._downtime_pareto_rows(work_orders)
+        elif report_type == "mttr":
+            rows = self._mttr_rows(work_orders)
+        elif report_type == "mtbf":
+            rows = self._mtbf_rows(work_orders, date_from, date_to)
+        elif report_type == "asset_history":
+            rows = self._daily_rows(work_orders)
+        elif report_type == "spare_consumption":
+            rows = self._spare_consumption_rows(spare_movements)
+        elif report_type == "critical_spare":
+            rows = self._critical_spare_rows(company, request)
+        elif report_type == "vendor_visit":
+            rows = self._vendor_visit_rows(vendor_visits)
+        elif report_type == "utility_downtime":
+            rows = self._utility_rows(work_orders)
+        else:
+            rows = self._daily_rows(work_orders)
+
+        pm_work_orders = work_orders.filter(work_type__in=PM_WORK_TYPES, target_date__lte=today)
+        pm_due = pm_work_orders.count()
+        pm_completed = pm_work_orders.filter(status__in=COMPLETED_WORK_STATUSES).count()
+        consumed_movements = spare_movements.filter(movement_type=SpareMovementType.CONSUME)
+        spare_cost = sum((movement.line_total for movement in consumed_movements), Decimal("0.00"))
+        mttr_values = [row.get("average_repair_minutes") for row in self._mttr_rows(work_orders)]
+        mtbf_values = [row.get("mtbf_days") for row in self._mtbf_rows(work_orders, date_from, date_to)]
+
+        summary = self._base_summary(work_orders)
+        summary.update(
+            {
+                "pm_due": pm_due,
+                "pm_completed": pm_completed,
+                "pm_compliance_percent": round((pm_completed / pm_due) * 100, 1) if pm_due else None,
+                "spare_consumption_rows": consumed_movements.count(),
+                "spare_consumption_cost": _decimal_string(spare_cost),
+                "critical_spares": MaintenanceSpare.objects.filter(
+                    company=company,
+                    is_active=True,
+                    is_critical=True,
+                ).count(),
+                "vendor_visits": vendor_visits.count(),
+                "average_mttr_minutes": _minutes_average(mttr_values),
+                "average_mtbf_days": _minutes_average(mtbf_values),
+            }
+        )
+
+        payload = {
+            "report_type": report_type,
+            "title": REPORT_TYPES[report_type],
+            "generated_at": _report_datetime(timezone.now()),
+            "filters": {
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "department": filters["department"],
+                "asset": filters["asset"],
+                "line": filters["line"],
+                "priority": filters["priority"],
+            },
+            "summary": summary,
+            "rows": rows,
+        }
+        return _report_response(request, payload)
 
 
 class MaintenanceOptionsAPI(APIView):
