@@ -410,6 +410,49 @@ class DispatchPlansService:
 
     @staticmethod
     def _apply_master_data(data: Dict[str, Any]) -> None:
+        linked_vehicle_entry_id = data.get("linked_vehicle_entry_id")
+        if linked_vehicle_entry_id:
+            linked_entry = VehicleEntry.objects.select_related(
+                "vehicle",
+                "vehicle__transporter",
+                "driver",
+            ).get(pk=linked_vehicle_entry_id)
+            vehicle = linked_entry.vehicle
+            driver = linked_entry.driver
+            transporter = vehicle.transporter if vehicle and vehicle.transporter_id else None
+
+            if vehicle:
+                if not data.get("vehicle_id"):
+                    data["vehicle_id"] = vehicle.id
+                if not data.get("vehicle_no"):
+                    data["vehicle_no"] = vehicle.vehicle_number
+
+            if driver:
+                if not data.get("driver_id"):
+                    data["driver_id"] = driver.id
+                if not data.get("driver_name"):
+                    data["driver_name"] = driver.name
+                if not data.get("driver_mobile_no"):
+                    data["driver_mobile_no"] = driver.mobile_no
+                if not data.get("driver_license_no"):
+                    data["driver_license_no"] = driver.license_no
+                if not data.get("driver_id_proof_type"):
+                    data["driver_id_proof_type"] = driver.id_proof_type
+                if not data.get("driver_id_proof_number"):
+                    data["driver_id_proof_number"] = driver.id_proof_number
+
+            if transporter:
+                if not data.get("transporter_id"):
+                    data["transporter_id"] = transporter.id
+                if not data.get("transporter_name"):
+                    data["transporter_name"] = transporter.name
+                if not data.get("transporter_gstin"):
+                    data["transporter_gstin"] = transporter.gstin
+                if not data.get("contact_person"):
+                    data["contact_person"] = transporter.contact_person
+                if not data.get("mobile_no"):
+                    data["mobile_no"] = transporter.mobile_no
+
         vehicle = None
         vehicle_id = data.get("vehicle_id")
         if vehicle_id:

@@ -14,7 +14,7 @@ from gate_core.enums import GateEntryStatus
 from company.models import Company
 from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import VehicleEntry, Driver
-from vehicle_management.models import Vehicle, VehicleType
+from vehicle_management.models import Transporter, Vehicle, VehicleType
 from raw_material_gatein.models import POReceipt, POItemReceipt
 from grpo.models import GRPOPosting, GRPOLinePosting, GRPOStatus, GRPOAttachment, SAPAttachmentStatus
 from grpo.serializers import ServiceGRPOPostRequestSerializer, ServiceGRPOPreviewSerializer
@@ -433,6 +433,7 @@ class GRPOServiceTests(TestCase):
         payload = mock_instance.create_grpo.call_args[0][0]
 
         self.assertEqual(payload["DocumentLines"][0]["TaxCode"], "RIGST@5")
+        self.assertEqual(payload["DocumentLines"][0]["U_Variety"], "Oil")
         self.assertEqual(payload["ShipPlace"], "DL")
         self.assertEqual(payload["DocumentAdditionalExpenses"][0]["TaxCode"], "RIGST@5")
         grpo.refresh_from_db()
@@ -918,6 +919,73 @@ class GRPOServiceTests(TestCase):
             service._infer_service_description(item_summary, product_variety),
             "Water",
         )
+
+    @patch.object(GRPOService, "_get_active_budget_codes")
+    @patch.object(GRPOService, "_get_dispatch_bill_snapshot")
+    def test_service_grpo_display_falls_back_to_linked_vehicle_entry(
+        self,
+        mock_bill_snapshot,
+        mock_budget_codes,
+    ):
+        mock_budget_codes.return_value = {}
+        mock_bill_snapshot.return_value = {
+            "doc_num": "626050517",
+            "state": "HR",
+            "city": "SONIPAT",
+            "card_code": "CUST001",
+            "card_name": "Test Customer",
+            "item_summary": "COLD PRESS MUSTARD OIL",
+            "total_litres": "1000.000",
+            "total_weight": "900.000",
+            "doc_total": "50000.00",
+        }
+        transporter = Transporter.objects.create(
+            name="Linked GRPO Transporter",
+            contact_person="Ops Contact",
+            mobile_no="7777777777",
+            gstin="07ABCDE1234F1Z5",
+        )
+        linked_vehicle = Vehicle.objects.create(
+            vehicle_number="DL01AB1234",
+            vehicle_type=self.vehicle_type,
+            transporter=transporter,
+        )
+        linked_driver = Driver.objects.create(
+            name="Linked GRPO Driver",
+            mobile_no="6666666666",
+            license_no="DL-GRPO-LINK",
+        )
+        linked_entry = VehicleEntry.objects.create(
+            entry_no="VE-DISP-002",
+            company=self.company,
+            vehicle=linked_vehicle,
+            driver=linked_driver,
+            entry_type="EMPTY_VEHICLE",
+            status=GateEntryStatus.COMPLETED,
+        )
+        dispatch_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=626050517,
+            sap_invoice_doc_num="626050517",
+            booking_status=DispatchPlanStatus.BOOKED,
+            linked_vehicle_entry=linked_entry,
+            vehicle_no="",
+            driver_name="",
+            transporter_name="",
+            transporter_gstin="",
+            total_freight=Decimal("1000.00"),
+        )
+
+        preview = GRPOService(company_code="TC001").get_service_grpo_preview_data(
+            dispatch_plan.id
+        )
+
+        self.assertEqual(preview["vehicle_no"], "DL01AB1234")
+        self.assertEqual(preview["driver_name"], "Linked GRPO Driver")
+        self.assertEqual(preview["transporter_name"], "Linked GRPO Transporter")
+        self.assertEqual(preview["transporter_gstin"], "07ABCDE1234F1Z5")
+        self.assertEqual(preview["linked_vehicle_entry_id"], linked_entry.id)
+        self.assertEqual(preview["linked_vehicle_entry_no"], "VE-DISP-002")
 
 
 class GRPOAPITests(APITestCase):
