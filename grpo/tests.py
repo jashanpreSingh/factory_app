@@ -433,6 +433,7 @@ class GRPOServiceTests(TestCase):
         payload = mock_instance.create_grpo.call_args[0][0]
 
         self.assertEqual(payload["DocumentLines"][0]["TaxCode"], "RIGST@5")
+        self.assertEqual(payload["DocumentLines"][0]["U_Variety"], "Oil")
         self.assertEqual(payload["ShipPlace"], "DL")
         self.assertEqual(payload["DocumentAdditionalExpenses"][0]["TaxCode"], "RIGST@5")
         grpo.refresh_from_db()
@@ -920,7 +921,21 @@ class GRPOServiceTests(TestCase):
         )
 
     @patch.object(GRPOService, "_get_active_budget_codes", return_value={})
-    @patch.object(GRPOService, "_get_dispatch_bill_snapshot", return_value={})
+    @patch.object(
+        GRPOService,
+        "_get_dispatch_bill_snapshot",
+        return_value={
+            "doc_num": "626050517",
+            "state": "HR",
+            "city": "SONIPAT",
+            "card_code": "CUST001",
+            "card_name": "Test Customer",
+            "item_summary": "COLD PRESS MUSTARD OIL",
+            "total_litres": "1000.000",
+            "total_weight": "900.000",
+            "doc_total": "50000.00",
+        },
+    )
     def test_service_grpo_display_falls_back_to_linked_vehicle_entry(
         self,
         _mock_snapshot,
@@ -956,9 +971,10 @@ class GRPOServiceTests(TestCase):
             sap_invoice_doc_num="626050517",
             booking_status=DispatchPlanStatus.BOOKED,
             linked_vehicle_entry=linked_entry,
-            transporter=transporter,
-            transporter_name="ARNAV TRANSPORT SERVICE",
-            transporter_gstin="07ABCDE1234F1Z5",
+            vehicle_no="",
+            driver_name="",
+            transporter_name="",
+            transporter_gstin="",
             bilty_no="BLTY-001",
             bilty_date=date(2026, 5, 1),
             freight=Decimal("1250.00"),
@@ -983,12 +999,16 @@ class GRPOServiceTests(TestCase):
         preview = service.get_service_grpo_preview_data(dispatch_plan.id)
         self.assertEqual(preview["vehicle_no"], "HR55AA1234")
         self.assertEqual(preview["driver_name"], "Ramesh Driver")
+        self.assertEqual(preview["transporter_name"], "ARNAV TRANSPORT SERVICE")
+        self.assertEqual(preview["transporter_gstin"], "07ABCDE1234F1Z5")
         self.assertEqual(preview["linked_vehicle_entry_id"], linked_entry.id)
         self.assertEqual(preview["linked_vehicle_entry_no"], "VE-DISP-001")
 
         serializer_data = ServiceGRPOPreviewSerializer(preview).data
         self.assertEqual(serializer_data["vehicle_no"], "HR55AA1234")
         self.assertEqual(serializer_data["driver_name"], "Ramesh Driver")
+        self.assertEqual(serializer_data["transporter_name"], "ARNAV TRANSPORT SERVICE")
+        self.assertEqual(serializer_data["transporter_gstin"], "07ABCDE1234F1Z5")
         self.assertEqual(serializer_data["linked_vehicle_entry_id"], linked_entry.id)
         self.assertEqual(serializer_data["linked_vehicle_entry_no"], "VE-DISP-001")
 

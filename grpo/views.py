@@ -410,8 +410,8 @@ class PendingServiceGRPOListAPI(APIView):
                 "linked_vehicle_entry_no": service.get_service_display_linked_entry_no(plan),
                 "vehicle_no": service.get_service_display_vehicle_no(plan),
                 "driver_name": service.get_service_display_driver_name(plan),
-                "transporter_name": plan.transporter_name,
-                "transporter_gstin": plan.transporter_gstin,
+                "transporter_name": service._dispatch_transporter_name(plan),
+                "transporter_gstin": service._dispatch_transporter_gstin(plan),
                 "source_state": bill_snapshot.get("state", "") or plan.place_of_supply,
                 "bilty_no": plan.bilty_no,
                 "bilty_date": plan.bilty_date,
@@ -628,6 +628,13 @@ class ServiceGRPOPostingDetailAPI(APIView):
         try:
             posting = ServiceGRPOPosting.objects.select_related(
                 "dispatch_plan",
+                "dispatch_plan__vehicle",
+                "dispatch_plan__vehicle__transporter",
+                "dispatch_plan__transporter",
+                "dispatch_plan__linked_vehicle_entry",
+                "dispatch_plan__linked_vehicle_entry__vehicle",
+                "dispatch_plan__linked_vehicle_entry__vehicle__transporter",
+                "dispatch_plan__linked_vehicle_entry__driver",
                 "posted_by",
             ).prefetch_related("lines", "attachments").get(id=posting_id)
         except ServiceGRPOPosting.DoesNotExist:

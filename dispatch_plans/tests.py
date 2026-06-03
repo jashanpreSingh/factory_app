@@ -1,7 +1,6 @@
-from django.test import SimpleTestCase
 from django.contrib.auth import get_user_model
 from django.http import QueryDict
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from company.models import Company
 from driver_management.models import Driver, VehicleEntry
@@ -11,6 +10,8 @@ from vehicle_management.models import Transporter, Vehicle, VehicleType
 from .models import DispatchPlan
 from .serializers import DispatchPlanUpdateSerializer
 from .services import DispatchPlansService
+
+User = get_user_model()
 
 
 class DispatchPlanUpdateSerializerTests(SimpleTestCase):
@@ -107,6 +108,8 @@ class DispatchPlanLinkedVehicleEntryTests(TestCase):
             name="Ramesh Driver",
             mobile_no="9898989898",
             license_no="DL0420260001",
+            id_proof_type="AADHAAR",
+            id_proof_number="123412341234",
         )
         self.vehicle_entry = VehicleEntry.objects.create(
             entry_no="VE-DISP-001",
@@ -138,6 +141,8 @@ class DispatchPlanLinkedVehicleEntryTests(TestCase):
         self.assertEqual(plan.driver_name, "Ramesh Driver")
         self.assertEqual(plan.driver_mobile_no, "9898989898")
         self.assertEqual(plan.driver_license_no, "DL0420260001")
+        self.assertEqual(plan.driver_id_proof_type, "AADHAAR")
+        self.assertEqual(plan.driver_id_proof_number, "123412341234")
         self.assertEqual(plan.transporter_name, "ARNAV TRANSPORT SERVICE")
         self.assertEqual(plan.transporter_gstin, "07ABCDE1234F1Z5")
         self.assertEqual(plan.contact_person, "Arnav Contact")

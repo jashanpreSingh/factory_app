@@ -256,6 +256,10 @@ class ServiceGRPOPendingEntrySerializer(serializers.Serializer):
     driver_name = serializers.CharField(allow_blank=True)
     transporter_name = serializers.CharField(allow_blank=True)
     transporter_gstin = serializers.CharField(allow_blank=True)
+    linked_vehicle_entry_id = serializers.IntegerField(
+        required=False, allow_null=True
+    )
+    linked_vehicle_entry_no = serializers.CharField(required=False, allow_blank=True)
     source_state = serializers.CharField(required=False, allow_blank=True)
     bilty_no = serializers.CharField(allow_blank=True)
     bilty_date = serializers.DateField(allow_null=True)
@@ -689,12 +693,10 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
     sap_invoice_doc_entry = serializers.IntegerField(
         source="dispatch_plan.sap_invoice_doc_entry", read_only=True
     )
-    vehicle_no = serializers.CharField(
-        source="dispatch_plan.vehicle_no", read_only=True
-    )
-    transporter_name = serializers.CharField(
-        source="dispatch_plan.transporter_name", read_only=True
-    )
+    vehicle_no = serializers.SerializerMethodField()
+    transporter_name = serializers.SerializerMethodField()
+    linked_vehicle_entry_id = serializers.SerializerMethodField()
+    linked_vehicle_entry_no = serializers.SerializerMethodField()
     total_amount = serializers.DecimalField(
         source="sap_doc_total",
         max_digits=18,
@@ -714,6 +716,8 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
             "sap_invoice_doc_entry",
             "vehicle_no",
             "transporter_name",
+            "linked_vehicle_entry_id",
+            "linked_vehicle_entry_no",
             "vendor_code",
             "vendor_name",
             "sap_doc_entry",
@@ -744,6 +748,41 @@ class ServiceGRPOPostingSerializer(serializers.ModelSerializer):
             obj.dispatch_plan.sap_invoice_doc_num
             or str(obj.dispatch_plan.sap_invoice_doc_entry)
         )
+
+    def get_vehicle_no(self, obj):
+        plan = obj.dispatch_plan
+        if plan.vehicle_no:
+            return plan.vehicle_no
+        if plan.linked_vehicle_entry_id and plan.linked_vehicle_entry.vehicle_id:
+            return plan.linked_vehicle_entry.vehicle.vehicle_number
+        if plan.vehicle_id:
+            return plan.vehicle.vehicle_number
+        return ""
+
+    def get_transporter_name(self, obj):
+        plan = obj.dispatch_plan
+        if plan.transporter_name:
+            return plan.transporter_name
+        if plan.transporter_id:
+            return plan.transporter.name
+        if (
+            plan.linked_vehicle_entry_id
+            and plan.linked_vehicle_entry.vehicle_id
+            and plan.linked_vehicle_entry.vehicle.transporter_id
+        ):
+            return plan.linked_vehicle_entry.vehicle.transporter.name
+        if plan.vehicle_id and plan.vehicle.transporter_id:
+            return plan.vehicle.transporter.name
+        return ""
+
+    def get_linked_vehicle_entry_id(self, obj):
+        return obj.dispatch_plan.linked_vehicle_entry_id
+
+    def get_linked_vehicle_entry_no(self, obj):
+        plan = obj.dispatch_plan
+        if plan.linked_vehicle_entry_id:
+            return plan.linked_vehicle_entry.entry_no
+        return ""
 
 
 class ServiceGRPOPostResponseSerializer(serializers.Serializer):

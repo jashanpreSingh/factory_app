@@ -143,6 +143,17 @@ class GRPOService:
         return decimal_value.quantize(Decimal(decimal_places))
 
     @staticmethod
+    def _sap_absolute_entry_or_none(value) -> Optional[int]:
+        if isinstance(value, bool) or value in (None, ""):
+            return None
+        if isinstance(value, int):
+            return value if value > 0 else None
+        if isinstance(value, str) and value.strip().isdigit():
+            entry = int(value.strip())
+            return entry if entry > 0 else None
+        return None
+
+    @staticmethod
     def _first_day_of_month(value) -> Optional[date]:
         if not value:
             return None
@@ -656,6 +667,66 @@ class GRPOService:
         return "SALES" if bill_snapshot.get("card_code") else ""
 
     @staticmethod
+    def _dispatch_linked_vehicle_entry_id(dispatch_plan: DispatchPlan) -> Optional[int]:
+        return dispatch_plan.linked_vehicle_entry_id
+
+    @staticmethod
+    def _dispatch_linked_vehicle_entry_no(dispatch_plan: DispatchPlan) -> str:
+        if dispatch_plan.linked_vehicle_entry_id:
+            return dispatch_plan.linked_vehicle_entry.entry_no
+        return ""
+
+    @staticmethod
+    def _dispatch_vehicle_no(dispatch_plan: DispatchPlan) -> str:
+        if dispatch_plan.vehicle_no:
+            return dispatch_plan.vehicle_no
+        if dispatch_plan.linked_vehicle_entry_id and dispatch_plan.linked_vehicle_entry.vehicle_id:
+            return dispatch_plan.linked_vehicle_entry.vehicle.vehicle_number
+        if dispatch_plan.vehicle_id:
+            return dispatch_plan.vehicle.vehicle_number
+        return ""
+
+    @staticmethod
+    def _dispatch_driver_name(dispatch_plan: DispatchPlan) -> str:
+        if dispatch_plan.driver_name:
+            return dispatch_plan.driver_name
+        if dispatch_plan.linked_vehicle_entry_id and dispatch_plan.linked_vehicle_entry.driver_id:
+            return dispatch_plan.linked_vehicle_entry.driver.name
+        if dispatch_plan.driver_id:
+            return dispatch_plan.driver.name
+        return ""
+
+    @staticmethod
+    def _dispatch_transporter(dispatch_plan: DispatchPlan):
+        if dispatch_plan.transporter_id:
+            return dispatch_plan.transporter
+        if (
+            dispatch_plan.linked_vehicle_entry_id
+            and dispatch_plan.linked_vehicle_entry.vehicle_id
+            and dispatch_plan.linked_vehicle_entry.vehicle.transporter_id
+        ):
+            return dispatch_plan.linked_vehicle_entry.vehicle.transporter
+        if dispatch_plan.vehicle_id and dispatch_plan.vehicle.transporter_id:
+            return dispatch_plan.vehicle.transporter
+        return None
+
+    def _dispatch_transporter_name(self, dispatch_plan: DispatchPlan) -> str:
+        if dispatch_plan.transporter_name:
+            return dispatch_plan.transporter_name
+        transporter = self._dispatch_transporter(dispatch_plan)
+        if transporter:
+            return transporter.name
+        return ""
+
+    def _dispatch_transporter_gstin(self, dispatch_plan: DispatchPlan) -> str:
+        if dispatch_plan.transporter_gstin:
+            return dispatch_plan.transporter_gstin
+        transporter = self._dispatch_transporter(dispatch_plan)
+        if transporter:
+            return getattr(transporter, "gstin", "") or ""
+        return ""
+
+    @staticmethod
     def _service_group_key(dispatch_plan: DispatchPlan) -> tuple:
         bilty_no = (dispatch_plan.bilty_no or "").strip()
         if not bilty_no:
@@ -700,10 +771,12 @@ class GRPOService:
             queryset.select_related(
                 "company",
                 "vehicle",
+                "vehicle__transporter",
                 "transporter",
                 "driver",
                 "linked_vehicle_entry",
                 "linked_vehicle_entry__vehicle",
+                "linked_vehicle_entry__vehicle__transporter",
                 "linked_vehicle_entry__driver",
             ).order_by("sap_invoice_doc_num", "sap_invoice_doc_entry", "id")
         )
@@ -1257,6 +1330,7 @@ class GRPOService:
                 variety = item_input.get("variety")
                 if variety:
                     line_data["CostingCode"] = variety
+                    line_data["U_Variety"] = str(variety)[:50]
 
                 document_lines.append(line_data)
                 grpo_lines_data.append({
@@ -1437,10 +1511,12 @@ class GRPOService:
             .select_related(
                 "company",
                 "vehicle",
+                "vehicle__transporter",
                 "transporter",
                 "driver",
                 "linked_vehicle_entry",
                 "linked_vehicle_entry__vehicle",
+                "linked_vehicle_entry__vehicle__transporter",
                 "linked_vehicle_entry__driver",
             )
             .prefetch_related("service_grpo_postings", "service_grpo_lines")
@@ -1497,10 +1573,12 @@ class GRPOService:
                 DispatchPlan.objects.select_related(
                     "company",
                     "vehicle",
+                    "vehicle__transporter",
                     "transporter",
                     "driver",
                     "linked_vehicle_entry",
                     "linked_vehicle_entry__vehicle",
+                    "linked_vehicle_entry__vehicle__transporter",
                     "linked_vehicle_entry__driver",
                 )
                 .prefetch_related("service_grpo_postings")
@@ -1525,6 +1603,8 @@ class GRPOService:
 
         vehicle_no = self.get_service_display_vehicle_no(dispatch_plan)
         driver_name = self.get_service_display_driver_name(dispatch_plan)
+        transporter_name = self._dispatch_transporter_name(dispatch_plan)
+        transporter_gstin = self._dispatch_transporter_gstin(dispatch_plan)
 
         latest_grpo = self._latest_service_grpo_for_group(group_plans)
         bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
@@ -1618,8 +1698,8 @@ class GRPOService:
             "linked_vehicle_entry_no": self.get_service_display_linked_entry_no(dispatch_plan),
             "vehicle_no": vehicle_no,
             "driver_name": driver_name,
-            "transporter_name": dispatch_plan.transporter_name,
-            "transporter_gstin": dispatch_plan.transporter_gstin,
+            "transporter_name": transporter_name,
+            "transporter_gstin": transporter_gstin,
             "bilty_no": dispatch_plan.bilty_no,
             "bilty_date": dispatch_plan.bilty_date,
             "freight": dispatch_plan.freight,
@@ -1824,7 +1904,14 @@ class GRPOService:
         try:
             dispatch_plan = DispatchPlan.objects.select_related(
                 "company",
+                "vehicle",
+                "vehicle__transporter",
                 "transporter",
+                "driver",
+                "linked_vehicle_entry",
+                "linked_vehicle_entry__vehicle",
+                "linked_vehicle_entry__vehicle__transporter",
+                "linked_vehicle_entry__driver",
             ).get(
                 id=dispatch_plan_id,
                 company__code=self.company_code,
@@ -1981,11 +2068,13 @@ class GRPOService:
         vendor_state = self._get_sap_bp_state(self.company_code, vendor_code)
         effective_place_of_supply = vendor_state or place_of_supply
         tax_supply_state = effective_place_of_supply
+        posting_vehicle_no = self._dispatch_vehicle_no(dispatch_plan)
+        posting_transporter_name = self._dispatch_transporter_name(dispatch_plan)
 
         grpo_posting = ServiceGRPOPosting.objects.create(
             dispatch_plan=dispatch_plan,
             vendor_code=vendor_code,
-            vendor_name=dispatch_plan.transporter_name,
+            vendor_name=posting_transporter_name,
             place_of_supply=effective_place_of_supply,
             effective_month=effective_month,
             budget_delivery_point=budget_delivery_point,
@@ -2072,6 +2161,8 @@ class GRPOService:
                 document_line["U_BiltyDate"] = dispatch_plan.bilty_date.isoformat()
             if line_invoice_number:
                 document_line["U_ARNO"] = line_invoice_number
+            if line_data["product_variety"]:
+                document_line["U_Variety"] = line_data["product_variety"][:50]
 
             remarks = []
             if dispatch_plan.bilty_no:
@@ -2103,10 +2194,10 @@ class GRPOService:
             grpo_payload["U_LRNUmber"] = dispatch_plan.bilty_no
         if dispatch_plan.bilty_date:
             grpo_payload["U_BiltyDate"] = dispatch_plan.bilty_date.isoformat()
-        if dispatch_plan.transporter_name:
-            grpo_payload["U_TransporterName"] = dispatch_plan.transporter_name
-        if dispatch_plan.vehicle_no:
-            grpo_payload["U_VehicleNoM"] = dispatch_plan.vehicle_no
+        if posting_transporter_name:
+            grpo_payload["U_TransporterName"] = posting_transporter_name
+        if posting_vehicle_no:
+            grpo_payload["U_VehicleNoM"] = posting_vehicle_no
         if invoice_number and not is_multi_invoice:
             grpo_payload["U_ARNO"] = invoice_number
             grpo_payload["U_TransporterInvoice"] = invoice_number
@@ -2271,6 +2362,13 @@ class GRPOService:
         """Get service GRPO posting history."""
         queryset = ServiceGRPOPosting.objects.select_related(
             "dispatch_plan",
+            "dispatch_plan__vehicle",
+            "dispatch_plan__vehicle__transporter",
+            "dispatch_plan__transporter",
+            "dispatch_plan__linked_vehicle_entry",
+            "dispatch_plan__linked_vehicle_entry__vehicle",
+            "dispatch_plan__linked_vehicle_entry__vehicle__transporter",
+            "dispatch_plan__linked_vehicle_entry__driver",
             "posted_by",
         ).prefetch_related("lines", "attachments").filter(
             dispatch_plan__company__code=self.company_code,
@@ -2350,6 +2448,7 @@ class GRPOService:
             existing_abs_entry = sap_client.get_grpo_attachment_entry(
                 grpo_posting.sap_doc_entry
             )
+            existing_abs_entry = self._sap_absolute_entry_or_none(existing_abs_entry)
 
             if existing_abs_entry:
                 # Add a new line to the existing Attachments2 entry.
@@ -2373,7 +2472,9 @@ class GRPOService:
                     filename=attachment.original_filename,
                     allow_metadata_fallback=True,
                 )
-                absolute_entry = sap_result.get("AbsoluteEntry")
+                absolute_entry = self._sap_absolute_entry_or_none(
+                    sap_result.get("AbsoluteEntry")
+                )
                 if not absolute_entry:
                     raise SAPDataError("SAP did not return AbsoluteEntry")
 
@@ -2445,6 +2546,7 @@ class GRPOService:
             existing_abs_entry = sap_client.get_grpo_attachment_entry(
                 grpo_posting.sap_doc_entry
             )
+            existing_abs_entry = self._sap_absolute_entry_or_none(existing_abs_entry)
 
             if existing_abs_entry:
                 # Add line to existing Attachments2 entry (avoids approval error)
@@ -2471,7 +2573,9 @@ class GRPOService:
                         filename=attachment.original_filename,
                         allow_metadata_fallback=True,
                     )
-                    absolute_entry = sap_result.get("AbsoluteEntry")
+                    absolute_entry = self._sap_absolute_entry_or_none(
+                        sap_result.get("AbsoluteEntry")
+                    )
                     if not absolute_entry:
                         raise SAPDataError("SAP did not return AbsoluteEntry")
 
