@@ -626,6 +626,36 @@ class GRPOService:
 
         return candidates
 
+    def _product_dimension_candidates_from_value(self, value: Any) -> List[str]:
+        normalized_value = self._normalize_dimension_search_text(value)
+        if not normalized_value:
+            return []
+
+        candidates = [str(value).strip()]
+        active_codes = self._get_active_dimension_codes(self.company_code, 1) or {}
+
+        for code, name in active_codes.items():
+            searchable = self._normalize_dimension_search_text(f"{code} {name}")
+            if len(normalized_value) >= 3 and normalized_value in searchable:
+                candidates.append(code)
+
+        synonym_tokens = {
+            "oil": ("oil", "crude", "edible"),
+            "transport": ("oil", "transport", "freight"),
+            "freight": ("oil", "transport", "freight"),
+            "beverage": ("beverage", "water", "juice", "drink"),
+            "water": ("water", "beverage"),
+        }
+        for key, tokens in synonym_tokens.items():
+            if key not in normalized_value:
+                continue
+            for code, name in active_codes.items():
+                searchable = self._normalize_dimension_search_text(f"{code} {name}")
+                if any(token in searchable for token in tokens):
+                    candidates.append(code)
+
+        return list(dict.fromkeys(candidates))
+
     def _resolve_product_dimension_code(
         self,
         item_summary: str,
@@ -634,8 +664,8 @@ class GRPOService:
     ) -> str:
         candidates = [
             *self._product_dimension_candidates_from_summary(item_summary),
-            product_variety,
-            service_description,
+            *self._product_dimension_candidates_from_value(product_variety),
+            *self._product_dimension_candidates_from_value(service_description),
         ]
         return self._resolve_active_dimension_code(1, *candidates)
 
@@ -1618,6 +1648,11 @@ class GRPOService:
             item_summary,
             product_variety,
         )
+        product_dimension = self._resolve_product_dimension_code(
+            item_summary,
+            product_variety,
+            service_description,
+        )
         delivery_point = self._infer_budget_delivery_point(dispatch_plan)
         source_state = bill_snapshot.get("state", "") or dispatch_plan.place_of_supply
         invoice_lines = []
@@ -1630,6 +1665,15 @@ class GRPOService:
             line_product_variety = (
                 inferred_line_product_variety
                 or plan.product_variety
+            )
+            line_service_description = self._infer_service_description(
+                line_item_summary,
+                line_product_variety,
+            )[:255]
+            line_product_dimension = self._resolve_product_dimension_code(
+                line_item_summary,
+                line_product_variety,
+                line_service_description,
             )
             line_total_litres = plan.total_litres
             if line_total_litres is None and line_snapshot:
@@ -1662,11 +1706,9 @@ class GRPOService:
                     "customer_name": line_snapshot.get("card_name", ""),
                     "source_state": line_snapshot.get("state", "") or plan.place_of_supply,
                     "source_city": line_snapshot.get("city", ""),
-                    "service_description": self._infer_service_description(
-                        line_item_summary,
-                        line_product_variety,
-                    )[:255],
+                    "service_description": line_service_description,
                     "product_variety": line_product_variety,
+                    "product_dimension": line_product_dimension,
                     "total_litres": line_total_litres,
                     "invoice_weight": line_invoice_weight,
                     "invoice_amount": line_invoice_amount,
@@ -1719,6 +1761,7 @@ class GRPOService:
             "default_sac_entry": dispatch_plan.sac_entry,
             "default_sac_code": dispatch_plan.sac_code,
             "default_product_variety": product_variety,
+            "default_product_dimension": product_dimension,
             "default_total_litres": total_litres,
             "default_sub_account": self._infer_service_sub_account(bill_snapshot),
             "invoice_number": (
@@ -1984,7 +2027,7 @@ class GRPOService:
         inferred_product_variety = self._infer_product_variety(
             bill_snapshot.get("item_summary", "")
         )
-        if inferred_product_variety:
+        if not product_variety and inferred_product_variety:
             product_variety = inferred_product_variety
         group_line_data = []
         aggregate_litres = Decimal("0.000")
@@ -1996,9 +2039,9 @@ class GRPOService:
             line_item_summary = line_snapshot.get("item_summary", "")
             inferred_line_product_variety = self._infer_product_variety(line_item_summary)
             line_product_variety = (
-                inferred_line_product_variety
-                or plan.product_variety
+                plan.product_variety
                 or product_variety
+                or inferred_line_product_variety
             )
             line_service_description = self._infer_service_description(
                 line_item_summary,
@@ -2068,6 +2111,25 @@ class GRPOService:
         vendor_state = self._get_sap_bp_state(self.company_code, vendor_code)
         effective_place_of_supply = vendor_state or place_of_supply
         tax_supply_state = effective_place_of_supply
+        for line_data in group_line_data:
+            line_snapshot = line_data["snapshot"]
+            product_dimension = self._resolve_product_dimension_code(
+                line_snapshot.get("item_summary", ""),
+                line_data["product_variety"],
+                line_data["service_description"],
+            )
+            if not product_dimension:
+                variety_label = (
+                    line_data["product_variety"]
+                    or line_data["service_description"]
+                    or "blank"
+                )
+                raise ValueError(
+                    "SAP Variety is required for Service GRPO. "
+                    f"Could not resolve '{variety_label}' to an active SAP Variety "
+                    "distribution rule."
+                )
+            line_data["product_dimension"] = product_dimension
         posting_vehicle_no = self._dispatch_vehicle_no(dispatch_plan)
         posting_transporter_name = self._dispatch_transporter_name(dispatch_plan)
 
@@ -2110,11 +2172,7 @@ class GRPOService:
                 supply_state=tax_supply_state,
             )
             line_data["tax_code"] = line_tax_code
-            product_dimension = self._resolve_product_dimension_code(
-                line_snapshot.get("item_summary", ""),
-                line_data["product_variety"],
-                line_data["service_description"],
-            )
+            product_dimension = line_data["product_dimension"]
             state_dimension = self._resolve_active_dimension_code(
                 5,
                 self._normalize_state(line_data["source_state"]),
