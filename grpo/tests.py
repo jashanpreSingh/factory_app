@@ -14,7 +14,7 @@ from gate_core.enums import GateEntryStatus
 from company.models import Company
 from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import VehicleEntry, Driver
-from vehicle_management.models import Vehicle, VehicleType
+from vehicle_management.models import Transporter, Vehicle, VehicleType
 from raw_material_gatein.models import POReceipt, POItemReceipt
 from grpo.models import GRPOPosting, GRPOLinePosting, GRPOStatus, GRPOAttachment, SAPAttachmentStatus
 from grpo.serializers import ServiceGRPOPostRequestSerializer, ServiceGRPOPreviewSerializer
@@ -918,6 +918,79 @@ class GRPOServiceTests(TestCase):
             service._infer_service_description(item_summary, product_variety),
             "Water",
         )
+
+    @patch.object(GRPOService, "_get_active_budget_codes", return_value={})
+    @patch.object(GRPOService, "_get_dispatch_bill_snapshot", return_value={})
+    def test_service_grpo_display_falls_back_to_linked_vehicle_entry(
+        self,
+        _mock_snapshot,
+        _mock_budget_codes,
+    ):
+        transporter = Transporter.objects.create(
+            name="ARNAV TRANSPORT SERVICE",
+            contact_person="Arnav Contact",
+            mobile_no="9811111111",
+            gstin="07ABCDE1234F1Z5",
+        )
+        linked_vehicle = Vehicle.objects.create(
+            vehicle_number="HR55AA1234",
+            vehicle_type=self.vehicle_type,
+            transporter=transporter,
+        )
+        linked_driver = Driver.objects.create(
+            name="Ramesh Driver",
+            mobile_no="9898989898",
+            license_no="DL0420260001",
+        )
+        linked_entry = VehicleEntry.objects.create(
+            entry_no="VE-DISP-001",
+            company=self.company,
+            vehicle=linked_vehicle,
+            driver=linked_driver,
+            entry_type="SALES_DISPATCH",
+            status=GateEntryStatus.COMPLETED,
+        )
+        dispatch_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=626050517,
+            sap_invoice_doc_num="626050517",
+            booking_status=DispatchPlanStatus.BOOKED,
+            linked_vehicle_entry=linked_entry,
+            transporter=transporter,
+            transporter_name="ARNAV TRANSPORT SERVICE",
+            transporter_gstin="07ABCDE1234F1Z5",
+            bilty_no="BLTY-001",
+            bilty_date=date(2026, 5, 1),
+            freight=Decimal("1250.00"),
+            total_freight=Decimal("1250.00"),
+        )
+        service = GRPOService(company_code="TC001")
+
+        pending_plan = service.get_pending_service_grpo_entries()[0]
+        self.assertEqual(
+            service.get_service_display_vehicle_no(pending_plan),
+            "HR55AA1234",
+        )
+        self.assertEqual(
+            service.get_service_display_driver_name(pending_plan),
+            "Ramesh Driver",
+        )
+        self.assertEqual(
+            service.get_service_display_linked_entry_no(pending_plan),
+            "VE-DISP-001",
+        )
+
+        preview = service.get_service_grpo_preview_data(dispatch_plan.id)
+        self.assertEqual(preview["vehicle_no"], "HR55AA1234")
+        self.assertEqual(preview["driver_name"], "Ramesh Driver")
+        self.assertEqual(preview["linked_vehicle_entry_id"], linked_entry.id)
+        self.assertEqual(preview["linked_vehicle_entry_no"], "VE-DISP-001")
+
+        serializer_data = ServiceGRPOPreviewSerializer(preview).data
+        self.assertEqual(serializer_data["vehicle_no"], "HR55AA1234")
+        self.assertEqual(serializer_data["driver_name"], "Ramesh Driver")
+        self.assertEqual(serializer_data["linked_vehicle_entry_id"], linked_entry.id)
+        self.assertEqual(serializer_data["linked_vehicle_entry_no"], "VE-DISP-001")
 
 
 class GRPOAPITests(APITestCase):

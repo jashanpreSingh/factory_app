@@ -250,6 +250,8 @@ class ServiceGRPOPendingEntrySerializer(serializers.Serializer):
     sap_invoice_doc_num = serializers.CharField(allow_blank=True)
     booking_status = serializers.CharField()
     dispatch_date = serializers.DateField(allow_null=True)
+    linked_vehicle_entry_id = serializers.IntegerField(required=False, allow_null=True)
+    linked_vehicle_entry_no = serializers.CharField(required=False, allow_blank=True)
     vehicle_no = serializers.CharField(allow_blank=True)
     driver_name = serializers.CharField(allow_blank=True)
     transporter_name = serializers.CharField(allow_blank=True)
