@@ -2,6 +2,7 @@ import shutil
 import tempfile
 from decimal import Decimal
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -17,6 +18,7 @@ from driver_management.models import Driver, VehicleEntry
 from gate_core.enums import GateEntryStatus
 from gate_core.models import UnitChoice
 from maintenance_gatein.models import MaintenanceType
+from notifications.models import Notification
 from person_gatein.models import EntryLog, Gate, PersonType, Visitor
 from production_execution.models import (
     BreakdownCategory,
@@ -565,6 +567,141 @@ class MaintenanceAssetAPITests(APITestCase):
 
         invalid = self.client.get("/api/v1/maintenance/reports/", {"report_type": "unknown"})
         self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_phase10_scan_stock_and_alert_automation(self):
+        asset_response = self.create_asset()
+        asset = Asset.objects.get(pk=asset_response.data["id"])
+        today = timezone.localdate()
+
+        qr_response = self.client.post(
+            f"/api/v1/maintenance/assets/{asset.id}/qr/",
+            {"qr_code": "QR-FILLER-001"},
+            format="json",
+        )
+        self.assertEqual(qr_response.status_code, status.HTTP_200_OK, qr_response.data)
+        self.assertEqual(qr_response.data["qr_code"], "QR-FILLER-001")
+        self.assertEqual(qr_response.data["asset_url"], f"/maintenance/assets/{asset.id}")
+
+        lookup = self.client.get("/api/v1/maintenance/scan/lookup/", {"code": "QR-FILLER-001"})
+        self.assertEqual(lookup.status_code, status.HTTP_200_OK, lookup.data)
+        self.assertTrue(lookup.data["found"])
+        self.assertEqual(lookup.data["type"], "asset")
+        self.assertEqual(lookup.data["asset"]["id"], asset.id)
+        self.assertTrue(lookup.data["actions"]["create_work_order"])
+
+        created = self.client.post(
+            "/api/v1/maintenance/scan/work-order/",
+            {
+                "code": "QR-FILLER-001",
+                "title": "Mobile scan complaint",
+                "problem_statement": "Abnormal vibration noticed during mobile inspection.",
+                "priority": "HIGH",
+                "impact": "DEGRADED",
+                "target_date": today.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertEqual(created.data["asset"], asset.id)
+        self.assertEqual(created.data["work_type"], "COMPLAINT")
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, "UNDER_REPAIR")
+
+        spare_response = self.create_spare(asset.id, current_stock="0.000", reorder_level="2.000")
+        spare = MaintenanceSpare.objects.get(pk=spare_response.data["id"])
+        spare_lookup = self.client.get(
+            "/api/v1/maintenance/scan/lookup/",
+            {"code": spare.sap_item_code},
+        )
+        self.assertEqual(spare_lookup.status_code, status.HTTP_200_OK, spare_lookup.data)
+        self.assertEqual(spare_lookup.data["type"], "spare")
+        self.assertEqual(spare_lookup.data["barcode"], spare.sap_item_code)
+
+        with patch(
+            "maintenance.views._fetch_sap_spare_stock",
+            return_value={
+                "available": True,
+                "source": "sap",
+                "message": "",
+                "rows": [
+                    {
+                        "item_code": spare.sap_item_code,
+                        "item_name": spare.name,
+                        "uom": spare.uom,
+                        "warehouse": "MNT",
+                        "warehouse_name": "Maintenance Store",
+                        "on_hand": "8.000",
+                        "committed": "1.000",
+                        "on_order": "2.000",
+                        "available_qty": "7.000",
+                    }
+                ],
+            },
+        ) as stock_reader:
+            stock = self.client.get(
+                "/api/v1/maintenance/spares/stock/",
+                {"spare": spare.id, "warehouse": "MNT"},
+            )
+        self.assertEqual(stock.status_code, status.HTTP_200_OK, stock.data)
+        stock_reader.assert_called_once_with(self.company.code, spare.sap_item_code, "MNT")
+        self.assertEqual(stock.data["local"]["current_stock"], "0.000")
+        self.assertEqual(stock.data["sap"]["source"], "sap")
+        self.assertEqual(stock.data["sap"]["total_available_qty"], "7.000")
+
+        MaintenanceWorkOrder.objects.create(
+            company=self.company,
+            work_order_no="MWO-P10-PM",
+            work_type="PREVENTIVE",
+            status="OPEN",
+            priority="NORMAL",
+            asset=asset,
+            department=asset.department,
+            line=asset.line,
+            title="PM due alert",
+            problem_statement="PM due",
+            impact="NO_IMPACT",
+            target_date=today,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        MaintenanceWorkOrder.objects.create(
+            company=self.company,
+            work_order_no="MWO-P10-BRK",
+            work_type="BREAKDOWN",
+            status="OPEN",
+            priority="CRITICAL",
+            asset=asset,
+            department=asset.department,
+            line=asset.line,
+            title="Critical breakdown alert",
+            problem_statement="Critical breakdown",
+            impact="STOPPAGE",
+            target_date=today,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        asset.amc_end_date = today + timedelta(days=10)
+        asset.save(update_fields=["amc_end_date", "updated_at"])
+
+        alerts = self.client.get("/api/v1/maintenance/alerts/")
+        self.assertEqual(alerts.status_code, status.HTTP_200_OK, alerts.data)
+        self.assertGreaterEqual(alerts.data["counts"]["PM_DUE"], 1)
+        self.assertGreaterEqual(alerts.data["counts"]["BREAKDOWN_ESCALATION"], 1)
+        self.assertGreaterEqual(alerts.data["counts"]["LOW_CRITICAL_SPARE"], 1)
+        self.assertGreaterEqual(alerts.data["counts"]["AMC_WARRANTY_EXPIRY"], 1)
+
+        notification_response = self.client.post(
+            "/api/v1/maintenance/alerts/",
+            {"alert_types": ["LOW_CRITICAL_SPARE"], "limit": 1},
+            format="json",
+        )
+        self.assertEqual(
+            notification_response.status_code,
+            status.HTTP_201_CREATED,
+            notification_response.data,
+        )
+        self.assertEqual(notification_response.data["notifications_sent"], 1)
+        self.assertEqual(Notification.objects.filter(recipient=self.user).count(), 1)
 
     def test_asset_code_is_unique_per_company(self):
         first = self.create_asset()

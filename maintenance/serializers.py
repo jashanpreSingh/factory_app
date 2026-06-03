@@ -875,6 +875,26 @@ class MaintenanceWorkOrderStatusSerializer(serializers.Serializer):
     remarks = serializers.CharField(required=False, allow_blank=True)
 
 
+class MaintenanceQrAssignSerializer(serializers.Serializer):
+    qr_code = serializers.CharField(required=False, allow_blank=True, max_length=150)
+
+
+class MaintenanceScanWorkOrderCreateSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=150)
+    title = serializers.CharField(max_length=200)
+    problem_statement = serializers.CharField()
+    priority = serializers.ChoiceField(
+        choices=MaintenancePriority.choices,
+        default=MaintenancePriority.HIGH,
+    )
+    impact = serializers.ChoiceField(
+        choices=WorkImpact.choices,
+        default=WorkImpact.DEGRADED,
+    )
+    target_date = serializers.DateField(required=False, allow_null=True)
+    assigned_to = CompanyUserPrimaryKeyRelatedField(required=False, allow_null=True)
+
+
 class MaintenanceGateLinkSerializer(CompanyScopedModelSerializer):
     gate_entry_no = serializers.CharField(source="gate_entry.work_order_number", read_only=True)
     vehicle_entry = serializers.IntegerField(source="gate_entry.vehicle_entry_id", read_only=True)

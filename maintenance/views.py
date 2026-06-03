@@ -16,6 +16,8 @@ from rest_framework.views import APIView
 
 from company.models import UserCompany
 from company.permissions import HasCompanyContext
+from notifications.models import NotificationType
+from notifications.services import NotificationService
 from production_execution.models import Machine
 
 from .constants import (
@@ -89,6 +91,8 @@ from .serializers import (
     MaintenanceWorkOrderSerializer,
     MaintenanceWorkOrderStatusSerializer,
     MaintenanceOptionsSerializer,
+    MaintenanceQrAssignSerializer,
+    MaintenanceScanWorkOrderCreateSerializer,
     SpareCategorySerializer,
     SpareIssueSerializer,
     SpareMovementSerializer,
@@ -348,6 +352,214 @@ def _report_response(request, payload):
         for row in payload["rows"]:
             writer.writerow([row.get(header, "") for header in headers])
     return response
+
+
+def _asset_qr_value(company, asset):
+    return asset.qr_code or f"MNT-ASSET-{company.code}-{asset.asset_code}"
+
+
+def _spare_barcode_value(spare):
+    return spare.sap_item_code or spare.part_number
+
+
+def _resolve_scan(company, code):
+    normalized = (code or "").strip()
+    if not normalized:
+        return None, None
+    asset = (
+        Asset.objects.filter(company=company, is_active=True)
+        .filter(Q(qr_code__iexact=normalized) | Q(asset_code__iexact=normalized))
+        .select_related("category", "location", "department")
+        .first()
+    )
+    if asset:
+        return "asset", asset
+    spare = (
+        MaintenanceSpare.objects.filter(company=company, is_active=True)
+        .filter(Q(part_number__iexact=normalized) | Q(sap_item_code__iexact=normalized))
+        .select_related("category")
+        .prefetch_related("compatible_assets")
+        .first()
+    )
+    if spare:
+        return "spare", spare
+    return None, None
+
+
+def _fetch_sap_spare_stock(company_code, item_code, warehouse=""):
+    if not item_code:
+        return {
+            "available": False,
+            "source": "local",
+            "message": "Spare does not have a SAP item code.",
+            "rows": [],
+        }
+    try:
+        from sap_client.context import CompanyContext
+        from sap_client.hana.connection import HanaConnection
+
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        schema = connection.schema
+        query = f"""
+            SELECT
+                T0."ItemCode",
+                IFNULL(T0."ItemName", ''),
+                IFNULL(T0."InvntryUom", ''),
+                IFNULL(T1."WhsCode", ''),
+                IFNULL(T2."WhsName", ''),
+                IFNULL(T1."OnHand", 0),
+                IFNULL(T1."IsCommited", 0),
+                IFNULL(T1."OnOrder", 0)
+            FROM "{schema}"."OITM" T0
+            LEFT JOIN "{schema}"."OITW" T1 ON T0."ItemCode" = T1."ItemCode"
+            LEFT JOIN "{schema}"."OWHS" T2 ON T1."WhsCode" = T2."WhsCode"
+            WHERE T0."ItemCode" = ? AND T0."InvntItem" = 'Y'
+        """
+        params = [item_code]
+        if warehouse:
+            query += ' AND T1."WhsCode" = ?'
+            params.append(warehouse)
+        query += ' ORDER BY T1."WhsCode"'
+        with connection.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+        return {
+            "available": True,
+            "source": "sap",
+            "message": "",
+            "rows": [
+                {
+                    "item_code": row[0],
+                    "item_name": row[1],
+                    "uom": row[2],
+                    "warehouse": row[3],
+                    "warehouse_name": row[4],
+                    "on_hand": _decimal_string(row[5], "0.001"),
+                    "committed": _decimal_string(row[6], "0.001"),
+                    "on_order": _decimal_string(row[7], "0.001"),
+                    "available_qty": _decimal_string(Decimal(str(row[5])) - Decimal(str(row[6])), "0.001"),
+                }
+                for row in rows
+            ],
+        }
+    except Exception as exc:
+        return {
+            "available": False,
+            "source": "local",
+            "message": str(exc),
+            "rows": [],
+        }
+
+
+def _maintenance_alerts(company):
+    today = timezone.localdate()
+    alert_rows = []
+
+    pm_orders = (
+        MaintenanceWorkOrder.objects.filter(
+            company=company,
+            is_active=True,
+            work_type__in=PM_WORK_TYPES,
+            status__in=ACTIONABLE_WORK_STATUSES,
+            target_date__lte=today + timedelta(days=7),
+        )
+        .select_related("asset", "department", "assigned_to")
+        .order_by("target_date", "-priority")[:25]
+    )
+    for work_order in pm_orders:
+        overdue = work_order.target_date and work_order.target_date < today
+        alert_rows.append(
+            {
+                "type": "PM_DUE",
+                "severity": "critical" if overdue else "warning",
+                "title": "PM overdue" if overdue else "PM due",
+                "message": f"{work_order.work_order_no} for {work_order.asset.asset_code} is due on {work_order.target_date}.",
+                "reference_type": "maintenance_work_order",
+                "reference_id": work_order.id,
+                "url": f"/maintenance/work-orders/{work_order.id}",
+                "due_date": work_order.target_date.isoformat() if work_order.target_date else None,
+            }
+        )
+
+    breakdowns = (
+        MaintenanceWorkOrder.objects.filter(
+            company=company,
+            is_active=True,
+            work_type=WorkType.BREAKDOWN,
+            status__in=ACTIONABLE_WORK_STATUSES,
+        )
+        .filter(Q(priority=MaintenancePriority.CRITICAL) | Q(impact=WorkImpact.STOPPAGE))
+        .select_related("asset", "department", "assigned_to")
+        .order_by("-priority", "created_at")[:25]
+    )
+    for work_order in breakdowns:
+        alert_rows.append(
+            {
+                "type": "BREAKDOWN_ESCALATION",
+                "severity": "critical",
+                "title": "Breakdown escalation",
+                "message": f"{work_order.asset.asset_code} has {work_order.priority.lower()} breakdown {work_order.work_order_no}.",
+                "reference_type": "maintenance_work_order",
+                "reference_id": work_order.id,
+                "url": f"/maintenance/work-orders/{work_order.id}",
+                "due_date": work_order.target_date.isoformat() if work_order.target_date else None,
+            }
+        )
+
+    spares = (
+        MaintenanceSpare.objects.filter(
+            company=company,
+            is_active=True,
+            is_critical=True,
+            current_stock__lte=F("reorder_level"),
+        )
+        .select_related("category")
+        .order_by("current_stock", "part_number")[:25]
+    )
+    for spare in spares:
+        alert_rows.append(
+            {
+                "type": "LOW_CRITICAL_SPARE",
+                "severity": "critical" if spare.is_below_minimum else "warning",
+                "title": "Low critical spare",
+                "message": f"{spare.part_number} stock is {spare.current_stock}; reorder level is {spare.reorder_level}.",
+                "reference_type": "maintenance_spare",
+                "reference_id": spare.id,
+                "url": "/maintenance/spares",
+                "due_date": None,
+            }
+        )
+
+    assets = (
+        Asset.objects.filter(company=company, is_active=True)
+        .filter(
+            Q(amc_end_date__lte=today + timedelta(days=30), amc_end_date__isnull=False)
+            | Q(warranty_end_date__lte=today + timedelta(days=30), warranty_end_date__isnull=False)
+        )
+        .select_related("department")
+        .order_by("amc_end_date", "warranty_end_date", "asset_code")[:25]
+    )
+    for asset in assets:
+        amc_overdue = asset.amc_end_date and asset.amc_end_date < today
+        warranty_overdue = asset.warranty_end_date and asset.warranty_end_date < today
+        due_date = asset.amc_end_date or asset.warranty_end_date
+        label = "AMC" if asset.amc_end_date else "Warranty"
+        alert_rows.append(
+            {
+                "type": "AMC_WARRANTY_EXPIRY",
+                "severity": "critical" if amc_overdue or warranty_overdue else "warning",
+                "title": f"{label} expiry",
+                "message": f"{asset.asset_code} {label.lower()} date is {due_date}.",
+                "reference_type": "maintenance_asset",
+                "reference_id": asset.id,
+                "url": f"/maintenance/assets/{asset.id}",
+                "due_date": due_date.isoformat() if due_date else None,
+            }
+        )
+
+    return alert_rows
 
 
 class MaintenanceDashboardAPI(APIView):
@@ -1052,6 +1264,197 @@ class MaintenanceReportsAPI(APIView):
         return _report_response(request, payload)
 
 
+class MaintenanceScanLookupAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewAsset]
+
+    def get(self, request):
+        company = _company(request)
+        code = request.query_params.get("code") or request.query_params.get("barcode") or ""
+        entity_type, entity = _resolve_scan(company, code)
+        if not entity:
+            return Response(
+                {"found": False, "code": code, "detail": "No maintenance asset or spare matched this code."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if entity_type == "asset":
+            return Response(
+                {
+                    "found": True,
+                    "type": "asset",
+                    "code": code,
+                    "qr_code": _asset_qr_value(company, entity),
+                    "asset": AssetSerializer(entity, context={"request": request}).data,
+                    "actions": {
+                        "view_url": f"/maintenance/assets/{entity.id}",
+                        "create_work_order": True,
+                    },
+                }
+            )
+        return Response(
+            {
+                "found": True,
+                "type": "spare",
+                "code": code,
+                "barcode": _spare_barcode_value(entity),
+                "spare": MaintenanceSpareSerializer(entity, context={"request": request}).data,
+                "actions": {
+                    "view_url": "/maintenance/spares",
+                    "stock_lookup": True,
+                },
+            }
+        )
+
+
+class MaintenanceScanWorkOrderAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanCreateWorkOrder]
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = MaintenanceScanWorkOrderCreateSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        company = _company(request)
+        entity_type, entity = _resolve_scan(company, serializer.validated_data["code"])
+        if entity_type != "asset":
+            return Response(
+                {"detail": "Scan code must identify a maintenance asset."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        asset = entity
+        work_order = MaintenanceWorkOrder.objects.create(
+            company=company,
+            work_order_no=MaintenanceWorkOrder.next_work_order_no(company),
+            work_type=WorkType.COMPLAINT,
+            status=WorkOrderStatus.OPEN,
+            priority=serializer.validated_data["priority"],
+            asset=asset,
+            department=asset.department,
+            area=asset.area,
+            line=asset.line,
+            title=serializer.validated_data["title"],
+            problem_statement=serializer.validated_data["problem_statement"],
+            impact=serializer.validated_data["impact"],
+            target_date=serializer.validated_data.get("target_date"),
+            reported_by=request.user,
+            assigned_to=serializer.validated_data.get("assigned_to"),
+            created_by=request.user,
+            updated_by=request.user,
+        )
+        if asset.status == AssetStatus.RUNNING:
+            asset.status = AssetStatus.UNDER_REPAIR
+            asset.updated_by = request.user
+            asset.save(update_fields=["status", "updated_by", "updated_at"])
+        return Response(
+            MaintenanceWorkOrderSerializer(work_order, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class MaintenanceSpareStockAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewSpare]
+
+    def get(self, request):
+        company = _company(request)
+        spare_id = request.query_params.get("spare")
+        code = request.query_params.get("code") or request.query_params.get("barcode") or ""
+        warehouse = (request.query_params.get("warehouse") or "").strip()
+        spare = None
+        if spare_id and str(spare_id).isdigit():
+            spare = MaintenanceSpare.objects.filter(
+                company=company,
+                id=int(spare_id),
+                is_active=True,
+            ).select_related("category").prefetch_related("compatible_assets").first()
+        if not spare and code:
+            entity_type, entity = _resolve_scan(company, code)
+            if entity_type == "spare":
+                spare = entity
+        if not spare:
+            return Response(
+                {"detail": "Spare was not found for the selected code."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        sap_stock = _fetch_sap_spare_stock(company.code, spare.sap_item_code, warehouse)
+        sap_total = sum((Decimal(str(row["available_qty"])) for row in sap_stock["rows"]), Decimal("0.000"))
+        return Response(
+            {
+                "spare": MaintenanceSpareSerializer(spare, context={"request": request}).data,
+                "barcode": _spare_barcode_value(spare),
+                "warehouse": warehouse,
+                "local": {
+                    "current_stock": _decimal_string(spare.current_stock, "0.001"),
+                    "minimum_stock": _decimal_string(spare.minimum_stock, "0.001"),
+                    "reorder_level": _decimal_string(spare.reorder_level, "0.001"),
+                    "shortage_qty": _decimal_string(spare.reorder_shortage_qty, "0.001"),
+                    "is_low_stock": spare.is_low_stock,
+                    "is_below_minimum": spare.is_below_minimum,
+                },
+                "sap": {
+                    **sap_stock,
+                    "total_available_qty": _decimal_string(sap_total, "0.001"),
+                },
+            }
+        )
+
+
+class MaintenanceAlertsAPI(APIView):
+    permission_classes = [IsAuthenticated, HasCompanyContext, CanViewMaintenanceDashboard]
+
+    def get(self, request):
+        company = _company(request)
+        alerts = _maintenance_alerts(company)
+        counts = {}
+        for alert in alerts:
+            counts[alert["type"]] = counts.get(alert["type"], 0) + 1
+        return Response(
+            {
+                "generated_at": _report_datetime(timezone.now()),
+                "counts": counts,
+                "total": len(alerts),
+                "alerts": alerts,
+            }
+        )
+
+    def post(self, request):
+        company = _company(request)
+        allowed_types = set(request.data.get("alert_types") or [])
+        limit = int(request.data.get("limit") or 20)
+        alerts = _maintenance_alerts(company)
+        if allowed_types:
+            alerts = [alert for alert in alerts if alert["type"] in allowed_types]
+        notifications = []
+        for alert in alerts[:limit]:
+            notification_type = (
+                NotificationType.STOCK_ALERT
+                if alert["type"] == "LOW_CRITICAL_SPARE"
+                else NotificationType.GENERAL_ANNOUNCEMENT
+            )
+            notifications.append(
+                NotificationService.send_notification_to_user(
+                    user=request.user,
+                    title=alert["title"],
+                    body=alert["message"],
+                    notification_type=notification_type,
+                    click_action_url=alert["url"],
+                    reference_type=alert["reference_type"],
+                    reference_id=alert["reference_id"],
+                    company=company,
+                    extra_data={"maintenance_alert_type": alert["type"], "severity": alert["severity"]},
+                    created_by=request.user,
+                )
+            )
+        return Response(
+            {
+                "notifications_sent": len(notifications),
+                "notification_ids": [notification.id for notification in notifications],
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class MaintenanceOptionsAPI(APIView):
     permission_classes = [IsAuthenticated, HasCompanyContext, CanViewAsset]
 
@@ -1181,6 +1584,8 @@ class AssetViewSet(CompanyScopedViewSet):
             permissions.append(CanDeleteAsset())
         elif self.action == "deactivate":
             permissions.append(CanDeactivateAsset())
+        elif self.action == "qr" and self.request.method == "POST":
+            permissions.append(CanEditAsset())
         else:
             permissions.append(CanViewAsset())
         return permissions
@@ -1233,6 +1638,36 @@ class AssetViewSet(CompanyScopedViewSet):
         asset = self.get_object()
         asset.deactivate(user=request.user)
         return Response(self.get_serializer(asset).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get", "post"], url_path="qr")
+    def qr(self, request, pk=None):
+        asset = self.get_object()
+        if request.method == "POST":
+            serializer = MaintenanceQrAssignSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            qr_code = serializer.validated_data.get("qr_code") or _asset_qr_value(self.company(), asset)
+            duplicate = Asset.objects.filter(
+                company=self.company(),
+                qr_code__iexact=qr_code,
+            ).exclude(pk=asset.pk).exists()
+            if duplicate:
+                return Response(
+                    {"qr_code": "QR code is already assigned to another asset."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            asset.qr_code = qr_code
+            asset.updated_by = request.user
+            asset.save(update_fields=["qr_code", "updated_by", "updated_at"])
+        qr_code = _asset_qr_value(self.company(), asset)
+        return Response(
+            {
+                "asset": AssetSerializer(asset, context={"request": request}).data,
+                "qr_code": qr_code,
+                "print_label": f"{asset.asset_code} - {asset.name}",
+                "scan_url": f"/maintenance/scan?code={qr_code}",
+                "asset_url": f"/maintenance/assets/{asset.id}",
+            }
+        )
 
 
 class MaintenanceWorkOrderViewSet(CompanyScopedViewSet):
