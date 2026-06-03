@@ -399,9 +399,6 @@ class PendingServiceGRPOListAPI(APIView):
 
         result = []
         for plan in dispatch_plans:
-            vehicle_no = plan.vehicle_no or (
-                plan.vehicle.vehicle_number if plan.vehicle_id else ""
-            )
             bill_snapshot = service._get_dispatch_bill_snapshot(plan)
             result.append({
                 "dispatch_plan_id": plan.id,
@@ -409,8 +406,10 @@ class PendingServiceGRPOListAPI(APIView):
                 "sap_invoice_doc_num": plan.sap_invoice_doc_num,
                 "booking_status": plan.booking_status,
                 "dispatch_date": plan.dispatch_date,
-                "vehicle_no": vehicle_no,
-                "driver_name": plan.driver_name,
+                "linked_vehicle_entry_id": plan.linked_vehicle_entry_id,
+                "linked_vehicle_entry_no": service.get_service_display_linked_entry_no(plan),
+                "vehicle_no": service.get_service_display_vehicle_no(plan),
+                "driver_name": service.get_service_display_driver_name(plan),
                 "transporter_name": plan.transporter_name,
                 "transporter_gstin": plan.transporter_gstin,
                 "source_state": bill_snapshot.get("state", "") or plan.place_of_supply,

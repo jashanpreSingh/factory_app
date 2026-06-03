@@ -703,8 +703,37 @@ class GRPOService:
                 "transporter",
                 "driver",
                 "linked_vehicle_entry",
+                "linked_vehicle_entry__vehicle",
+                "linked_vehicle_entry__driver",
             ).order_by("sap_invoice_doc_num", "sap_invoice_doc_entry", "id")
         )
+
+    @staticmethod
+    def get_service_display_vehicle_no(dispatch_plan: DispatchPlan) -> str:
+        if dispatch_plan.vehicle_no:
+            return dispatch_plan.vehicle_no
+        if dispatch_plan.vehicle_id and getattr(dispatch_plan, "vehicle", None):
+            return dispatch_plan.vehicle.vehicle_number or ""
+        linked_entry = getattr(dispatch_plan, "linked_vehicle_entry", None)
+        if linked_entry and getattr(linked_entry, "vehicle", None):
+            return linked_entry.vehicle.vehicle_number or ""
+        return ""
+
+    @staticmethod
+    def get_service_display_driver_name(dispatch_plan: DispatchPlan) -> str:
+        if dispatch_plan.driver_name:
+            return dispatch_plan.driver_name
+        if dispatch_plan.driver_id and getattr(dispatch_plan, "driver", None):
+            return dispatch_plan.driver.name or ""
+        linked_entry = getattr(dispatch_plan, "linked_vehicle_entry", None)
+        if linked_entry and getattr(linked_entry, "driver", None):
+            return linked_entry.driver.name or ""
+        return ""
+
+    @staticmethod
+    def get_service_display_linked_entry_no(dispatch_plan: DispatchPlan) -> str:
+        linked_entry = getattr(dispatch_plan, "linked_vehicle_entry", None)
+        return linked_entry.entry_no if linked_entry else ""
 
     @staticmethod
     def _line_amount_from_plan(dispatch_plan: DispatchPlan) -> Decimal:
@@ -1411,6 +1440,8 @@ class GRPOService:
                 "transporter",
                 "driver",
                 "linked_vehicle_entry",
+                "linked_vehicle_entry__vehicle",
+                "linked_vehicle_entry__driver",
             )
             .prefetch_related("service_grpo_postings", "service_grpo_lines")
             .distinct()
@@ -1469,6 +1500,8 @@ class GRPOService:
                     "transporter",
                     "driver",
                     "linked_vehicle_entry",
+                    "linked_vehicle_entry__vehicle",
+                    "linked_vehicle_entry__driver",
                 )
                 .prefetch_related("service_grpo_postings")
                 .get(
@@ -1490,9 +1523,8 @@ class GRPOService:
         line_amounts = [self._line_amount_from_plan(plan) for plan in group_plans]
         amount = sum(line_amounts, Decimal("0.00"))
 
-        vehicle_no = dispatch_plan.vehicle_no or (
-            dispatch_plan.vehicle.vehicle_number if dispatch_plan.vehicle_id else ""
-        )
+        vehicle_no = self.get_service_display_vehicle_no(dispatch_plan)
+        driver_name = self.get_service_display_driver_name(dispatch_plan)
 
         latest_grpo = self._latest_service_grpo_for_group(group_plans)
         bill_snapshot = self._get_dispatch_bill_snapshot(dispatch_plan)
@@ -1582,8 +1614,10 @@ class GRPOService:
             "booking_status": dispatch_plan.booking_status,
             "dispatch_date": dispatch_plan.dispatch_date,
             "is_ready_for_grpo": is_ready,
+            "linked_vehicle_entry_id": dispatch_plan.linked_vehicle_entry_id,
+            "linked_vehicle_entry_no": self.get_service_display_linked_entry_no(dispatch_plan),
             "vehicle_no": vehicle_no,
-            "driver_name": dispatch_plan.driver_name,
+            "driver_name": driver_name,
             "transporter_name": dispatch_plan.transporter_name,
             "transporter_gstin": dispatch_plan.transporter_gstin,
             "bilty_no": dispatch_plan.bilty_no,
