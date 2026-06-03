@@ -37,6 +37,7 @@ class HanaServiceGRPOOptionsReader:
                 "gl_accounts": self._get_gl_accounts(cursor, schema),
                 "sac_codes": self._get_sac_codes(cursor, schema),
                 "locations": self._get_locations(cursor, schema),
+                "varieties": self._get_product_varieties(cursor, schema),
                 "projects": self._get_budget_delivery_points(cursor, schema),
                 "sub_accounts": self._get_sub_accounts(cursor, schema),
                 "expense_codes": self._get_expense_codes(cursor, schema),
@@ -165,6 +166,27 @@ class HanaServiceGRPOOptionsReader:
                 "location_code": int(row[0]),
                 "location_name": row[1] or str(row[0]),
                 "state": row[2] or "",
+            }
+            for row in cursor.fetchall()
+        ]
+
+    @staticmethod
+    def _get_product_varieties(cursor, schema: str) -> List[Dict[str, Any]]:
+        cursor.execute(
+            f"""
+                SELECT
+                    "OcrCode" AS variety_code,
+                    IFNULL("OcrName", '') AS variety_name
+                FROM "{schema}"."OOCR"
+                WHERE "DimCode" = 1
+                  AND IFNULL("Active", 'Y') = 'Y'
+                ORDER BY "OcrName", "OcrCode"
+            """
+        )
+        return [
+            {
+                "variety_code": row[0],
+                "variety_name": row[1] or row[0],
             }
             for row in cursor.fetchall()
         ]

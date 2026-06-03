@@ -495,6 +495,176 @@ class GRPOServiceTests(TestCase):
             "SUNFLOWR",
         )
 
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    def test_service_grpo_product_dimension_maps_generic_oil_to_active_variety(
+        self, mock_dimension_codes
+    ):
+        """Generic Oil selection must still resolve to a real SAP Variety dimension."""
+        mock_dimension_codes.return_value = {
+            "CRUDE": "Crude Oil",
+            "BEV": "Beverage",
+        }
+        service = GRPOService(company_code="TC001")
+
+        self.assertEqual(
+            service._resolve_product_dimension_code(
+                "Transport freight",
+                "Oil",
+                "Transport",
+            ),
+            "CRUDE",
+        )
+
+    @patch.object(GRPOService, "_filter_purchase_delivery_note_udfs")
+    @patch.object(GRPOService, "_get_dispatch_bill_snapshot")
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    @patch.object(GRPOService, "_get_sap_tax_codes")
+    @patch.object(GRPOService, "_get_sap_bp_state")
+    @patch.object(GRPOService, "_get_sap_branch_states")
+    @patch("grpo.services.SAPClient")
+    def test_service_grpo_posts_required_variety_costing_code(
+        self,
+        mock_sap_client,
+        mock_branch_states,
+        mock_vendor_state,
+        mock_tax_codes,
+        mock_dimension_codes,
+        mock_bill_snapshot,
+        mock_filter_udfs,
+    ):
+        """SAP needs service GRPO Variety in CostingCode, not only U_Variety."""
+        mock_branch_states.return_value = {2: "HR"}
+        mock_vendor_state.return_value = "HR"
+        mock_tax_codes.return_value = {
+            "GST05R": {
+                "code": "GST05R",
+                "name": "SGST @ 2.5 % + CGST @ 2.5 % RCM",
+                "rate": Decimal("5"),
+            },
+        }
+
+        def dimension_codes(company_code, dim_code):
+            return {
+                1: {"CRUDE": "Crude Oil"},
+                2: {"05-2026": "05-2026"},
+                5: {"HR": "Haryana"},
+            }.get(dim_code, {})
+
+        mock_dimension_codes.side_effect = dimension_codes
+        mock_bill_snapshot.return_value = {
+            "doc_num": "626050517",
+            "state": "HR",
+            "card_code": "CUST001",
+            "item_summary": "Transport freight",
+            "total_litres": "1000.000",
+            "doc_total": "50000.00",
+        }
+        mock_instance = MagicMock()
+        mock_instance.create_grpo.return_value = {
+            "DocEntry": 9001,
+            "DocNum": 7001,
+            "DocTotal": 1000.00,
+        }
+        mock_sap_client.return_value = mock_instance
+
+        dispatch_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=626050517,
+            sap_invoice_doc_num="626050517",
+            booking_status=DispatchPlanStatus.BOOKED,
+            place_of_supply="HR",
+            transporter_name="ARNAV TRANSPORT SERVICE",
+            vehicle_no="HR55AA1234",
+            total_freight=Decimal("1000.00"),
+        )
+
+        service = GRPOService(company_code="TC001")
+        service.post_service_grpo(
+            dispatch_plan_id=dispatch_plan.id,
+            user=self.user,
+            vendor_code="VENDA000956",
+            branch_id=2,
+            service_description="Transport freight",
+            amount=Decimal("1000.00"),
+            tax_code="GST05R",
+            gl_account="5670001",
+            place_of_supply="HR",
+            effective_month="2026-05",
+            location_code=2,
+            location_name="HARYANA",
+            sac_entry=40,
+            sac_code="9965",
+            product_variety="Oil",
+            include_bilty_attachment=False,
+        )
+
+        payload = mock_instance.create_grpo.call_args[0][0]
+        self.assertEqual(payload["DocumentLines"][0]["CostingCode"], "CRUDE")
+        self.assertEqual(payload["DocumentLines"][0]["U_Variety"], "Oil")
+
+    @patch.object(GRPOService, "_get_dispatch_bill_snapshot")
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    @patch.object(GRPOService, "_get_sap_bp_state")
+    @patch.object(GRPOService, "_get_sap_branch_states")
+    @patch("grpo.services.SAPClient")
+    def test_service_grpo_fails_before_sap_when_variety_dimension_missing(
+        self,
+        mock_sap_client,
+        mock_branch_states,
+        mock_vendor_state,
+        mock_dimension_codes,
+        mock_bill_snapshot,
+    ):
+        """Do not send a Service GRPO payload when SAP Variety cannot be resolved."""
+        mock_branch_states.return_value = {2: "HR"}
+        mock_vendor_state.return_value = "HR"
+
+        def dimension_codes(company_code, dim_code):
+            return {
+                1: {"BEV": "Beverage"},
+                2: {"05-2026": "05-2026"},
+            }.get(dim_code, {})
+
+        mock_dimension_codes.side_effect = dimension_codes
+        mock_bill_snapshot.return_value = {
+            "doc_num": "626050517",
+            "state": "HR",
+            "card_code": "CUST001",
+            "item_summary": "Transport freight",
+        }
+
+        dispatch_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=626050517,
+            sap_invoice_doc_num="626050517",
+            booking_status=DispatchPlanStatus.BOOKED,
+            place_of_supply="HR",
+            total_freight=Decimal("1000.00"),
+        )
+
+        service = GRPOService(company_code="TC001")
+        with self.assertRaisesMessage(ValueError, "SAP Variety is required"):
+            service.post_service_grpo(
+                dispatch_plan_id=dispatch_plan.id,
+                user=self.user,
+                vendor_code="VENDA000956",
+                branch_id=2,
+                service_description="Transport freight",
+                amount=Decimal("1000.00"),
+                tax_code="GST05R",
+                gl_account="5670001",
+                place_of_supply="HR",
+                effective_month="2026-05",
+                location_code=2,
+                location_name="HARYANA",
+                sac_entry=40,
+                sac_code="9965",
+                product_variety="Oil",
+                include_bilty_attachment=False,
+            )
+
+        mock_sap_client.return_value.create_grpo.assert_not_called()
+
     def test_get_grpo_preview_data(self):
         """Test getting GRPO preview data returns all PO details for pre-fill"""
         service = GRPOService(company_code="TC001")
@@ -921,13 +1091,19 @@ class GRPOServiceTests(TestCase):
         )
 
     @patch.object(GRPOService, "_get_active_budget_codes")
+    @patch.object(GRPOService, "_get_active_dimension_codes")
     @patch.object(GRPOService, "_get_dispatch_bill_snapshot")
     def test_service_grpo_display_falls_back_to_linked_vehicle_entry(
         self,
         mock_bill_snapshot,
+        mock_dimension_codes,
         mock_budget_codes,
     ):
         mock_budget_codes.return_value = {}
+        mock_dimension_codes.return_value = {
+            "MUSTARD": "Mustard Oil",
+            "05-2026": "05-2026",
+        }
         mock_bill_snapshot.return_value = {
             "doc_num": "626050517",
             "state": "HR",
@@ -1186,6 +1362,12 @@ class GRPOSerializerTests(TestCase):
             "gl_accounts": [],
             "sac_codes": [],
             "locations": [],
+            "varieties": [
+                {
+                    "variety_code": "CRUDE",
+                    "variety_name": "Crude Oil",
+                }
+            ],
             "projects": [],
             "sub_accounts": [],
             "expense_codes": [
@@ -1206,6 +1388,7 @@ class GRPOSerializerTests(TestCase):
             serializer.data["expense_codes"][0]["expense_name"],
             "FREIGHT OUTWARD",
         )
+        self.assertEqual(serializer.data["varieties"][0]["variety_code"], "CRUDE")
 
     def test_grpo_post_request_serializer_minimal(self):
         """Test minimal GRPO post request (only required fields)"""

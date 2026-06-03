@@ -283,6 +283,7 @@ class ServiceGRPOInvoiceLinePreviewSerializer(serializers.Serializer):
     source_city = serializers.CharField(allow_blank=True)
     service_description = serializers.CharField(allow_blank=True)
     product_variety = serializers.CharField(allow_blank=True)
+    product_dimension = serializers.CharField(allow_blank=True, required=False)
     total_litres = serializers.DecimalField(
         max_digits=18, decimal_places=3, allow_null=True
     )
@@ -314,6 +315,7 @@ class ServiceGRPOPreviewSerializer(ServiceGRPOPendingEntrySerializer):
     default_sac_entry = serializers.IntegerField(allow_null=True)
     default_sac_code = serializers.CharField(allow_blank=True)
     default_product_variety = serializers.CharField(allow_blank=True)
+    default_product_dimension = serializers.CharField(allow_blank=True, required=False)
     default_total_litres = serializers.DecimalField(
         max_digits=18, decimal_places=3, allow_null=True
     )
@@ -466,6 +468,11 @@ class ServiceGRPOLocationOptionSerializer(serializers.Serializer):
     state = serializers.CharField(allow_blank=True)
 
 
+class ServiceGRPOVarietyOptionSerializer(serializers.Serializer):
+    variety_code = serializers.CharField()
+    variety_name = serializers.CharField()
+
+
 class ServiceGRPOProjectOptionSerializer(serializers.Serializer):
     project_code = serializers.CharField()
     project_name = serializers.CharField()
@@ -490,6 +497,7 @@ class ServiceGRPOOptionsSerializer(serializers.Serializer):
     gl_accounts = ServiceGRPOGLAccountOptionSerializer(many=True)
     sac_codes = ServiceGRPOSACCodeOptionSerializer(many=True)
     locations = ServiceGRPOLocationOptionSerializer(many=True)
+    varieties = ServiceGRPOVarietyOptionSerializer(many=True, required=False)
     projects = ServiceGRPOProjectOptionSerializer(many=True)
     sub_accounts = ServiceGRPOSubAccountOptionSerializer(many=True)
     expense_codes = ServiceGRPOExpenseCodeOptionSerializer(many=True)
