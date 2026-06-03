@@ -3269,8 +3269,13 @@ class MaintenanceGateEntryFullView(APIView):
                     "maintenance_entry__maintenance_type",
                     "maintenance_entry__receiving_department",
                     "maintenance_entry__created_by",
+                    "maintenance_entry__maintenance_link",
+                    "maintenance_entry__maintenance_link__asset",
+                    "maintenance_entry__maintenance_link__work_order",
+                    "maintenance_entry__maintenance_link__spare",
+                    "maintenance_entry__maintenance_link__received_by",
                 )
-                .get(id=gate_entry_id)
+                .get(id=gate_entry_id, company=request.company.company)
             )
         except VehicleEntry.DoesNotExist:
             raise NotFound("Gate entry not found")
@@ -3342,6 +3347,7 @@ class MaintenanceGateEntryFullView(APIView):
         # MAINTENANCE SECTION
         # =========================
         if maintenance:
+            maintenance_link = getattr(maintenance, "maintenance_link", None)
             response["maintenance_details"] = {
                 "work_order_number": maintenance.work_order_number,
                 "maintenance_type": (
@@ -3368,7 +3374,48 @@ class MaintenanceGateEntryFullView(APIView):
                 ),
                 "created_at": maintenance.created_at,
                 "updated_at": maintenance.updated_at,
+                "maintenance_link": None,
             }
+            if maintenance_link:
+                response["maintenance_details"]["maintenance_link"] = {
+                    "id": maintenance_link.id,
+                    "asset": maintenance_link.asset_id,
+                    "asset_code": maintenance_link.asset.asset_code if maintenance_link.asset else "",
+                    "asset_name": maintenance_link.asset.name if maintenance_link.asset else "",
+                    "work_order": maintenance_link.work_order_id,
+                    "work_order_no": (
+                        maintenance_link.work_order.work_order_no
+                        if maintenance_link.work_order else ""
+                    ),
+                    "work_order_title": (
+                        maintenance_link.work_order.title
+                        if maintenance_link.work_order else ""
+                    ),
+                    "spare": maintenance_link.spare_id,
+                    "spare_part_number": (
+                        maintenance_link.spare.part_number
+                        if maintenance_link.spare else ""
+                    ),
+                    "spare_name": maintenance_link.spare.name if maintenance_link.spare else "",
+                    "spare_uom": maintenance_link.spare.uom if maintenance_link.spare else "",
+                    "spare_is_critical": (
+                        maintenance_link.spare.is_critical
+                        if maintenance_link.spare else False
+                    ),
+                    "qc_required": maintenance_link.qc_required,
+                    "qc_status": maintenance_link.qc_status,
+                    "grpo_reference": maintenance_link.grpo_reference,
+                    "grpo_doc_entry": maintenance_link.grpo_doc_entry,
+                    "grpo_doc_num": maintenance_link.grpo_doc_num,
+                    "receipt_status": maintenance_link.receipt_status,
+                    "received_quantity": maintenance_link.received_quantity,
+                    "received_at": maintenance_link.received_at,
+                    "received_by": maintenance_link.received_by_id,
+                    "received_by_name": (
+                        maintenance_link.received_by.full_name
+                        if maintenance_link.received_by else ""
+                    ),
+                }
 
         return Response(response)
 

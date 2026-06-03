@@ -442,7 +442,11 @@ class AddBreakdownAPI(APIView):
             )
         service = _get_service(request)
         try:
-            breakdown = service.add_breakdown(run_id, serializer.validated_data)
+            breakdown = service.add_breakdown(
+                run_id,
+                serializer.validated_data,
+                user=request.user,
+            )
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
@@ -464,7 +468,10 @@ class ResolveBreakdownAPI(APIView):
         service = _get_service(request)
         try:
             breakdown = service.resolve_breakdown(
-                run_id, breakdown_id, serializer.validated_data['action']
+                run_id,
+                breakdown_id,
+                serializer.validated_data['action'],
+                user=request.user,
             )
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

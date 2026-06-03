@@ -3,6 +3,7 @@ from .views import (
     MaintenanceGateEntryCreateAPI,
     MaintenanceGateEntryUpdateAPI,
     MaintenanceGateCompleteAPI,
+    MaintenanceGateReceiveSpareAPI,
     MaintenanceTypeListAPI
 )
 
@@ -24,6 +25,12 @@ urlpatterns = [
         "gate-entries/<int:gate_entry_id>/complete/",
         MaintenanceGateCompleteAPI.as_view(),
         name="maintenance-complete"
+    ),
+    # Receive linked spare into maintenance store stock
+    path(
+        "gate-entries/<int:gate_entry_id>/maintenance/receive-spare/",
+        MaintenanceGateReceiveSpareAPI.as_view(),
+        name="maintenance-receive-spare"
     ),
     # List maintenance types (for dropdown)
     path(
