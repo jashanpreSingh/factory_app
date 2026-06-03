@@ -12,6 +12,7 @@ from rest_framework import status
 
 from gate_core.enums import GateEntryStatus
 from company.models import Company
+from dispatch_plans.models import DispatchPlan, DispatchPlanStatus
 from driver_management.models import VehicleEntry, Driver
 from vehicle_management.models import Vehicle, VehicleType
 from raw_material_gatein.models import POReceipt, POItemReceipt
@@ -296,6 +297,16 @@ class GRPOServiceTests(TestCase):
                 "name": "RCM IGST @5%",
                 "rate": Decimal("5"),
             },
+            "CG+SG@5": {
+                "code": "CG+SG@5",
+                "name": "CGST @ 2.5 % + SGST @ 2.5 %",
+                "rate": Decimal("5"),
+            },
+            "IGST@5": {
+                "code": "IGST@5",
+                "name": "IGST @5%",
+                "rate": Decimal("5"),
+            },
         }
 
         service = GRPOService(company_code="TC001")
@@ -303,6 +314,10 @@ class GRPOServiceTests(TestCase):
         self.assertEqual(
             service._resolve_service_line_tax_code("GST05R", "HR", "DL"),
             "RIGST@5",
+        )
+        self.assertEqual(
+            service._resolve_service_line_tax_code("CG+SG@5", "HR", "DL"),
+            "IGST@5",
         )
 
     @patch.object(GRPOService, "_get_sap_tax_codes")
@@ -327,6 +342,101 @@ class GRPOServiceTests(TestCase):
             service._resolve_service_line_tax_code("GST05R", "Haryana", "HR"),
             "GST05R",
         )
+
+    @patch.object(GRPOService, "_filter_purchase_delivery_note_udfs")
+    @patch.object(GRPOService, "_get_dispatch_bill_snapshot")
+    @patch.object(GRPOService, "_get_active_dimension_codes")
+    @patch.object(GRPOService, "_get_sap_tax_codes")
+    @patch.object(GRPOService, "_get_sap_bp_state")
+    @patch.object(GRPOService, "_get_sap_branch_states")
+    @patch("grpo.services.SAPClient")
+    def test_service_grpo_uses_vendor_state_for_service_tax(
+        self,
+        mock_sap_client,
+        mock_branch_states,
+        mock_vendor_state,
+        mock_tax_codes,
+        mock_dimension_codes,
+        mock_bill_snapshot,
+        mock_filter_udfs,
+    ):
+        """Service freight tax must use the transporter/vendor state, not invoice state."""
+        mock_branch_states.return_value = {2: "HR"}
+        mock_vendor_state.return_value = "DL"
+        mock_tax_codes.return_value = {
+            "GST05R": {
+                "code": "GST05R",
+                "name": "SGST @ 2.5 % + CGST @ 2.5 % RCM",
+                "rate": Decimal("5"),
+            },
+            "RIGST@5": {
+                "code": "RIGST@5",
+                "name": "RCM IGST @5%",
+                "rate": Decimal("5"),
+            },
+        }
+        mock_dimension_codes.return_value = None
+        mock_bill_snapshot.return_value = {
+            "doc_num": "626050517",
+            "state": "HR",
+            "card_code": "CUST001",
+            "item_summary": "Transport freight",
+            "total_litres": "1000.000",
+            "doc_total": "50000.00",
+        }
+        mock_instance = MagicMock()
+        mock_instance.create_grpo.return_value = {
+            "DocEntry": 9001,
+            "DocNum": 7001,
+            "DocTotal": 1050.00,
+        }
+        mock_sap_client.return_value = mock_instance
+
+        dispatch_plan = DispatchPlan.objects.create(
+            company=self.company,
+            sap_invoice_doc_entry=626050517,
+            sap_invoice_doc_num="626050517",
+            booking_status=DispatchPlanStatus.BOOKED,
+            place_of_supply="HR",
+            transporter_name="ARNAV TRANSPORT SERVICE",
+            vehicle_no="HR55AA1234",
+            total_freight=Decimal("1000.00"),
+        )
+
+        service = GRPOService(company_code="TC001")
+        grpo = service.post_service_grpo(
+            dispatch_plan_id=dispatch_plan.id,
+            user=self.user,
+            vendor_code="VENDA000956",
+            branch_id=2,
+            service_description="Transport freight",
+            amount=Decimal("1000.00"),
+            tax_code="GST05R",
+            gl_account="5670001",
+            place_of_supply="HR",
+            effective_month="2026-05",
+            location_code=2,
+            location_name="HARYANA",
+            sac_entry=40,
+            sac_code="9965",
+            include_bilty_attachment=False,
+            extra_charges=[
+                {
+                    "expense_code": 1,
+                    "amount": Decimal("50.00"),
+                    "remarks": "Freight handling",
+                    "tax_code": "GST05R",
+                }
+            ],
+        )
+
+        payload = mock_instance.create_grpo.call_args[0][0]
+
+        self.assertEqual(payload["DocumentLines"][0]["TaxCode"], "RIGST@5")
+        self.assertEqual(payload["ShipPlace"], "DL")
+        self.assertEqual(payload["DocumentAdditionalExpenses"][0]["TaxCode"], "RIGST@5")
+        grpo.refresh_from_db()
+        self.assertEqual(grpo.place_of_supply, "DL")
 
     @patch.object(GRPOService, "_get_active_dimension_codes")
     def test_service_grpo_effective_month_maps_to_dimension_code(self, mock_dimension_codes):

@@ -260,6 +260,76 @@ class GRPOService:
                 except Exception:
                     pass
 
+    @staticmethod
+    @lru_cache(maxsize=256)
+    def _get_sap_bp_state(company_code: str, bp_code: str) -> str:
+        bp_code = (bp_code or "").strip()
+        if not bp_code:
+            return ""
+
+        context = CompanyContext(company_code)
+        connection = HanaConnection(context.hana)
+        conn = None
+        cursor = None
+        try:
+            conn = connection.connect()
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                    SELECT IFNULL("State1", ''), IFNULL("State2", '')
+                    FROM "{connection.schema}"."OCRD"
+                    WHERE "CardCode" = ?
+                """,
+                [bp_code],
+            )
+            row = cursor.fetchone()
+            if row:
+                for state in row:
+                    normalized_state = GRPOService._normalize_state(state)
+                    if normalized_state:
+                        return normalized_state
+
+            cursor.execute(
+                f"""
+                    SELECT IFNULL("State", '')
+                    FROM "{connection.schema}"."CRD1"
+                    WHERE "CardCode" = ?
+                      AND IFNULL("State", '') <> ''
+                    ORDER BY
+                        CASE
+                            WHEN IFNULL("AdresType", '') = 'B' THEN 0
+                            WHEN IFNULL("AdresType", '') = 'S' THEN 1
+                            ELSE 2
+                        END,
+                        "Address"
+                """,
+                [bp_code],
+            )
+            for row in cursor.fetchall():
+                normalized_state = GRPOService._normalize_state(row[0])
+                if normalized_state:
+                    return normalized_state
+            return ""
+        except Exception as exc:
+            logger.warning(
+                "Could not read SAP BP state for %s/%s: %s",
+                company_code,
+                bp_code,
+                exc,
+            )
+            return ""
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
     @classmethod
     def _normalize_state(cls, value: Any) -> str:
         state = str(value or "").strip().upper()
@@ -1873,11 +1943,16 @@ class GRPOService:
         if invoice_amount is None and aggregate_invoice_amount > 0:
             invoice_amount = aggregate_invoice_amount
 
+        branch_state = self._get_sap_branch_states(self.company_code).get(int(branch_id), "")
+        vendor_state = self._get_sap_bp_state(self.company_code, vendor_code)
+        effective_place_of_supply = vendor_state or place_of_supply
+        tax_supply_state = effective_place_of_supply
+
         grpo_posting = ServiceGRPOPosting.objects.create(
             dispatch_plan=dispatch_plan,
             vendor_code=vendor_code,
             vendor_name=dispatch_plan.transporter_name,
-            place_of_supply=place_of_supply,
+            place_of_supply=effective_place_of_supply,
             effective_month=effective_month,
             budget_delivery_point=budget_delivery_point,
             sub_account=sub_account,
@@ -1892,7 +1967,6 @@ class GRPOService:
         )
 
         company_code = self.company_code.upper()
-        branch_state = self._get_sap_branch_states(self.company_code).get(int(branch_id), "")
         document_lines = []
         for index, line_data in enumerate(group_line_data):
             plan = line_data["plan"]
@@ -1910,7 +1984,7 @@ class GRPOService:
             line_tax_code = self._resolve_service_line_tax_code(
                 requested_tax_code=tax_code,
                 branch_state=branch_state,
-                supply_state=line_data["source_state"],
+                supply_state=tax_supply_state,
             )
             line_data["tax_code"] = line_tax_code
             product_dimension = self._resolve_product_dimension_code(
@@ -1988,8 +2062,8 @@ class GRPOService:
             "Comments": structured_comments,
             "DocumentLines": document_lines,
         }
-        if place_of_supply and not is_multi_invoice:
-            grpo_payload["ShipPlace"] = place_of_supply
+        if effective_place_of_supply and not is_multi_invoice:
+            grpo_payload["ShipPlace"] = effective_place_of_supply
         if dispatch_plan.bilty_no:
             grpo_payload["U_BilltyNumber"] = dispatch_plan.bilty_no
             grpo_payload["U_LRNUmber"] = dispatch_plan.bilty_no
@@ -2027,7 +2101,11 @@ class GRPOService:
                 if charge.get("remarks"):
                     expense["Remarks"] = charge["remarks"]
                 if charge.get("tax_code"):
-                    expense["TaxCode"] = charge["tax_code"]
+                    expense["TaxCode"] = self._resolve_service_line_tax_code(
+                        requested_tax_code=charge["tax_code"],
+                        branch_state=branch_state,
+                        supply_state=tax_supply_state,
+                    )
                 additional_expenses.append(expense)
             grpo_payload["DocumentAdditionalExpenses"] = additional_expenses
 
