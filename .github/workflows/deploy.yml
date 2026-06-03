@@ -7,17 +7,40 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Prepare SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_HOST"
+          test -n "$SSH_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 60 -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_HOST"
+          test -n "$SSH_USERNAME"
+          timeout 10m ssh \
+            -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o ConnectTimeout=60 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=4 \
+            "$SSH_USERNAME@$SSH_HOST" <<'EOF'
             cd /home/superadmin/django_projects
             bash factory_deploy.sh
+          EOF
