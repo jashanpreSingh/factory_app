@@ -162,6 +162,19 @@ class TestHanaNonMovingRMReaderRowMapping(TestCase):
         self.assertEqual(query, 'CALL "TEST"."REPORT_BP_NON_MOVING_RM"(?, ?)')
         self.assertEqual(params, [0, 105])
 
+    def test_build_stock_age_query_reads_selected_company_tables(self):
+        query, params = self.reader._build_stock_age_query(
+            age=45,
+            item_group=102,
+            branch_label="OIL",
+        )
+
+        self.assertIn('"TEST"."OITW"', query)
+        self.assertIn('"TEST"."OITM"', query)
+        self.assertIn('"TEST"."OINM"', query)
+        self.assertIn('G."ItmsGrpCod" = ?', query)
+        self.assertEqual(params, [102, "OIL", 45, 45])
+
 
 # ---------------------------------------------------------------------------
 # 2. NonMovingRMService Tests
@@ -181,6 +194,7 @@ class TestNonMovingRMService(TestCase):
             service.reader = MagicMock()
             service.company_reader = MagicMock()
             service.company_reader.get_warehouse_distribution.return_value = []
+            service.company_reader.get_stock_age_report.return_value = []
             return service
 
     def test_get_report_meta(self):
@@ -303,6 +317,36 @@ class TestNonMovingRMService(TestCase):
         self.assertEqual(len(result["data"]), 1)
         self.assertEqual(result["data"][0]["branch"], "OIL")
         self.assertEqual(result["summary"]["total_value"], 100.0)
+
+    def test_get_report_falls_back_to_company_stock_age_when_no_branch_rows(self):
+        service = self._make_service()
+        service.reader.get_non_moving_report.return_value = [
+            {"branch": "BEV", "value": 200.0, "quantity": 20.0, "days_since_last_movement": 46},
+        ]
+        service.company_reader.get_stock_age_report.return_value = [
+            {
+                "branch": "OIL",
+                "item_code": "FG000001",
+                "item_name": "Finished Oil",
+                "item_group_name": "FINISHED",
+                "sub_group": "",
+                "warehouse": "",
+                "value": 1000.0,
+                "quantity": 25.0,
+                "days_since_last_movement": 120,
+            },
+        ]
+
+        result = service.get_report(age=45, item_group=102)
+
+        self.assertEqual(len(result["data"]), 1)
+        self.assertEqual(result["data"][0]["item_group_name"], "FINISHED")
+        self.assertEqual(result["summary"]["total_items"], 1)
+        service.company_reader.get_stock_age_report.assert_called_once_with(
+            age=45,
+            item_group=102,
+            branch_label="OIL",
+        )
 
     def test_get_report_empty_result(self):
         service = self._make_service()

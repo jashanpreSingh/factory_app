@@ -51,6 +51,11 @@ class NonMovingRMService:
             row for row in rows
             if self._matches_company_branch(row) and self._meets_age_threshold(row, age)
         ]
+        rows = self._fallback_to_company_stock_age_report(
+            rows=rows,
+            age=age,
+            item_group=item_group,
+        )
         warehouse_distribution = self.company_reader.get_warehouse_distribution(
             [row.get("item_code", "") for row in rows]
         )
@@ -131,6 +136,32 @@ class NonMovingRMService:
         if not expected_branch:
             return True
         return branch == expected_branch
+
+    def _fallback_to_company_stock_age_report(
+        self,
+        *,
+        rows: List[Dict],
+        age: int,
+        item_group: int,
+    ) -> List[Dict]:
+        if rows or not item_group:
+            return rows
+
+        branch_label = COMPANY_BRANCH_LABELS.get(self.company_code)
+        if not branch_label:
+            return rows
+
+        logger.info(
+            "Falling back to company stock-age query for non-moving report: company=%s item_group=%s age=%s",
+            self.company_code,
+            item_group,
+            age,
+        )
+        return self.company_reader.get_stock_age_report(
+            age=age,
+            item_group=item_group,
+            branch_label=branch_label,
+        )
 
     def _build_warehouse_summary(
         self,
