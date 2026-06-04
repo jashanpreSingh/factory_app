@@ -4,7 +4,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 
-PROCEDURE_NAME = "SALES PLANNING VS REQUIREMENT_OLD"
+PROCEDURE_NAME = "SALES PLANNING VS REQUIREMENT_WEEKLY"
 
 
 class SalesPlanningRequirementPermission(models.Model):
