@@ -41,6 +41,7 @@ urlpatterns = [
     path("api/v1/gate-core/", include("gate_core.urls")),
     path("api/v1/daily-needs-gatein/", include("daily_needs_gatein.urls")),
     path("api/v1/maintenance-gatein/", include("maintenance_gatein.urls")),
+    path("api/v1/maintenance/", include("maintenance.urls")),
     path("api/v1/construction-gatein/", include("construction_gatein.urls")),
     path("api/v1/person-gatein/", include("person_gatein.urls")),
     path("api/v1/grpo/", include("grpo.urls")),
@@ -49,6 +50,10 @@ urlpatterns = [
     path("api/v1/sap/plan-dashboard/", include("sap_plan_dashboard.urls")),
     path("api/v1/dashboards/stock/", include("stock_dashboard.urls")),
     path("api/v1/dashboards/inventory-age/", include("inventory_age.urls")),
+    path(
+        "api/v1/dashboards/sales-planning-requirement/",
+        include("sales_planning_requirement.urls"),
+    ),
     path("api/v1/dispatch-plans/", include("dispatch_plans.urls")),
     path("api/v1/dispatch/", include("dispatch_plans.dispatch_urls")),
     path("api/v1/non-moving-rm/", include("non_moving_rm.urls")),

@@ -460,8 +460,186 @@ class ProductionExecutionService:
         logger.info(f"Production stopped for run {run_id}")
         return active_segment
 
+    def _append_note(self, existing, note):
+        existing = (existing or '').strip()
+        note = (note or '').strip()
+        if not note:
+            return existing
+        if not existing:
+            return note
+        return f"{existing}\n{note}"
+
+    def _resolve_maintenance_asset(self, machine, asset_id=None):
+        from maintenance.models import Asset
+
+        assets = Asset.objects.filter(company=self.company, is_active=True).select_related(
+            'department',
+            'production_machine',
+            'production_machine__line',
+        )
+        if asset_id:
+            try:
+                return assets.get(id=asset_id)
+            except Asset.DoesNotExist:
+                raise ValueError(f"Maintenance asset {asset_id} not found.")
+        if not machine:
+            return None
+        return assets.filter(production_machine=machine).order_by('asset_code').first()
+
+    def _create_maintenance_work_order_for_breakdown(
+        self,
+        run: ProductionRun,
+        breakdown: MachineBreakdown,
+        data: dict,
+        user=None,
+    ):
+        if not data.get('create_maintenance_work_order', True):
+            return None
+
+        from maintenance.constants import (
+            AssetStatus,
+            WorkImpact,
+            WorkOrderStatus,
+            WorkType,
+        )
+        from maintenance.models import MaintenanceWorkOrder
+
+        try:
+            return breakdown.maintenance_work_order
+        except MaintenanceWorkOrder.DoesNotExist:
+            pass
+
+        asset = self._resolve_maintenance_asset(
+            breakdown.machine,
+            data.get('maintenance_asset_id'),
+        )
+        if not asset:
+            logger.info(
+                "Maintenance work order was not created for breakdown %s because no asset was linked.",
+                breakdown.id,
+            )
+            return None
+
+        reporter = user if user and getattr(user, 'is_authenticated', False) else run.created_by
+        machine_label = breakdown.machine.name if breakdown.machine_id else run.line.name
+        title = f"Production breakdown - {machine_label}"[:200]
+        impact_notes = (
+            f"Production run #{run.run_number} on {run.date}"
+            f" / Line: {run.line.name}"
+        )
+        if run.product:
+            impact_notes = f"{impact_notes} / Product: {run.product}"
+
+        work_order = MaintenanceWorkOrder.objects.create(
+            company=run.company,
+            work_order_no=MaintenanceWorkOrder.next_work_order_no(run.company),
+            work_type=WorkType.BREAKDOWN,
+            status=WorkOrderStatus.OPEN,
+            priority=data.get('maintenance_priority') or 'CRITICAL',
+            asset=asset,
+            department=asset.department,
+            area=asset.area,
+            line=asset.line or run.line.name,
+            title=title,
+            problem_statement=breakdown.reason,
+            impact=WorkImpact.STOPPAGE,
+            impact_notes=impact_notes,
+            downtime_reason=breakdown.reason,
+            production_run=run,
+            production_breakdown=breakdown,
+            reported_by=reporter,
+            created_by=reporter,
+            updated_by=reporter,
+        )
+
+        if asset.status != AssetStatus.BREAKDOWN:
+            asset.status = AssetStatus.BREAKDOWN
+            asset.updated_by = reporter
+            asset.save(update_fields=['status', 'updated_by', 'updated_at'])
+
+        return work_order
+
+    def _sync_maintenance_work_order_after_breakdown_resolution(
+        self,
+        breakdown: MachineBreakdown,
+        action: str,
+        user=None,
+    ):
+        from maintenance.constants import AssetStatus, WorkOrderStatus
+        from maintenance.models import MaintenanceWorkOrder
+
+        try:
+            work_order = breakdown.maintenance_work_order
+        except MaintenanceWorkOrder.DoesNotExist:
+            return None
+
+        updater = user if user and getattr(user, 'is_authenticated', False) else work_order.updated_by
+        now = timezone.now()
+
+        if action == 'stop_unrecovered':
+            if not work_order.start_time:
+                work_order.start_time = breakdown.start_time
+            work_order.status = WorkOrderStatus.IN_PROGRESS
+            work_order.technician_remarks = self._append_note(
+                work_order.technician_remarks,
+                "Production stopped with unrecovered breakdown.",
+            )
+            work_order.updated_by = updater
+            work_order.save(
+                update_fields=[
+                    'start_time',
+                    'status',
+                    'technician_remarks',
+                    'updated_by',
+                    'updated_at',
+                ]
+            )
+            if work_order.asset.status != AssetStatus.UNDER_REPAIR:
+                work_order.asset.status = AssetStatus.UNDER_REPAIR
+                work_order.asset.updated_by = updater
+                work_order.asset.save(update_fields=['status', 'updated_by', 'updated_at'])
+            return work_order
+
+        if work_order.status in [
+            WorkOrderStatus.COMPLETED,
+            WorkOrderStatus.APPROVED,
+            WorkOrderStatus.CLOSED,
+        ]:
+            return work_order
+
+        if not work_order.start_time:
+            work_order.start_time = breakdown.start_time
+        work_order.end_time = breakdown.end_time or now
+        work_order.completed_at = now
+        work_order.status = WorkOrderStatus.COMPLETED
+        work_order.downtime_reason = work_order.downtime_reason or breakdown.reason
+        work_order.completion_remarks = self._append_note(
+            work_order.completion_remarks,
+            "Resolved from production breakdown timeline.",
+        )
+        work_order.updated_by = updater
+        work_order.save(
+            update_fields=[
+                'start_time',
+                'end_time',
+                'completed_at',
+                'status',
+                'downtime_reason',
+                'completion_remarks',
+                'updated_by',
+                'updated_at',
+            ]
+        )
+
+        if work_order.asset.status != AssetStatus.UNDER_REPAIR:
+            work_order.asset.status = AssetStatus.UNDER_REPAIR
+            work_order.asset.updated_by = updater
+            work_order.asset.save(update_fields=['status', 'updated_by', 'updated_at'])
+
+        return work_order
+
     @transaction.atomic
-    def add_breakdown(self, run_id: int, data: dict) -> MachineBreakdown:
+    def add_breakdown(self, run_id: int, data: dict, user=None) -> MachineBreakdown:
         """Close current running segment and create a breakdown."""
         run = self._get_run_or_raise(run_id)
         if run.status == RunStatus.COMPLETED:
@@ -498,11 +676,12 @@ class ProductionExecutionService:
             run.save(update_fields=['status', 'updated_at'])
 
         self._recompute_run_totals(run)
+        self._create_maintenance_work_order_for_breakdown(run, breakdown, data, user=user)
         logger.info(f"Breakdown added for run {run_id}: {category.name}")
         return breakdown
 
     @transaction.atomic
-    def resolve_breakdown(self, run_id: int, breakdown_id: int, action: str) -> MachineBreakdown:
+    def resolve_breakdown(self, run_id: int, breakdown_id: int, action: str, user=None) -> MachineBreakdown:
         """Resolve an active breakdown."""
         run = self._get_run_or_raise(run_id)
         if run.status == RunStatus.COMPLETED:
@@ -536,6 +715,11 @@ class ProductionExecutionService:
             )
 
         self._recompute_run_totals(run)
+        self._sync_maintenance_work_order_after_breakdown_resolution(
+            breakdown,
+            action,
+            user=user,
+        )
         logger.info(f"Breakdown {breakdown_id} resolved with action '{action}'")
         return breakdown
 
@@ -653,7 +837,12 @@ class ProductionExecutionService:
         run = self._get_run_or_raise(run_id)
         segments = list(run.segments.all())
         breakdowns = list(
-            run.breakdowns.select_related('machine', 'breakdown_category').all()
+            run.breakdowns.select_related(
+                'machine',
+                'breakdown_category',
+                'maintenance_work_order',
+                'maintenance_work_order__asset',
+            ).all()
         )
         return {
             'segments': segments,
@@ -709,7 +898,12 @@ class ProductionExecutionService:
 
     def get_run_breakdowns(self, run_id: int):
         run = self._get_run_or_raise(run_id)
-        return run.breakdowns.select_related('machine', 'breakdown_category').all()
+        return run.breakdowns.select_related(
+            'machine',
+            'breakdown_category',
+            'maintenance_work_order',
+            'maintenance_work_order__asset',
+        ).all()
 
     @transaction.atomic
     def update_breakdown(self, run_id: int, breakdown_id: int, data: dict) -> MachineBreakdown:

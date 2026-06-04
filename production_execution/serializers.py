@@ -1,7 +1,10 @@
 from decimal import Decimal
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Sum
 from rest_framework import serializers
+from maintenance.constants import MaintenancePriority
+
 from .models import (
     ProductionLine, Machine, MachineChecklistTemplate,
     BreakdownCategory, LineSkuConfig,
@@ -203,16 +206,55 @@ class MachineBreakdownSerializer(serializers.ModelSerializer):
     breakdown_category_name = serializers.CharField(
         source='breakdown_category.name', read_only=True, default=''
     )
+    maintenance_work_order_id = serializers.SerializerMethodField()
+    maintenance_work_order_no = serializers.SerializerMethodField()
+    maintenance_work_order_status = serializers.SerializerMethodField()
+    maintenance_asset_id = serializers.SerializerMethodField()
+    maintenance_asset_code = serializers.SerializerMethodField()
+    maintenance_asset_name = serializers.SerializerMethodField()
 
     class Meta:
         model = MachineBreakdown
         fields = [
-            'id', 'machine', 'machine_name', 'start_time', 'end_time',
+            'id', 'production_run', 'machine', 'machine_name', 'start_time', 'end_time',
             'breakdown_minutes', 'breakdown_category', 'breakdown_category_name',
             'is_active', 'is_unrecovered',
+            'maintenance_work_order_id', 'maintenance_work_order_no',
+            'maintenance_work_order_status', 'maintenance_asset_id',
+            'maintenance_asset_code', 'maintenance_asset_name',
             'reason', 'remarks', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_at', 'updated_at']
+
+    def _work_order(self, obj):
+        try:
+            return obj.maintenance_work_order
+        except ObjectDoesNotExist:
+            return None
+
+    def get_maintenance_work_order_id(self, obj):
+        work_order = self._work_order(obj)
+        return work_order.id if work_order else None
+
+    def get_maintenance_work_order_no(self, obj):
+        work_order = self._work_order(obj)
+        return work_order.work_order_no if work_order else ''
+
+    def get_maintenance_work_order_status(self, obj):
+        work_order = self._work_order(obj)
+        return work_order.status if work_order else ''
+
+    def get_maintenance_asset_id(self, obj):
+        work_order = self._work_order(obj)
+        return work_order.asset_id if work_order else None
+
+    def get_maintenance_asset_code(self, obj):
+        work_order = self._work_order(obj)
+        return work_order.asset.asset_code if work_order else ''
+
+    def get_maintenance_asset_name(self, obj):
+        work_order = self._work_order(obj)
+        return work_order.asset.name if work_order else ''
 
 
 class ProductionRunDetailSerializer(serializers.ModelSerializer):
@@ -244,7 +286,12 @@ class ProductionRunDetailSerializer(serializers.ModelSerializer):
 
     def get_breakdowns(self, obj):
         return MachineBreakdownSerializer(
-            obj.breakdowns.select_related('machine', 'breakdown_category').all(),
+            obj.breakdowns.select_related(
+                'machine',
+                'breakdown_category',
+                'maintenance_work_order',
+                'maintenance_work_order__asset',
+            ).all(),
             many=True
         ).data
 
@@ -257,6 +304,13 @@ class AddBreakdownSerializer(serializers.Serializer):
     """Used when operator clicks 'Add Breakdown' on the timeline."""
     breakdown_category_id = serializers.IntegerField()
     machine_id = serializers.IntegerField(required=False, allow_null=True)
+    maintenance_asset_id = serializers.IntegerField(required=False, allow_null=True)
+    create_maintenance_work_order = serializers.BooleanField(required=False, default=True)
+    maintenance_priority = serializers.ChoiceField(
+        choices=MaintenancePriority.choices,
+        required=False,
+        default=MaintenancePriority.CRITICAL,
+    )
     reason = serializers.CharField(max_length=500)
     produced_cases = serializers.DecimalField(
         max_digits=12, decimal_places=1, required=False, default=0,
