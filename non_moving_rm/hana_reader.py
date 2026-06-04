@@ -73,6 +73,27 @@ class HanaNonMovingRMReader:
         rows = self._execute(query, [])
         return [self._map_item_group_row(r) for r in rows]
 
+    def get_stock_age_report(
+        self,
+        *,
+        age: int,
+        item_group: int,
+        branch_label: str,
+    ) -> List[Dict]:
+        """
+        Reads non-moving stock directly from the selected company schema.
+
+        This fills gaps where the central REPORT_BP_NON_MOVING_RM procedure
+        does not return rows for a company/item-group combination.
+        """
+        query, params = self._build_stock_age_query(
+            age=age,
+            item_group=item_group,
+            branch_label=branch_label,
+        )
+        rows = self._execute(query, params)
+        return [self._map_report_row(r) for r in rows]
+
     def get_warehouse_distribution(self, item_codes: List[str]) -> List[Dict]:
         """
         Reads current warehouse-level stock for the given item codes.
@@ -86,6 +107,106 @@ class HanaNonMovingRMReader:
             query, params = self._build_warehouse_distribution_query(chunk)
             rows.extend(self._execute(query, params))
         return [self._map_warehouse_distribution_row(r) for r in rows]
+
+    def _build_stock_age_query(
+        self,
+        *,
+        age: int,
+        item_group: int,
+        branch_label: str,
+    ):
+        schema = self._schema()
+        query = f"""
+WITH StockItems AS (
+    SELECT
+        M."ItemCode",
+        M."ItemName",
+        G."ItmsGrpNam" AS "ItemGroupName",
+        COALESCE(M."U_Sub_Group", '') AS "SubGroup",
+        COALESCE(M."U_IsLitre", 'N') AS "IsLitre",
+        M."CreateDate",
+        M."AvgPrice" AS "ItemAvgPrice",
+        M."LastPurPrc",
+        W."WhsCode",
+        W."OnHand",
+        W."AvgPrice" AS "WarehouseAvgPrice"
+    FROM "{schema}"."OITW" W
+    INNER JOIN "{schema}"."OITM" M
+        ON M."ItemCode" = W."ItemCode"
+    INNER JOIN "{schema}"."OITB" G
+        ON G."ItmsGrpCod" = M."ItmsGrpCod"
+    INNER JOIN "{schema}"."OWHS" H
+        ON H."WhsCode" = W."WhsCode"
+    WHERE W."OnHand" > 0
+      AND COALESCE(H."Inactive", 'N') <> 'Y'
+      AND G."ItmsGrpCod" = ?
+),
+LastMovement AS (
+    SELECT
+        N."ItemCode",
+        MAX(N."DocDate") AS "LastMovementDate"
+    FROM "{schema}"."OINM" N
+    INNER JOIN StockItems S
+        ON S."ItemCode" = N."ItemCode"
+       AND S."WhsCode" = N."Warehouse"
+    WHERE COALESCE(N."InQty", 0) <> 0
+       OR COALESCE(N."OutQty", 0) <> 0
+    GROUP BY N."ItemCode"
+),
+ReportRows AS (
+    SELECT
+        ? AS "Branch",
+        S."ItemCode",
+        S."ItemName",
+        S."ItemGroupName",
+        SUM(S."OnHand") AS "Quantity",
+        SUM(CASE WHEN S."IsLitre" = 'Y' THEN S."OnHand" ELSE 0 END) AS "Litres",
+        S."SubGroup",
+        ROUND(
+            SUM(
+                S."OnHand" *
+                CASE
+                    WHEN COALESCE(S."WarehouseAvgPrice", 0) <> 0 THEN S."WarehouseAvgPrice"
+                    WHEN COALESCE(S."ItemAvgPrice", 0) <> 0 THEN S."ItemAvgPrice"
+                    ELSE COALESCE(S."LastPurPrc", 0)
+                END
+            ),
+            4
+        ) AS "Value",
+        MAX(COALESCE(L."LastMovementDate", S."CreateDate")) AS "LastMovementDate"
+    FROM StockItems S
+    LEFT JOIN LastMovement L
+        ON L."ItemCode" = S."ItemCode"
+    GROUP BY
+        S."ItemCode",
+        S."ItemName",
+        S."ItemGroupName",
+        S."SubGroup"
+)
+SELECT
+    "Branch",
+    "ItemCode",
+    "ItemName",
+    "ItemGroupName",
+    "Quantity",
+    "Litres",
+    "SubGroup",
+    "Value",
+    "LastMovementDate",
+    CASE
+        WHEN "LastMovementDate" IS NULL THEN 0
+        ELSE DAYS_BETWEEN("LastMovementDate", CURRENT_DATE)
+    END AS "DaysSinceLastMovement",
+    0 AS "ConsumptionRatio"
+FROM ReportRows
+WHERE ? <= 0
+   OR CASE
+          WHEN "LastMovementDate" IS NULL THEN 0
+          ELSE DAYS_BETWEEN("LastMovementDate", CURRENT_DATE)
+      END > ?
+ORDER BY "DaysSinceLastMovement" DESC, "ItemCode"
+"""
+        return query, [item_group, branch_label, age, age]
 
     def _build_warehouse_distribution_query(self, item_codes: List[str]):
         schema = self._schema()
