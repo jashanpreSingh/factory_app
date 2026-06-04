@@ -1357,8 +1357,9 @@ class GRPOService:
                 if gl_account:
                     line_data["AccountCode"] = gl_account
 
-                variety = item_input.get("variety")
+                variety = (item_input.get("variety") or item.variety or "").strip()
                 if variety:
+                    line_data["U_Variety"] = variety
                     line_data["CostingCode"] = variety
                     line_data["U_Variety"] = str(variety)[:50]
 
@@ -2197,6 +2198,8 @@ class GRPOService:
                 document_line["LocationCode"] = int(location_code)
             if product_dimension:
                 document_line["CostingCode"] = product_dimension
+            if line_data["product_variety"]:
+                document_line["U_Variety"] = line_data["product_variety"]
             if effective_month_dimension:
                 document_line["CostingCode2"] = effective_month_dimension
             if post_budget_as_dimension:
