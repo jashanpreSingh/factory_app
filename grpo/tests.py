@@ -433,6 +433,7 @@ class GRPOServiceTests(TestCase):
         payload = mock_instance.create_grpo.call_args[0][0]
 
         self.assertEqual(payload["DocumentLines"][0]["TaxCode"], "RIGST@5")
+        self.assertEqual(payload["DocumentLines"][0]["U_Variety"], "Oil")
         self.assertEqual(payload["ShipPlace"], "DL")
         self.assertEqual(payload["DocumentAdditionalExpenses"][0]["TaxCode"], "RIGST@5")
         grpo.refresh_from_db()
@@ -1350,6 +1351,7 @@ class GRPOAttachmentServiceTests(TestCase):
     def test_upload_attachment_success(self, mock_sap_client):
         """Test successful attachment upload and linking"""
         mock_instance = MagicMock()
+        mock_instance.get_grpo_attachment_entry.return_value = None
         mock_instance.upload_attachment.return_value = {"AbsoluteEntry": 789}
         mock_instance.link_attachment_to_grpo.return_value = {
             "DocEntry": 12345, "AttachmentEntry": 789
@@ -1386,6 +1388,7 @@ class GRPOAttachmentServiceTests(TestCase):
         from sap_client.exceptions import SAPConnectionError
 
         mock_instance = MagicMock()
+        mock_instance.get_grpo_attachment_entry.return_value = None
         mock_instance.upload_attachment.side_effect = SAPConnectionError("SAP unavailable")
         mock_sap_client.return_value = mock_instance
 
@@ -1446,6 +1449,7 @@ class GRPOAttachmentServiceTests(TestCase):
     def test_retry_attachment_upload_success(self, mock_sap_client):
         """Test retrying a failed attachment upload"""
         mock_instance = MagicMock()
+        mock_instance.get_grpo_attachment_entry.return_value = None
         mock_instance.upload_attachment.return_value = {"AbsoluteEntry": 999}
         mock_instance.link_attachment_to_grpo.return_value = {
             "DocEntry": 12345, "AttachmentEntry": 999
@@ -1475,6 +1479,7 @@ class GRPOAttachmentServiceTests(TestCase):
     def test_retry_skips_upload_if_already_uploaded(self, mock_sap_client):
         """Test retry skips upload when sap_absolute_entry already set"""
         mock_instance = MagicMock()
+        mock_instance.get_grpo_attachment_entry.return_value = None
         mock_instance.link_attachment_to_grpo.return_value = {
             "DocEntry": 12345, "AttachmentEntry": 555
         }
