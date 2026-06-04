@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'dispatch_plans',
     'django_apscheduler',
     'non_moving_rm',
+    'sales_planning_requirement',
     'warehouse',
     'barcode',
     'ai_assistant',
@@ -333,6 +334,27 @@ SAP_FILE_UPLOADER_SOURCE_PATHS = {
         default="",
     ),
 }
+
+SALES_PLANNING_REQUIREMENT_REFRESH_DAY = config(
+    "SALES_PLANNING_REQUIREMENT_REFRESH_DAY",
+    default=1,
+    cast=int,
+)
+SALES_PLANNING_REQUIREMENT_REFRESH_HOUR = config(
+    "SALES_PLANNING_REQUIREMENT_REFRESH_HOUR",
+    default=2,
+    cast=int,
+)
+SALES_PLANNING_REQUIREMENT_REFRESH_MINUTE = config(
+    "SALES_PLANNING_REQUIREMENT_REFRESH_MINUTE",
+    default=30,
+    cast=int,
+)
+SALES_PLANNING_REQUIREMENT_RUN_TIMEOUT_HOURS = config(
+    "SALES_PLANNING_REQUIREMENT_RUN_TIMEOUT_HOURS",
+    default=4,
+    cast=int,
+)
 
 # Firebase Cloud Messaging
 FCM_CREDENTIALS_PATH = config('FCM_CREDENTIALS_PATH', default='firebase-service-account.json')
