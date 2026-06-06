@@ -42,6 +42,10 @@ class GRPOService:
     Service for handling GRPO operations.
     """
     SAP_DOCUMENT_COMMENTS_MAX_LENGTH = 254
+    QC_FINAL_STATUSES = frozenset({
+        InspectionStatus.ACCEPTED,
+        InspectionStatus.REJECTED,
+    })
     STATE_NAME_CODES = {
         "HARYANA": "HR",
         "DELHI": "DL",
@@ -921,9 +925,10 @@ class GRPOService:
     def get_pending_grpo_entries(self) -> List[VehicleEntry]:
         """
         Get all completed gate entries that are ready for GRPO posting.
-        Returns entries with status COMPLETED or QC_COMPLETED.
+        Returns entries with status COMPLETED or QC_COMPLETED, excluding stale
+        entries whose item QC is still HOLD/PENDING.
         """
-        return VehicleEntry.objects.filter(
+        entries = list(VehicleEntry.objects.filter(
             company__code=self.company_code,
             entry_type="RAW_MATERIAL",
             is_active=True,
@@ -931,8 +936,11 @@ class GRPOService:
         ).prefetch_related(
             "po_receipts",
             "po_receipts__items",
+            "po_receipts__items__arrival_slip",
+            "po_receipts__items__arrival_slip__inspection",
             "grpo_postings"
-        ).order_by("-entry_time")
+        ).order_by("-entry_time"))
+        return [entry for entry in entries if self.is_entry_ready_for_grpo(entry)]
 
     def get_grpo_dashboard_summary(self) -> Dict[str, Any]:
         """
@@ -1009,6 +1017,8 @@ class GRPOService:
         ).prefetch_related(
             "po_receipts",
             "po_receipts__items",
+            "po_receipts__items__arrival_slip",
+            "po_receipts__items__arrival_slip__inspection",
             "grpo_postings",
         ).order_by("-entry_time")
 
@@ -1037,10 +1047,7 @@ class GRPOService:
         except VehicleEntry.DoesNotExist:
             raise ValueError(f"Vehicle entry {vehicle_entry_id} not found")
 
-        is_ready = vehicle_entry.status in [
-            GateEntryStatus.COMPLETED,
-            GateEntryStatus.QC_COMPLETED
-        ]
+        is_ready = self.is_entry_ready_for_grpo(vehicle_entry)
 
         po_receipts_qs = vehicle_entry.po_receipts.all()
         if po_receipt_ids:
@@ -1118,6 +1125,78 @@ class GRPOService:
 
         inspection = arrival_slip.inspection
         return inspection.final_status
+
+    def _get_qc_blocking_reason(self, po_item_receipt: POItemReceipt) -> Optional[str]:
+        """
+        Return a QC status that blocks GRPO, if the item is still in QC flow.
+
+        Existing non-QC/legacy gate entries can still proceed when no arrival
+        slip exists. Once QC has started, the item must reach ACCEPTED or
+        REJECTED before GRPO can be listed or posted.
+        """
+        if not hasattr(po_item_receipt, "arrival_slip"):
+            return None
+
+        arrival_slip = po_item_receipt.arrival_slip
+        if not arrival_slip.is_submitted:
+            return "ARRIVAL_SLIP_PENDING"
+
+        if not hasattr(arrival_slip, "inspection"):
+            return "INSPECTION_PENDING"
+
+        inspection = arrival_slip.inspection
+        if inspection.final_status not in self.QC_FINAL_STATUSES:
+            return inspection.final_status or InspectionStatus.PENDING
+
+        return None
+
+    def _collect_qc_blockers(self, po_receipts: List[POReceipt]) -> List[str]:
+        blockers = []
+        for po_receipt in po_receipts:
+            for item in po_receipt.items.all():
+                status_value = self._get_qc_blocking_reason(item)
+                if not status_value:
+                    continue
+
+                report_no = ""
+                arrival_slip = getattr(item, "arrival_slip", None)
+                inspection = getattr(arrival_slip, "inspection", None) if arrival_slip else None
+                if inspection:
+                    report_no = f", report {inspection.report_no}"
+
+                blockers.append(
+                    f"PO {po_receipt.po_number}, item {item.po_item_code}"
+                    f"{report_no}, QC status {status_value}"
+                )
+
+        return blockers
+
+    def is_entry_ready_for_grpo(self, vehicle_entry: VehicleEntry) -> bool:
+        """Status plus item-level QC guard for GRPO readiness."""
+        if vehicle_entry.status not in [
+            GateEntryStatus.COMPLETED,
+            GateEntryStatus.QC_COMPLETED
+        ]:
+            return False
+
+        po_receipts = list(vehicle_entry.po_receipts.all())
+        return not self._collect_qc_blockers(po_receipts)
+
+    def _validate_qc_ready_for_grpo(self, vehicle_entry: VehicleEntry) -> None:
+        po_receipts = list(
+            POReceipt.objects.prefetch_related(
+                "items",
+                "items__arrival_slip",
+                "items__arrival_slip__inspection",
+            ).filter(vehicle_entry=vehicle_entry, is_active=True)
+        )
+        blockers = self._collect_qc_blockers(po_receipts)
+        if blockers:
+            raise ValueError(
+                "GRPO cannot be posted because QC is not final for one or more "
+                "related PO items: "
+                + "; ".join(blockers)
+            )
 
     def _build_structured_comments(
         self,
@@ -1234,6 +1313,8 @@ class GRPOService:
             raise ValueError(
                 f"Gate entry is not completed. Current status: {vehicle_entry.status}"
             )
+
+        self._validate_qc_ready_for_grpo(vehicle_entry)
 
         weighment = (
             Weighment.objects.select_for_update()
