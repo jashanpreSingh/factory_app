@@ -60,6 +60,7 @@ urlpatterns = [
     path("api/v1/warehouse/", include("warehouse.urls")),
     path("api/v1/barcode/", include("barcode.urls")),
     path("api/v1/ai/", include("ai_assistant.urls")),
+    path("api/v1/audit/", include("audit.urls")),
 
 ]
 

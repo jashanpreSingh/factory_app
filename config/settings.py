@@ -94,6 +94,7 @@ INSTALLED_APPS = [
     'warehouse',
     'barcode',
     'ai_assistant',
+    'audit',
 ]
 
 MIDDLEWARE = [
